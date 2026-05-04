@@ -1,6 +1,5 @@
 import json
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
@@ -10,7 +9,13 @@ from fin.database import get_db
 from fin.models.alert import AlertFireModel, AlertModel
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
-from fin.schemas.alert import AlertCreate, AlertResponse, AlertUpdate, HistoryResponse, TriggeredInfo
+from fin.schemas.alert import (
+    AlertCreate,
+    AlertResponse,
+    AlertUpdate,
+    HistoryResponse,
+    TriggeredInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +66,13 @@ def get_quote(symbol: str):
             raise HTTPException(status_code=503, detail="Price data unavailable")
         change_pct = (price - prev_close) / prev_close * 100
         currency = getattr(info, "currency", "USD") or "USD"
-        return {"symbol": symbol, "price": price, "prev_close": prev_close, "change_pct": change_pct, "currency": currency}
+        return {
+            "symbol": symbol,
+            "price": price,
+            "prev_close": prev_close,
+            "change_pct": change_pct,
+            "currency": currency,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -83,14 +94,26 @@ def list_alerts(enabled: bool | None = None, db: Session = Depends(get_db)):
     return [_to_response(a) for a in alerts]
 
 
-def _check_duplicate(repo: AlertSQLiteRepository, symbol: str, condition: str, value: float, exclude_id: str | None = None) -> None:
+def _check_duplicate(
+    repo: AlertSQLiteRepository,
+    symbol: str,
+    condition: str,
+    value: float,
+    exclude_id: str | None = None,
+) -> None:
     existing = [
-        a for a in repo.get_all()
-        if a.symbol == symbol and a.condition == condition and a.value == value
+        a
+        for a in repo.get_all()
+        if a.symbol == symbol
+        and a.condition == condition
+        and a.value == value
         and (exclude_id is None or a.id != exclude_id)
     ]
     if existing:
-        raise HTTPException(status_code=409, detail=f"Duplicate alert: {symbol} {condition} {value} already exists")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Duplicate alert: {symbol} {condition} {value} already exists",
+        )
 
 
 @router.post("/alerts", response_model=AlertResponse, status_code=201)
@@ -104,7 +127,13 @@ def create_alert(data: AlertCreate, db: Session = Depends(get_db)):
     repo = AlertSQLiteRepository(db)
     _check_duplicate(repo, normalized.symbol, normalized.condition, normalized.value)
     alert = repo.create(normalized)
-    logger.info("Created alert %s for %s %s %s", alert.id, alert.symbol, alert.condition, alert.value)
+    logger.info(
+        "Created alert %s for %s %s %s",
+        alert.id,
+        alert.symbol,
+        alert.condition,
+        alert.value,
+    )
     return _to_response(alert)
 
 

@@ -16,3 +16,19 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["fin"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "httpx>=0.27",
+    "pre-commit>=4.6.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=fin --cov-report=term-missing --cov-fail-under=80"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["serve.py", "check_alerts.py"]

@@ -22,6 +22,7 @@ class RelativePathFormatter(logging.Formatter):
 
         try:
             from fin.context import request_id_ctx
+
             rid = request_id_ctx.get()
             record.request_id = rid if rid else "-"
         except (ImportError, AttributeError):
@@ -47,7 +48,9 @@ def setup_logging(
     file_fmt = RelativePathFormatter(
         "%(asctime)s - [%(levelname)s] [%(request_id)s] - %(relpath)s:%(lineno)d - %(message)s"
     )
-    fh = RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8")
+    fh = RotatingFileHandler(
+        log_file, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(file_fmt)
     root.addHandler(fh)
@@ -55,11 +58,20 @@ def setup_logging(
     if console_level is not None:
         ch = logging.StreamHandler()
         ch.setLevel(console_level)
-        ch.setFormatter(RelativePathFormatter("[%(levelname)s] [%(request_id)s] %(message)s"))
+        ch.setFormatter(
+            RelativePathFormatter("[%(levelname)s] [%(request_id)s] %(message)s")
+        )
         root.addHandler(ch)
 
     root.setLevel(logging.INFO)
-    for noisy in ("multipart", "python_multipart", "urllib3", "uvicorn", "yfinance", "peewee"):
+    for noisy in (
+        "multipart",
+        "python_multipart",
+        "urllib3",
+        "uvicorn",
+        "yfinance",
+        "peewee",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     if script_name:
@@ -81,9 +93,13 @@ def get_access_logger(log_filename: str = "access.log") -> logging.Logger:
     logger.propagate = False
 
     if not logger.handlers:
-        fh = RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=10, encoding="utf-8")
+        fh = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=10, encoding="utf-8"
+        )
         fh.setLevel(logging.INFO)
-        fh.setFormatter(RelativePathFormatter("%(asctime)s - [%(request_id)s] %(message)s"))
+        fh.setFormatter(
+            RelativePathFormatter("%(asctime)s - [%(request_id)s] %(message)s")
+        )
         logger.addHandler(fh)
 
     return logger
