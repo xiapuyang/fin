@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api")
 
 
 def _guess_market(symbol: str) -> str:
-    """Infer market from symbol format."""
-    if symbol.endswith(".HK"):
+    """Infer market from symbol format or well-known HK index prefixes."""
+    if symbol.endswith(".HK") or symbol.startswith(("^HSI", "^HSCE", "^HSTECH")):
         return "HK"
     if symbol.endswith(".SS") or symbol.endswith(".SZ"):
         return "CN"
