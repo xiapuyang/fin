@@ -1,6 +1,14 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+def _check_change_value(condition: Optional[str], value: Optional[float]) -> None:
+    """Validate that change_lte value is negative and change_gte value is positive."""
+    if condition == "change_lte" and value is not None and value >= 0:
+        raise ValueError("跌幅超 (change_lte) 的 value 必须为负数")
+    if condition == "change_gte" and value is not None and value <= 0:
+        raise ValueError("涨幅超 (change_gte) 的 value 必须为正数")
 
 
 class AlertCreate(BaseModel):
@@ -9,12 +17,22 @@ class AlertCreate(BaseModel):
     condition: str
     value: float
 
+    @model_validator(mode="after")
+    def check_condition_value(self) -> "AlertCreate":
+        _check_change_value(self.condition, self.value)
+        return self
+
 
 class AlertUpdate(BaseModel):
     name: Optional[str] = None
     condition: Optional[str] = None
     value: Optional[float] = None
     enabled: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def check_condition_value(self) -> "AlertUpdate":
+        _check_change_value(self.condition, self.value)
+        return self
 
 
 class TriggeredInfo(BaseModel):

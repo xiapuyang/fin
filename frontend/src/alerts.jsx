@@ -4,7 +4,7 @@ const COND_OPTIONS = [
   { value: "price_gte",  label: "价格高于 Price ≥",  symbol: "≥",  isPrice: true,  isUp: true  },
   { value: "price_lte",  label: "价格低于 Price ≤",  symbol: "≤",  isPrice: true,  isUp: false },
   { value: "change_gte", label: "涨幅超 Change ≥",   symbol: "Δ≥", isPrice: false, isUp: true  },
-  { value: "change_lte", label: "跌幅超 Change ≤",   symbol: "Δ≤", isPrice: false, isUp: false },
+  { value: "change_lte", label: "跌幅超 Change ≥",   symbol: "Δ≤", isPrice: false, isUp: false },
 ];
 
 const condMeta = (c) => COND_OPTIONS.find(o => o.value === c) || COND_OPTIONS[0];
@@ -42,7 +42,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   }, [alerts.map(a => a.code).join(",")]);
 
   // Form state
-  const [form, setForm] = React.useState({ code: "NVDA", cond: "price_gte", threshold: "", name: "" });
+  const [form, setForm] = React.useState({ code: "NVDA", cond: "price_lte", threshold: "", name: "" });
   const [liveQuote, setLiveQuote] = React.useState(null);
 
   // Fetch live quote whenever symbol changes
@@ -65,10 +65,11 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
 
   // computed: distance to threshold
   const numThr = parseFloat(form.threshold);
+  const effectiveThr = !cond.isPrice && !cond.isUp ? -numThr : numThr;
   const distance = !isNaN(numThr) && selectedSym ? (
     cond.isPrice
-      ? ((numThr - selectedSym.price) / selectedSym.price * 100)
-      : (numThr - ((selectedSym.price - selectedSym.prevClose) / selectedSym.prevClose * 100))
+      ? ((effectiveThr - selectedSym.price) / selectedSym.price * 100)
+      : (effectiveThr - ((selectedSym.price - selectedSym.prevClose) / selectedSym.prevClose * 100))
   ) : null;
 
   const pickSymbol = (sym) => {
@@ -79,17 +80,23 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
 
   const submit = () => {
     if (!form.code || !form.threshold) return;
+    const numThr = parseFloat(form.threshold);
+    if (form.cond === "change_lte" && numThr <= 0) {
+      setFormError("跌幅超：请输入正数（如 2 表示跌幅超 2%）");
+      return;
+    }
     const sym = SYMBOL_INDEX[form.code];
-    const name = form.name || (sym ? `${sym.name} ${cond.symbol} ${form.threshold}` : `${form.code} ${cond.symbol} ${form.threshold}`);
+    const thrDisplay = form.cond === "change_lte" ? `-${form.threshold}%` : form.threshold;
+    const name = form.name || (sym ? `${sym.name} ${cond.symbol} ${thrDisplay}` : `${form.code} ${cond.symbol} ${thrDisplay}`);
     setFormError("");
     fetch("/api/alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: form.code, name, condition: form.cond, value: parseFloat(form.threshold) }),
+      body: JSON.stringify({ symbol: form.code, name, condition: form.cond, value: cond.isUp || cond.isPrice ? numThr : -Math.abs(numThr) }),
     }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
       .then(a => {
         setAlerts(prev => [a, ...prev]);
-        setForm({ code: form.code, cond: "price_gte", threshold: "", name: "" });
+        setForm({ code: form.code, cond: "price_lte", threshold: "", name: "" });
       }).catch(e => setFormError(e.detail || "提交失败"));
   };
 
