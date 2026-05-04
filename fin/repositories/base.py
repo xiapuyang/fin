@@ -32,7 +32,9 @@ class AlertRepository(ABC):
 
 class AlertFireRepository(ABC):
     @abstractmethod
-    def create(self, alert_id: str, price: float, change_pct: float) -> AlertFireModel: ...
+    def create(
+        self, alert_id: str, price: float, change_pct: float
+    ) -> AlertFireModel: ...
 
     @abstractmethod
     def get_by_alert(self, alert_id: str) -> list[AlertFireModel]: ...
