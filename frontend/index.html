@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>fin — Financial Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* surfaces */
+    --bg: #F6F2EB;
+    --bg-deep: #ECE6DB;
+    --paper: #FFFFFF;
+    --paper-2: #FBF9F5;
+    --line: #E7E1D5;
+    --line-2: #D8D1C2;
+    --line-strong: #BCB29E;
+
+    /* ink */
+    --ink: #14161B;
+    --ink-2: #2C3038;
+    --ink-3: #5C6270;
+    --ink-4: #8B8F9A;
+    --ink-5: #B6B9C2;
+
+    /* semantic — CN convention: 红涨 绿跌 */
+    --up: #D9352B;
+    --up-soft: #FBE8E5;
+    --up-ink: #8E1E16;
+    --down: #1F8A4C;
+    --down-soft: #E3F1E8;
+    --down-ink: #0E5530;
+    --warn: #C8821F;
+    --warn-soft: #F8EBD3;
+    --info: #2D5BD9;
+    --info-soft: #E2EAFC;
+    --violet: #6B4FB8;
+    --violet-soft: #ECE5FA;
+
+    /* market chips */
+    --us: #1F4FE0;
+    --hk: #B8447B;
+    --cn: #C8460F;
+
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow-sm: 0 1px 0 rgba(20,22,27,.04), 0 1px 2px rgba(20,22,27,.04);
+    --shadow-md: 0 1px 0 rgba(20,22,27,.04), 0 4px 12px -2px rgba(20,22,27,.06);
+    --shadow-lg: 0 1px 0 rgba(20,22,27,.04), 0 12px 32px -8px rgba(20,22,27,.10);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .mono, .num { font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .serif-cn { font-family: 'Noto Serif SC', 'Songti SC', serif; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+  button, input, select, textarea { outline: none; }
+  ::selection { background: #14161B; color: #fff; }
+
+  /* utility scrollbar */
+  .scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .scroll::-webkit-scrollbar-thumb { background: #d8d1c2; border-radius: 6px; border: 2px solid var(--bg); }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+
+  /* Soft entrance */
+  .fade-in { animation: fadeIn .25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity:1; transform:none;} }
+
+  .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+  @keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .ticker-tape { animation: tickerScroll 60s linear infinite; }
+  @keyframes tickerScroll { from { transform: translateX(0);} to { transform: translateX(-50%);} }
+
+  /* Sparkline */
+  .spark path { fill: none; stroke-width: 1.5; }
+
+  /* Range track */
+  input[type=range] { -webkit-appearance: none; appearance:none; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); margin-top: -5px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel" src="src/atoms.jsx"></script>
+<script type="text/babel" src="src/charts.jsx"></script>
+<script type="text/babel" src="src/dashboard.jsx"></script>
+<script type="text/babel" src="src/alerts.jsx"></script>
+<script type="text/babel" src="src/holdings.jsx"></script>
+<script type="text/babel" src="src/ledger.jsx"></script>
+<script type="text/babel" src="src/balance.jsx"></script>
+<script type="text/babel" src="src/fire.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>

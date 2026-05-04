@@ -1,0 +1,21 @@
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from fin import settings as settings_store
+
+router = APIRouter(prefix="/api")
+
+
+class SettingsPayload(BaseModel):
+    notify_email: str | None = None
+    notify_enabled: bool | None = None
+
+
+@router.get("/settings")
+def get_settings():
+    return settings_store.load()
+
+
+@router.put("/settings")
+def put_settings(data: SettingsPayload):
+    return settings_store.save(data.model_dump(exclude_none=True))
