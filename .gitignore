@@ -27,6 +27,11 @@ logs/
 .env
 *.env
 
+# Temp / backup
+*.bak
+*.orig
+*.temp
+
 # macOS
 .DS_Store
 
@@ -35,3 +40,11 @@ logs/
 .vscode/
 *.swp
 *.swo
+docs/
+
+# Test artifacts
+.coverage
+htmlcov/
+
+# Claude Code local settings
+.claude/
