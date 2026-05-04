@@ -28,7 +28,7 @@ def client():
 
     app.dependency_overrides[get_db] = override_get_db
     with patch("fin.api.init_db"):
-        with patch("fin.services.price_updater.start_price_updater"):
+        with patch("fin.api.start_price_updater"):
             with TestClient(app) as c:
                 yield c
     app.dependency_overrides.clear()

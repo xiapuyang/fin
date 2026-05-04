@@ -16,8 +16,7 @@ from fin.schemas.alert import (
     HistoryResponse,
     TriggeredInfo,
 )
-from fin.services.quote import QuoteService
-from fin.services.quote import normalize_symbol as _normalize_symbol
+from fin.services.quote import QuoteService, normalize_symbol as _normalize_symbol
 
 logger = logging.getLogger(__name__)
 
