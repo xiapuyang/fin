@@ -9,9 +9,17 @@ const COND_OPTIONS = [
 
 const condMeta = (c) => COND_OPTIONS.find(o => o.value === c) || COND_OPTIONS[0];
 
-const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
+const WATCHLIST_TAB = "关注列表 Watchlist";
+
+const guessMarket = (symbol) => {
+  if (symbol.endsWith(".HK") || symbol.startsWith("^HSI") || symbol.startsWith("^HSCE") || symbol.startsWith("^HSTECH")) return "HK";
+  if (symbol.endsWith(".SS") || symbol.endsWith(".SZ")) return "CN";
+  return "US";
+};
+
+const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => {
   const [tab, setTab] = React.useState("active");
-  const [category, setCategory] = React.useState(Object.keys(SYMBOLS)[0]);
+  const [category, setCategory] = React.useState(initialCategory || Object.keys(SYMBOLS)[0]);
   const [search, setSearch] = React.useState("");
   const [showImport, setShowImport] = React.useState(false);
   const [showEmail, setShowEmail] = React.useState(false);
@@ -21,7 +29,11 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   const [liveQuotes, setLiveQuotes] = React.useState({});
   const [lastCheck, setLastCheck] = React.useState(null);
 
-  // Load alerts, history, and settings from API on mount
+  const [watchlist, setWatchlist] = React.useState([]);
+  const [searchResult, setSearchResult] = React.useState(null);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+
+  // Load alerts, history, settings, and watchlist from API on mount
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(console.error);
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(console.error);
@@ -29,6 +41,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
       if (s.notify_email) setNotifyEmail(s.notify_email);
       setNotifyEnabled(s.notify_enabled);
     }).catch(console.error);
+    fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
   }, []);
 
   // Fetch last-check timestamp; refresh every minute so relative time stays current
@@ -56,10 +69,10 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
     return () => { clearInterval(timer); ctrl.abort(); };
   }, []);
 
-  // Fetch live quotes whenever the alert symbol set changes
+  // Fetch live quotes whenever the alert symbol set changes (skip already-cached)
   React.useEffect(() => {
     const ctrl = new AbortController();
-    const symbols = [...new Set(alerts.map(a => a.code))];
+    const symbols = [...new Set(alerts.map(a => a.code))].filter(code => !liveQuotes[code]);
     symbols.forEach(code => {
       fetch(`/api/quote/${encodeURIComponent(code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
@@ -68,6 +81,50 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
     });
     return () => ctrl.abort();
   }, [alerts.map(a => a.code).join(",")]);
+
+  // Fetch live quotes for watchlist symbols when watchlist changes
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    watchlist.forEach(w => {
+      if (liveQuotes[w.symbol]) return;
+      fetch(`/api/quote/${encodeURIComponent(w.symbol)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q && setLiveQuotes(prev => ({ ...prev, [w.symbol]: q })))
+        .catch(() => {});
+    });
+    return () => ctrl.abort();
+  }, [watchlist.map(w => w.symbol).join(",")]);
+
+  // Debounced symbol search: clientside first, backend fallback for unknown symbols
+  React.useEffect(() => {
+    setSearchResult(null);
+    if (!search) return;
+    const upper = search.trim().toUpperCase();
+    const hasClientMatch = Object.values(SYMBOLS).flat().some(
+      s => s.code.includes(upper) || s.name.toLowerCase().includes(search.toLowerCase())
+    );
+    if (hasClientMatch) { setSearchLoading(false); return; }
+    if (upper.length > 12) { setSearchLoading(false); return; }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      setSearchLoading(true);
+      fetch(`/api/quote/${encodeURIComponent(upper)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => {
+          if (q) setSearchResult({
+            code: upper,
+            name: q.name || upper,
+            market: guessMarket(upper),
+            currency: q.currency || "USD",
+            price: q.price,
+            prevClose: q.prev_close,
+          });
+          setSearchLoading(false);
+        })
+        .catch(() => setSearchLoading(false));
+    }, 500);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [search]);
 
   // Form state
   const [form, setForm] = React.useState({ code: "NVDA", cond: "price_lte", threshold: "", name: "" });
@@ -88,12 +145,11 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   // Merge live quote over static symbol data for display
   const staticSym = SYMBOL_INDEX[form.code];
   const selectedSym = liveQuote
-    ? { ...(staticSym || { code: form.code, name: form.code, market: "US" }),
+    ? { ...(staticSym || { code: form.code, name: form.code, market: guessMarket(form.code) }),
         price: liveQuote.price, prevClose: liveQuote.prev_close, currency: liveQuote.currency }
     : staticSym;
   const cond = condMeta(form.cond);
 
-  // computed: distance to threshold
   const numThr = parseFloat(form.threshold);
   const effectiveThr = !cond.isPrice && !cond.isUp ? -numThr : numThr;
   const distance = !isNaN(numThr) && selectedSym?.price != null ? (
@@ -103,10 +159,29 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   ) : null;
 
   const pickSymbol = (sym) => {
-    setForm(f => ({ ...f, code: sym.code, name: f.name || `${sym.name} 提醒` }));
+    setForm(f => ({ ...f, code: sym.code }));
+    setSearch("");
   };
 
   const [formError, setFormError] = React.useState("");
+
+  const addToWatch = (symbol, name, market, currency) => {
+    fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, name, market, currency }),
+    }).then(r => r.ok ? r.json() : null)
+      .then(item => {
+        if (item) setWatchlist(prev => prev.some(w => w.symbol === item.symbol) ? prev : [...prev, item]);
+      })
+      .catch(console.error);
+  };
+
+  const removeFromWatch = (symbol) => {
+    fetch(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: "DELETE" })
+      .then(r => { if (r.ok) setWatchlist(prev => prev.filter(w => w.symbol !== symbol)); })
+      .catch(console.error);
+  };
 
   const submit = () => {
     if (!form.code || !form.threshold) return;
@@ -127,6 +202,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
       .then(a => {
         setAlerts(prev => [a, ...prev]);
         setForm({ code: form.code, cond: "price_lte", threshold: "", name: "" });
+        // Reflect backend auto-add in local watchlist state (use a.code — already normalized)
+        const s = SYMBOL_INDEX[a.code] || { name: a.code, market: guessMarket(a.code), currency: "USD" };
+        setWatchlist(prev => prev.some(w => w.symbol === a.code) ? prev : [
+          ...prev,
+          { symbol: a.code, name: s.name, market: s.market, currency: s.currency },
+        ]);
       }).catch(e => setFormError(e.detail || "提交失败"));
   };
 
@@ -185,6 +266,18 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
     all: alerts.length,
   };
 
+  // Quick Pick chip data depending on mode
+  const upper = search.trim().toUpperCase();
+  const clientMatches = search
+    ? Object.values(SYMBOLS).flat().filter(
+        s => s.code.includes(upper) || s.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : [];
+  const isSearchMode = search.length > 0;
+  const isWatchlistTab = category === WATCHLIST_TAB;
+
+  const categoryTabs = [WATCHLIST_TAB, ...Object.keys(SYMBOLS)];
+
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
@@ -216,7 +309,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
         })()} mono={false} accent="var(--violet)" hint="check_alerts.py"/>
       </div>
 
-      {/* Two-column: form + symbol picker */}
+      {/* Two-column: symbol picker + form */}
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 14, marginBottom: 22 }}>
         {/* Symbol picker */}
         <Card padding={0}>
@@ -224,30 +317,118 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>常用标的 Quick Pick</div>
               <Input
-                value={search} onChange={() => {}}
+                value={search}
+                onChange={v => setSearch(v)}
                 prefix={<Icon name="search" size={13}/>}
                 placeholder="Search symbol…"
                 style={{ width: 200, height: 30 }}
               />
             </div>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {Object.keys(SYMBOLS).map(c => (
-                <button key={c} onClick={() => setCategory(c)} style={{
-                  padding: "5px 10px", fontSize: 11.5, fontWeight: 500,
-                  background: category === c ? "var(--ink)" : "transparent",
-                  color: category === c ? "#fff" : "var(--ink-3)",
-                  border: "1px solid " + (category === c ? "var(--ink)" : "var(--line-2)"),
-                  borderRadius: 6, cursor: "pointer",
-                }}>{c}</button>
-              ))}
-            </div>
+            {!isSearchMode && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {categoryTabs.map(c => (
+                  <button key={c} onClick={() => setCategory(c)} style={{
+                    padding: "5px 10px", fontSize: 11.5, fontWeight: 500,
+                    background: category === c ? "var(--ink)" : "transparent",
+                    color: category === c ? "#fff" : "var(--ink-3)",
+                    border: "1px solid " + (category === c ? "var(--ink)" : "var(--line-2)"),
+                    borderRadius: 6, cursor: "pointer",
+                  }}>{c}</button>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 260, overflowY: "auto" }} className="scroll">
-            {SYMBOLS[category].map(s => {
-              const q = liveQuotes[s.code];
-              const liveSym = q ? { ...s, price: q.price, prevClose: q.prev_close } : s;
-              return <SymbolChip key={s.code} sym={liveSym} onClick={pickSymbol} selected={form.code === s.code}/>;
-            })}
+
+          <div style={{ padding: 14, maxHeight: 260, overflowY: "auto" }} className="scroll">
+            {isSearchMode ? (
+              /* Search results */
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {clientMatches.map(s => {
+                  const q = liveQuotes[s.code];
+                  const liveSym = q ? { ...s, price: q.price, prevClose: q.prev_close } : s;
+                  const watched = watchlist.some(w => w.symbol === s.code);
+                  return (
+                    <div key={s.code} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <SymbolChip sym={liveSym} onClick={pickSymbol} selected={form.code === s.code}/>
+                      {!watched && (
+                        <button
+                          onClick={() => addToWatch(s.code, s.name, s.market, s.currency)}
+                          title="添加到自选"
+                          style={{ ...watchBtnStyle, color: "var(--info)" }}
+                        >+ Watch</button>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Backend-fetched unknown symbol */}
+                {searchLoading && (
+                  <div style={{ fontSize: 12, color: "var(--ink-4)", padding: "6px 10px" }}>查询中…</div>
+                )}
+                {!searchLoading && searchResult && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 12px", border: "1px solid var(--line-2)", borderRadius: 8,
+                    background: "var(--paper-2)", width: "100%",
+                  }}>
+                    <MarketDot market={searchResult.market}/>
+                    <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{searchResult.code}</span>
+                    <span style={{ fontSize: 12, color: "var(--ink-3)", flex: 1 }}>{searchResult.name}</span>
+                    {searchResult.price != null && (
+                      <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+                        {fmtMoney(searchResult.price, searchResult.currency)}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => pickSymbol(searchResult)}
+                      style={{ ...watchBtnStyle, color: "var(--ink-2)" }}
+                    >选取</button>
+                    {!watchlist.some(w => w.symbol === searchResult.code) && (
+                      <button
+                        onClick={() => addToWatch(searchResult.code, searchResult.name, searchResult.market, searchResult.currency)}
+                        style={{ ...watchBtnStyle, color: "var(--info)" }}
+                      >+ Watch</button>
+                    )}
+                  </div>
+                )}
+                {!searchLoading && clientMatches.length === 0 && !searchResult && search.length > 0 && (
+                  <div style={{ fontSize: 12, color: "var(--ink-4)", padding: "6px 10px" }}>
+                    未找到"{search}"，请检查代码是否正确
+                  </div>
+                )}
+              </div>
+            ) : isWatchlistTab ? (
+              /* Watchlist tab */
+              watchlist.length === 0 ? (
+                <Empty icon="bell" title="自选为空" hint="搜索标的并点击 + Watch，或添加提醒后自动加入"/>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {watchlist.map(w => {
+                    const q = liveQuotes[w.symbol];
+                    const sym = { code: w.symbol, name: w.name || w.symbol, market: w.market || "US", currency: w.currency || "USD" };
+                    const liveSym = q ? { ...sym, price: q.price, prevClose: q.prev_close } : sym;
+                    return (
+                      <div key={w.symbol} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                        <SymbolChip sym={liveSym} onClick={pickSymbol} selected={form.code === w.symbol}/>
+                        <button
+                          onClick={() => removeFromWatch(w.symbol)}
+                          title="从关注列表移除"
+                          style={removeBtnStyle}
+                        >×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              /* Preset category chips */
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(SYMBOLS[category] || []).map(s => {
+                  const q = liveQuotes[s.code];
+                  const liveSym = q ? { ...s, price: q.price, prevClose: q.prev_close } : s;
+                  return <SymbolChip key={s.code} sym={liveSym} onClick={pickSymbol} selected={form.code === s.code}/>;
+                })}
+              </div>
+            )}
           </div>
         </Card>
 
@@ -326,7 +507,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
               </div>
             )}
 
-            {formError && <div style={{ fontSize: 12, color: "var(--up)", padding: "6px 10px", background: "rgba(217,53,43,.06)", borderRadius: 6 }}>{formError}</div>}
+            {formError && <div style={{ fontSize: 12, color: "var(--up)", padding: "6px 10px", background: "rgba(217,53,43,.06)", borderRadius: 6, marginBottom: 10 }}>{formError}</div>}
             <Button variant="primary" icon="plus" size="lg" onClick={submit} style={{ width: "100%", justifyContent: "center" }}>
               添加提醒 Add Alert
             </Button>
@@ -444,6 +625,21 @@ QQQ price_lte 490 加仓信号
       />
     </div>
   );
+};
+
+const watchBtnStyle = {
+  fontSize: 10.5, fontWeight: 600, padding: "3px 7px",
+  background: "var(--bg-deep)", border: "1px solid var(--line-2)",
+  borderRadius: 5, cursor: "pointer", whiteSpace: "nowrap",
+};
+
+const removeBtnStyle = {
+  position: "absolute", top: -4, right: -4,
+  width: 16, height: 16, borderRadius: 8,
+  fontSize: 10, lineHeight: "14px", textAlign: "center",
+  background: "var(--ink-4)", color: "#fff",
+  border: "none", cursor: "pointer", padding: 0,
+  display: "flex", alignItems: "center", justifyContent: "center",
 };
 
 const EmailSettingsModal = ({ open, onClose, email, setEmail, enabled, setEnabled }) => {

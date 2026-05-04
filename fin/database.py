@@ -30,7 +30,7 @@ def _seed_mock_user(db: "Session") -> None:
     """
     from fin.models.user import UserModel, MOCK_USER_ID
 
-    if not db.query(UserModel).filter(UserModel.id == MOCK_USER_ID).first():
+    if not db.query(UserModel).filter(UserModel.email == "admin@fin.local").first():
         db.add(UserModel(id=MOCK_USER_ID, name="Sharp", email="admin@fin.local"))
         db.commit()
 
@@ -64,7 +64,7 @@ def _migrate_alert_user_id(db: "Session") -> None:
 
 
 def init_db() -> None:
-    from fin.models import alert, stock, user  # noqa: F401
+    from fin.models import alert, stock, user, watchlist  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
