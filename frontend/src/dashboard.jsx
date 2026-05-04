@@ -25,6 +25,7 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
   React.useEffect(() => {
     const ctrl = new AbortController();
     watchlist.forEach(w => {
+      if (watchQuotes[w.symbol]) return;
       fetch(`/api/quote/${encodeURIComponent(w.symbol)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setWatchQuotes(prev => ({ ...prev, [w.symbol]: q })))
@@ -189,7 +190,7 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
               <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>关注列表 Watchlist</div>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{watchlist.length} 支 · 自选标的</div>
             </div>
-            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate({ route: "alerts", category: "关注列表 Watchlist" })}>Manage</Button>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate({ route: "alerts", category: WATCHLIST_TAB })}>Manage</Button>
           </div>
           <div>
             {watch.length === 0 && (
