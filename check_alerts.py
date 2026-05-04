@@ -32,7 +32,9 @@ def _get_agentmail_client() -> AgentMail | None:
     return AgentMail(api_key=key)
 
 
-def _send_email(am: AgentMail, subject: str, html_body: str, text_body: str, notify_email: str) -> None:
+def _send_email(
+    am: AgentMail, subject: str, html_body: str, text_body: str, notify_email: str
+) -> None:
     am.inboxes.messages.send(
         inbox_id=AGENTMAIL_INBOX,
         to=notify_email,
@@ -42,7 +44,9 @@ def _send_email(am: AgentMail, subject: str, html_body: str, text_body: str, not
     )
 
 
-def _check_condition(condition: str, value: float, price: float, change_pct: float) -> bool:
+def _check_condition(
+    condition: str, value: float, price: float, change_pct: float
+) -> bool:
     if condition == "price_gte":
         return price >= value
     if condition == "price_lte":
@@ -110,8 +114,11 @@ def _build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--force", action="store_true", help="Skip market-state check (for testing)")
+    parser.add_argument(
+        "--force", action="store_true", help="Skip market-state check (for testing)"
+    )
     args = parser.parse_args()
 
     app_settings = settings_store.load()
@@ -136,7 +143,9 @@ def main() -> None:
             logger.info("Email notifications disabled in settings")
             am = None
         if not notify_email:
-            logger.warning("No notify_email configured — will check but not send emails")
+            logger.warning(
+                "No notify_email configured — will check but not send emails"
+            )
             am = None
 
         symbols = list({a.symbol for a in alerts})
@@ -148,7 +157,11 @@ def main() -> None:
                 ticker = yf.Ticker(symbol)
                 info = ticker.fast_info
                 if not args.force and getattr(info, "market_state", None) != "REGULAR":
-                    logger.info("Market not REGULAR for %s (state=%s), skipping", symbol, getattr(info, "market_state", "?"))
+                    logger.info(
+                        "Market not REGULAR for %s (state=%s), skipping",
+                        symbol,
+                        getattr(info, "market_state", "?"),
+                    )
                     price_data[symbol] = (None, None)
                     continue
                 price = info.last_price
@@ -171,14 +184,23 @@ def main() -> None:
                 continue
 
             if alert.condition not in VALID_CONDITIONS:
-                logger.warning("Unknown condition %s for alert %s", alert.condition, alert.id)
+                logger.warning(
+                    "Unknown condition %s for alert %s", alert.condition, alert.id
+                )
                 continue
 
             if not _check_condition(alert.condition, alert.value, price, change_pct):
                 continue
 
-            logger.info("TRIGGERED: %s (%s) — %s %s, price=%.4g change=%.2f%%",
-                        alert.name, alert.symbol, alert.condition, alert.value, price, change_pct)
+            logger.info(
+                "TRIGGERED: %s (%s) — %s %s, price=%.4g change=%.2f%%",
+                alert.name,
+                alert.symbol,
+                alert.condition,
+                alert.value,
+                price,
+                change_pct,
+            )
             fired.append((alert, price, change_pct))
 
             try:
