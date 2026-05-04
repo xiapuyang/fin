@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 # ── Health & Symbols ──────────────────────────────────────────────────────────
@@ -34,35 +34,23 @@ def test_get_symbols_not_found(client, tmp_path, monkeypatch):
 
 
 def test_get_quote_success(client):
-    mock_info = MagicMock()
-    mock_info.last_price = 150.0
-    mock_info.previous_close = 148.0
-    mock_info.currency = "USD"
-
-    with patch("yfinance.Ticker") as mock_ticker:
-        mock_ticker.return_value.fast_info = mock_info
+    live = {"price": 150.0, "prev_close": 148.0, "currency": "USD"}
+    with patch("fin.services.quote._fetch_live", return_value=live):
         r = client.get("/api/quote/AAPL")
-
     assert r.status_code == 200
-    data = r.json()
-    assert data["price"] == 150.0
-    assert data["symbol"] == "AAPL"
+    assert r.json()["price"] == 150.0
+    assert r.json()["symbol"] == "AAPL"
 
 
 def test_get_quote_missing_price(client):
-    mock_info = MagicMock()
-    mock_info.last_price = None
-    mock_info.previous_close = None
-
-    with patch("yfinance.Ticker") as mock_ticker:
-        mock_ticker.return_value.fast_info = mock_info
+    with patch("fin.services.quote._fetch_live", return_value={}):
         r = client.get("/api/quote/AAPL")
-
     assert r.status_code == 503
 
 
 def test_get_quote_fetch_error(client):
-    with patch("yfinance.Ticker", side_effect=RuntimeError("network error")):
+    # _fetch_live swallows exceptions and returns {}; QuoteService then returns None → 503
+    with patch("fin.services.quote._fetch_live", return_value={}):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 503
 

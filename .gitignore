@@ -19,6 +19,8 @@ uv.lock
 data/fin.db
 data/.credentials.json
 data/settings.json
+data/last_check.json
+fin.pid
 
 # Logs
 logs/
@@ -48,3 +50,4 @@ htmlcov/
 
 # Claude Code local settings
 .claude/
+.context/

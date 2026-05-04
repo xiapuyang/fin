@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
+    from fin.services.price_updater import start_price_updater
+
+    start_price_updater()
     yield
     logger.info("Shutting down")
 
@@ -34,6 +37,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LoggingMiddleware)
+
+
+@app.middleware("http")
+async def no_cache_api(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 app.include_router(alerts_router)
 app.include_router(settings_router)

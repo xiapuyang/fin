@@ -22,7 +22,34 @@ def get_db():
         db.close()
 
 
+def _seed_mock_user(db: "Session") -> None:
+    from fin.models.user import UserModel, MOCK_USER_ID
+
+    if not db.query(UserModel).filter(UserModel.id == MOCK_USER_ID).first():
+        db.add(UserModel(id=MOCK_USER_ID, name="Sharp", email="admin@fin.local"))
+        db.commit()
+
+
+def _migrate_alert_user_id(db: "Session") -> None:
+    from fin.models.user import MOCK_USER_ID
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(alerts)"))]
+    if "user_id" not in cols:
+        db.execute(text("ALTER TABLE alerts ADD COLUMN user_id TEXT"))
+    db.execute(
+        text(f"UPDATE alerts SET user_id = '{MOCK_USER_ID}' WHERE user_id IS NULL")
+    )
+    db.commit()
+
+
 def init_db() -> None:
-    from fin.models import alert  # noqa: F401 — triggers table registration
+    from fin.models import alert, stock, user  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    db: Session = SessionLocal()
+    try:
+        _seed_mock_user(db)
+        _migrate_alert_user_id(db)
+    finally:
+        db.close()
