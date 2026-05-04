@@ -18,6 +18,7 @@ class AlertModel(Base):
     )  # price_gte, price_lte, change_gte, change_lte
     value = Column(Float, nullable=False)
     enabled = Column(Boolean, default=True, nullable=False)
+    user_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
