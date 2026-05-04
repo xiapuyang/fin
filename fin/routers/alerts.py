@@ -122,14 +122,22 @@ def create_alert(data: AlertCreate, db: Session = Depends(get_db)):
         alert.value,
     )
 
-    # Auto-add symbol to watchlist after alert creation
-    stock = StockSQLiteRepository(db).get_by_symbol(normalized.symbol)
-    WatchlistSQLiteRepository(db).add(
-        symbol=normalized.symbol,
-        name=stock.name if stock else None,
-        market=_guess_market(normalized.symbol),
-        currency=stock.currency if stock else "USD",
-    )
+    # Auto-add symbol to watchlist — best-effort side effect, never fails the alert
+    try:
+        QuoteService(db).get_quote(
+            normalized.symbol
+        )  # populates stock cache if missing
+        stock = StockSQLiteRepository(db).get_by_symbol(normalized.symbol)
+        WatchlistSQLiteRepository(db).add(
+            symbol=normalized.symbol,
+            name=stock.name if stock else None,
+            market=_guess_market(normalized.symbol),
+            currency=stock.currency if stock else "USD",
+        )
+    except Exception:
+        logger.warning(
+            "Watchlist auto-add failed for %s (non-fatal)", normalized.symbol
+        )
 
     return _to_response(alert)
 
