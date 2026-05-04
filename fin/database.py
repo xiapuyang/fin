@@ -24,4 +24,5 @@ def get_db():
 
 def init_db() -> None:
     from fin.models import alert  # noqa: F401 — triggers table registration
+
     Base.metadata.create_all(bind=engine)
