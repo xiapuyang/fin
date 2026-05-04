@@ -1,0 +1,281 @@
+/* Dashboard — overview of all 5 modules + market summary */
+
+const MARKET_HOURS = (now = new Date()) => {
+  // Simulated states for demo. In real cron these come from yfinance market_state.
+  const h = now.getUTCHours();
+  // ET ≈ UTC-4 (DST). Just provide a plausible mock
+  return {
+    US: { state: "REGULAR", label: "盘中 Open", nextEvent: "收盘 16:00 ET" },
+    HK: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 HKT" },
+    CN: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 CST" },
+  };
+};
+
+const Dashboard = ({ onNavigate, alerts, history }) => {
+  const market = MARKET_HOURS();
+  const all = Object.values(SYMBOLS).flat();
+  const watch = [
+    SYMBOL_INDEX["NVDA"], SYMBOL_INDEX["GOOGL"], SYMBOL_INDEX["TSLA"],
+    SYMBOL_INDEX["^GSPC"], SYMBOL_INDEX["QQQ"], SYMBOL_INDEX["0700.HK"],
+  ].filter(Boolean);
+
+  const activeAlerts = alerts.filter(a => a.enabled).length;
+  const triggered = alerts.filter(a => a.triggered).length;
+
+  // Allocation (canonical net worth source — declared first so dashboard numbers reconcile)
+  const allocation = [
+    { label: "美股科技", value: 1340000, color: "#1F4FE0" },
+    { label: "美股 ETF", value: 280000, color: "#5C8AE6" },
+    { label: "港股", value: 220000, color: "#B8447B" },
+    { label: "A 股", value: 95000, color: "#C8460F" },
+    { label: "黄金", value: 78000, color: "#C8821F" },
+    { label: "现金", value: 250000, color: "#5C6270" },
+  ];
+
+  const netWorth = allocation.reduce((s, a) => s + a.value, 0); // ¥2.263M
+  const totalCost = HOLDINGS.reduce((sum, h) => {
+    const sym = SYMBOL_INDEX[h.code] || h;
+    return sum + h.cost * h.shares * (FX[sym.currency || "USD"] || 1);
+  }, 0);
+  const pnlPct = 24.3; // mock — coherent with display
+
+  const modules = [
+    { id: "alerts",   icon: "bell",      kicker: "MODULE 01", title: "提醒",     en: "Alerts",       color: "var(--up)",     stat: `${activeAlerts} active · ${triggered} triggered`, blurb: "盘中价格 & 涨跌触发邮件" },
+    { id: "holdings", icon: "wallet",    kicker: "MODULE 02", title: "投资组合", en: "Portfolio",     color: "var(--info)",   stat: `${HOLDINGS.length} positions · ${fmtPct(pnlPct,1)}`, blurb: "成本 & 盈亏 & 年化 IRR" },
+    { id: "ledger",   icon: "book",      kicker: "MODULE 03", title: "记账",     en: "Ledger",       color: "var(--violet)", stat: `${LEDGER.length} entries this week`, blurb: "支出收入 & 月度报表" },
+    { id: "balance",  icon: "target",    kicker: "MODULE 04", title: "资产负债",  en: "Balance Sheet",color: "var(--warn)",   stat: `${BS_ITEMS.length} items · ${BS_SNAPSHOTS.length} 快照`, blurb: "净资产 & 历史快照" },
+    { id: "fire",     icon: "spark",     kicker: "MODULE 05", title: "退休计划",  en: "FIRE",         color: "var(--down)",   stat: "11.2y to 财务自由", blurb: "FIRE 数字 & 复利推演 & 里程碑" },
+  ];
+
+  // Net worth history (mock series, ends at canonical netWorth)
+  const netWorthSeries = [
+    { label: "Jun", value: 1820000 }, { label: "Jul", value: 1864000 },
+    { label: "Aug", value: 1942000 }, { label: "Sep", value: 1981000 },
+    { label: "Oct", value: 2014000 }, { label: "Nov", value: 2102000 },
+    { label: "Dec", value: 2154000 }, { label: "Jan", value: 2178000 },
+    { label: "Feb", value: 2201000 }, { label: "Mar", value: 2218000 },
+    { label: "Apr", value: 2231000 }, { label: "May", value: netWorth },
+  ];
+  const prevMonth = 2231000;
+  const momPct = (netWorth - prevMonth) / prevMonth * 100;
+
+  return (
+    <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
+      {/* Welcome */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 24 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--ink-4)" }}>2026 · WEEK 18 · MAY 03</div>
+          <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
+          <div style={{ fontSize: 14, color: "var(--ink-3)" }}>Net worth tracking toward FIRE · 11.2y to 财务自由</div>
+        </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          {Object.entries(market).map(([k, v]) => (
+            <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <MarketDot market={k} size={6}/>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".05em" }}>
+                  {{ US: "US", HK: "HK", CN: "CN" }[k]}
+                </span>
+                <span className={"pulse-dot"} style={{
+                  display: "inline-block", width: 6, height: 6, borderRadius: 3,
+                  background: v.state === "REGULAR" ? "var(--up)" : "var(--ink-5)",
+                }}/>
+              </div>
+              <div style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{v.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Top stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
+        <Card padding={20}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
+              <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
+                ¥{(netWorth / 1000000).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
+              </div>
+              <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
+                <ChangeNum value={momPct} format="pct" size="sm"/>
+                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>since last month</span>
+              </div>
+            </div>
+            <Sparkline data={netWorthSeries.map(d => d.value)} width={120} height={40} color="var(--up)" fill={true}/>
+          </div>
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
+            <AreaChart data={netWorthSeries} width={420} height={120} color="var(--ink)" fillOpacity={.06} yLabels={3}/>
+          </div>
+        </Card>
+
+        <Card padding={20}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ALLOCATION · 仓位</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
+            <Donut
+              data={allocation} size={140} thickness={20}
+              centerValue={`${(allocation.reduce((s, d) => s + d.value, 0) / 1000000).toFixed(2)}M`}
+              centerSub="¥ CNY"
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11.5, flex: 1 }}>
+              {allocation.map(a => {
+                const pct = a.value / allocation.reduce((s, d) => s + d.value, 0) * 100;
+                return (
+                  <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
+                    <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
+                    <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+
+        <Card padding={20}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>FIRE TARGET · 财务自由</div>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 12 }}>
+            <ProgressRing value={netWorth / 6000000} size={88} thickness={9} color="var(--down)"/>
+            <div>
+              <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>{((netWorth / 6000000) * 100).toFixed(1)}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>%</span></div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>of ¥6M target</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Years to go</div>
+              <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>11.2<span style={{ fontSize: 14, color: "var(--ink-3)" }}>y</span></div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Required CAGR</div>
+              <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>10.4<span style={{ fontSize: 14 }}>%</span></div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Modules grid */}
+      <SectionHeader kicker="MODULES" title="模块导航" subtitle="Local-first · zero cloud · five focused modules"/>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 32 }}>
+        {modules.map(m => (
+          <ModuleCard key={m.id} mod={m} onClick={() => onNavigate(m.id)}/>
+        ))}
+      </div>
+
+      {/* Bottom — watchlist + alerts overview */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 14 }}>
+        <Card padding={0}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>关注列表 Watchlist</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Top picks across markets</div>
+            </div>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>Manage</Button>
+          </div>
+          <div>
+            {watch.map((s, i) => {
+              const ch = (s.price - s.prevClose) / s.prevClose * 100;
+              const isUp = ch >= 0;
+              return (
+                <div key={s.code} style={{
+                  padding: "12px 20px", display: "grid", gridTemplateColumns: "auto 1fr 90px 120px 80px", gap: 16, alignItems: "center",
+                  borderBottom: i < watch.length - 1 ? "1px solid var(--line)" : "none",
+                }}>
+                  <MarketDot market={s.market}/>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{s.code}</span>
+                      <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{s.name}</span>
+                    </div>
+                  </div>
+                  <Sparkline data={s.spark} width={90} height={26} fill={true}/>
+                  <div className="mono" style={{ textAlign: "right", fontSize: 14, fontWeight: 600 }}>
+                    {fmtMoney(s.price, s.currency, 2)}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <ChangeNum value={ch} size="sm"/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card padding={0}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>提醒概览 Alerts</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{activeAlerts} active · {triggered} fired this month</div>
+            </div>
+            <Button size="sm" icon="plus" variant="secondary" onClick={() => onNavigate("alerts")}>Add</Button>
+          </div>
+          <div style={{ padding: "10px 14px" }}>
+            {alerts.filter(a => a.enabled).slice(0, 5).map(a => {
+              const sym = SYMBOL_INDEX[a.code];
+              if (!sym) return null;
+              const ch = (sym.price - sym.prevClose) / sym.prevClose * 100;
+              const isPriceCond = a.cond.startsWith("price");
+              const distance = isPriceCond
+                ? ((a.threshold - sym.price) / sym.price * 100)
+                : (a.threshold - ch);
+              const condLabel = { price_gte: "≥", price_lte: "≤", change_gte: "Δ≥", change_lte: "Δ≤" }[a.cond];
+              return (
+                <div key={a.id} style={{ padding: "8px 6px", display: "flex", alignItems: "center", gap: 10, borderRadius: 6 }}>
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: "var(--up)", flexShrink: 0 }}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-4)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span className="mono">{a.code}</span>
+                      <span>·</span>
+                      <span className="mono">{condLabel} {a.threshold}{a.cond.startsWith("change") ? "%" : ""}</span>
+                    </div>
+                  </div>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                    {Math.abs(distance).toFixed(1)}{isPriceCond ? "%" : "pp"} away
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const ModuleCard = ({ mod, onClick }) => {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        background: "var(--paper)", border: "1px solid var(--line)",
+        borderRadius: "var(--radius-lg)", padding: 18, cursor: "pointer",
+        transition: "transform .15s, box-shadow .2s, border-color .15s",
+        boxShadow: hov ? "var(--shadow-md)" : "var(--shadow-sm)",
+        transform: hov ? "translateY(-2px)" : "none",
+        borderColor: hov ? "var(--line-strong)" : "var(--line)",
+        position: "relative", overflow: "hidden",
+      }}>
+      <div style={{
+        position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: mod.color,
+      }}/>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{
+          width: 32, height: 32, borderRadius: 8, background: "var(--bg-deep)",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", color: mod.color,
+        }}><Icon name={mod.icon} size={17}/></span>
+        <Icon name="arrow-right" size={14} style={{ color: hov ? "var(--ink)" : "var(--ink-5)", transition: "color .15s, transform .15s", transform: hov ? "translateX(2px)" : "none" }}/>
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".15em", color: "var(--ink-4)", marginTop: 14 }}>{mod.kicker}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+        <span className="serif-cn" style={{ fontSize: 22, fontWeight: 700 }}>{mod.title}</span>
+        <span style={{ fontSize: 12, color: "var(--ink-4)", fontWeight: 500 }}>{mod.en}</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.45 }}>{mod.blurb}</div>
+      <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--line)" }}>{mod.stat}</div>
+    </div>
+  );
+};
+
+window.Dashboard = Dashboard;

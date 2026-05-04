@@ -1,0 +1,18 @@
+[project]
+name = "fin"
+version = "0.1.0"
+description = "Personal financial management — alerts, holdings, ledger, FIRE"
+requires-python = ">=3.11"
+dependencies = [
+    "agentmail>=0.1.0",
+    "fastapi[standard]>=0.115.0",
+    "sqlalchemy>=2.0.0",
+    "yfinance>=0.2.50",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fin"]
