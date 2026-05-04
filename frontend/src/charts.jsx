@@ -102,44 +102,71 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
 };
 
 // === Trigger timeline (for alerts module) =================================
-const TriggerTimeline = ({ events, width = 560, height = 80, days = 30 }) => {
-  const padL = 8, padR = 8, padT = 28, padB = 22;
+const TriggerTimeline = ({ events, width = 560, height = 110, days = 14 }) => {
+  const padL = 8, padR = 8, padB = 24;
   const w = width - padL - padR;
-  const end = new Date();
-  const start = new Date(end); start.setDate(start.getDate() - days + 1);
+  const lineY = height - padB;
   const dayW = w / days;
+
+  // Normalize to local midnight so events near day boundaries land correctly
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days + 1);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Group by dayIdx → { symbol → events[] }
   const evMap = {};
   events.forEach(e => {
     const d = new Date(e.time || e.date);
-    const dayIdx = Math.floor((d - start) / 86400000);
+    d.setHours(0, 0, 0, 0);
+    const dayIdx = Math.round((d - startDate) / 86400000);
     if (dayIdx < 0 || dayIdx >= days) return;
-    (evMap[dayIdx] = evMap[dayIdx] || []).push(e);
+    if (!evMap[dayIdx]) evMap[dayIdx] = {};
+    if (!evMap[dayIdx][e.code]) evMap[dayIdx][e.code] = [];
+    evMap[dayIdx][e.code].push(e);
   });
+
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
-      <line x1={padL} x2={padL + w} y1={padT + 14} y2={padT + 14} stroke="var(--line-2)" strokeWidth="1"/>
+      <line x1={padL} x2={padL + w} y1={lineY} y2={lineY} stroke="var(--line-2)" strokeWidth="1"/>
       {Array.from({ length: days }).map((_, i) => {
-        const evs = evMap[i] || [];
-        const cx = padL + i * dayW + dayW / 2;
-        const d = new Date(start); d.setDate(start.getDate() + i);
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        const cx = padL + i * dayW + dayW / 2;
+        const symGroups = evMap[i] || {};
+        const syms = Object.keys(symGroups);
+        // Show label on first, last, and every other day
+        const showLabel = i === 0 || i === days - 1 || i % 2 === 0;
         return (
           <g key={i}>
-            <line x1={cx} x2={cx} y1={padT + 11} y2={padT + 17} stroke={isWeekend ? "var(--ink-5)" : "var(--ink-4)"} strokeWidth="1"/>
-            {evs.map((e, j) => {
-              const isUp = e.cond === "price_gte" || e.cond === "change_gte";
-              return (
-                <g key={j}>
-                  <line x1={cx} x2={cx} y1={padT + 14} y2={padT - 6 - j * 12} stroke={isUp ? "var(--up)" : "var(--down)"} strokeWidth="1.5"/>
-                  <circle cx={cx} cy={padT - 6 - j * 12} r="3.5" fill={isUp ? "var(--up)" : "var(--down)"}/>
-                </g>
-              );
-            })}
-            {(i === 0 || i === days - 1 || i === Math.floor(days / 2)) && (
-              <text x={cx} y={padT + 32} fontSize="10" fill="var(--ink-4)" textAnchor="middle" className="mono">
+            <line x1={cx} x2={cx} y1={lineY - 3} y2={lineY + 3}
+              stroke={isWeekend ? "var(--ink-5)" : "var(--ink-4)"} strokeWidth="1"/>
+            {showLabel && (
+              <text x={cx} y={lineY + 14} fontSize="9.5" fill="var(--ink-4)" textAnchor="middle" className="mono">
                 {(d.getMonth() + 1) + "/" + d.getDate()}
               </text>
             )}
+            {syms.map((sym, si) => {
+              const evs = symGroups[sym];
+              const isUp = evs[0].cond === "price_gte" || evs[0].cond === "change_gte";
+              const color = isUp ? "var(--up)" : "var(--down)";
+              const count = evs.length;
+              const dotY = lineY - 18 - si * 26;
+              const tip = evs.map(e =>
+                `${e.code}  ${e.name}  @${e.time}\nprice ${e.actual?.toFixed(2)}  chg ${e.change_pct?.toFixed(2)}%`
+              ).join("\n");
+              return (
+                <g key={sym}>
+                  <title>{tip}</title>
+                  <line x1={cx} x2={cx} y1={lineY} y2={dotY + 6} stroke={color} strokeWidth="1.5" opacity="0.4"/>
+                  <circle cx={cx} cy={dotY} r={count > 1 ? 8 : 5.5} fill={color}/>
+                  {count > 1
+                    ? <text x={cx} y={dotY + 4} fontSize="8.5" fill="white" textAnchor="middle" fontWeight="700">{count}</text>
+                    : null}
+                  <text x={cx} y={dotY - 11} fontSize="9" fill={color} textAnchor="middle" fontWeight="600" className="mono">{sym}</text>
+                </g>
+              );
+            })}
           </g>
         );
       })}

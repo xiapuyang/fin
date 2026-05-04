@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, String
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from fin.database import Base
@@ -18,6 +18,7 @@ class AlertModel(Base):
     )  # price_gte, price_lte, change_gte, change_lte
     value = Column(Float, nullable=False)
     enabled = Column(Boolean, default=True, nullable=False)
+    user_id = Column(BigInteger, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
