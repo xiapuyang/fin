@@ -39,11 +39,14 @@ class AlertSQLiteRepository(AlertRepository):
         )
 
     def create(self, data: AlertCreate) -> AlertModel:
+        from fin.models.user import MOCK_USER_ID
+
         alert = AlertModel(
             symbol=data.symbol,
             name=data.name,
             condition=data.condition,
             value=data.value,
+            user_id=MOCK_USER_ID,
         )
         self._db.add(alert)
         self._db.commit()

@@ -4,17 +4,22 @@
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import json
+
 import yfinance as yf
 from agentmail import AgentMail
 
+from fin.config import LAST_CHECK_PATH
 from fin.database import SessionLocal, init_db
 from fin.logger import setup_logging
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
+from fin.services.quote import QuoteService
 from fin import settings as settings_store
 
 AGENTMAIL_INBOX = "agent_of_sharp@agentmail.to"
@@ -151,28 +156,32 @@ def main() -> None:
         symbols = list({a.symbol for a in alerts})
         logger.info("Fetching data for %d symbols: %s", len(symbols), symbols)
 
+        quote_service = QuoteService(db)
         price_data: dict[str, tuple[float, float]] = {}
         for symbol in symbols:
             try:
-                ticker = yf.Ticker(symbol)
-                info = ticker.fast_info
-                if not args.force and getattr(info, "market_state", None) != "REGULAR":
+                fi = yf.Ticker(symbol).fast_info
+                market_state = getattr(fi, "market_state", None)
+                if not args.force and market_state != "REGULAR":
                     logger.info(
                         "Market not REGULAR for %s (state=%s), skipping",
                         symbol,
-                        getattr(info, "market_state", "?"),
+                        market_state,
                     )
                     price_data[symbol] = (None, None)
                     continue
-                price = info.last_price
-                prev_close = info.previous_close
-                if price is None or prev_close is None or prev_close == 0:
+                quote = quote_service.get_quote(symbol)
+                if not quote or not quote.get("price") or not quote.get("change_pct"):
                     logger.warning("Missing price data for %s", symbol)
                     price_data[symbol] = (None, None)
                     continue
-                change_pct = (price - prev_close) / prev_close * 100
-                price_data[symbol] = (price, change_pct)
-                logger.info("%s: price=%.4g change=%.2f%%", symbol, price, change_pct)
+                price_data[symbol] = (quote["price"], quote["change_pct"])
+                logger.info(
+                    "%s: price=%.4g change=%.2f%%",
+                    symbol,
+                    quote["price"],
+                    quote["change_pct"],
+                )
             except Exception:
                 logger.exception("Failed to fetch %s", symbol)
                 price_data[symbol] = (None, None)
@@ -220,6 +229,10 @@ def main() -> None:
 
     finally:
         db.close()
+
+    LAST_CHECK_PATH.write_text(
+        json.dumps({"checked_at": datetime.utcnow().isoformat() + "Z"})
+    )
 
 
 if __name__ == "__main__":

@@ -232,8 +232,8 @@ const Toggle = ({ value, onChange, size = "md" }) => {
 
 // === Symbol chip ===========================================================
 const SymbolChip = ({ sym, onClick, selected, showName = true, dense = false }) => {
-  const ch = ((sym.price - sym.prevClose) / sym.prevClose) * 100;
-  const isUp = ch >= 0;
+  const hasPrice = sym.price != null && sym.prevClose != null && sym.prevClose !== 0;
+  const ch = hasPrice ? ((sym.price - sym.prevClose) / sym.prevClose) * 100 : null;
   return (
     <button onClick={() => onClick?.(sym)} style={{
       display: "inline-flex", alignItems: "center", gap: 8,
@@ -247,8 +247,8 @@ const SymbolChip = ({ sym, onClick, selected, showName = true, dense = false }) 
       <MarketDot market={sym.market} />
       <span className="mono" style={{ fontWeight: 600, fontSize: 12, letterSpacing: ".02em" }}>{sym.code}</span>
       {showName && <span style={{ fontSize: 11.5, color: selected ? "rgba(255,255,255,.7)" : "var(--ink-3)" }}>{sym.name}</span>}
-      <span className="mono" style={{ fontSize: 11, color: isUp ? "var(--up)" : "var(--down)", fontWeight: 600, marginLeft: 2 }}>
-        {fmtPct(ch, 2)}
+      <span className="mono" style={{ fontSize: 11, color: ch != null ? (ch >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)", fontWeight: 600, marginLeft: 2 }}>
+        {ch != null ? fmtPct(ch, 2) : "—"}
       </span>
     </button>
   );
