@@ -16,6 +16,7 @@ from fin.schemas.alert import (
     HistoryResponse,
     TriggeredInfo,
 )
+from fin.services.quote import QuoteService, normalize_symbol as _normalize_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -42,42 +43,17 @@ def _to_response(alert: AlertModel) -> AlertResponse:
     )
 
 
-def _normalize_symbol(symbol: str) -> str:
-    """Normalize common user-friendly symbol aliases to yfinance format."""
-    aliases = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
-    return aliases.get(symbol.upper(), symbol.upper())
-
-
 @router.get("/health")
 def health():
     return {"status": "ok"}
 
 
 @router.get("/quote/{symbol}")
-def get_quote(symbol: str):
-    import yfinance as yf
-
-    symbol = _normalize_symbol(symbol)
-    try:
-        info = yf.Ticker(symbol).fast_info
-        price = info.last_price
-        prev_close = info.previous_close
-        if price is None or prev_close is None or prev_close == 0:
-            raise HTTPException(status_code=503, detail="Price data unavailable")
-        change_pct = (price - prev_close) / prev_close * 100
-        currency = getattr(info, "currency", "USD") or "USD"
-        return {
-            "symbol": symbol,
-            "price": price,
-            "prev_close": prev_close,
-            "change_pct": change_pct,
-            "currency": currency,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning("Quote fetch failed for %s: %s", symbol, e)
-        raise HTTPException(status_code=503, detail="Failed to fetch quote")
+def get_quote(symbol: str, db: Session = Depends(get_db)):
+    result = QuoteService(db).get_quote(symbol)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Price data unavailable")
+    return result
 
 
 @router.get("/symbols")

@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session, selectinload
 
 from fin.models.alert import AlertModel
+from fin.models.user import MOCK_USER_ID
 from fin.repositories.base import AlertRepository
 from fin.schemas.alert import AlertCreate, AlertUpdate
 
@@ -44,6 +45,7 @@ class AlertSQLiteRepository(AlertRepository):
             name=data.name,
             condition=data.condition,
             value=data.value,
+            user_id=MOCK_USER_ID,
         )
         self._db.add(alert)
         self._db.commit()
