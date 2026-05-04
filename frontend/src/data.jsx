@@ -24,11 +24,13 @@ const SYMBOLS = {
     { code: "TSLA",  name: "Tesla",     market: "US", currency: "USD" },
   ],
   "港股 HK Stocks": [
-    { code: "^HSI",    name: "恒生指数", market: "HK", currency: "HKD" },
-    { code: "0700.HK", name: "腾讯控股", market: "HK", currency: "HKD" },
-    { code: "9988.HK", name: "阿里巴巴", market: "HK", currency: "HKD" },
-    { code: "3690.HK", name: "美团",     market: "HK", currency: "HKD" },
-    { code: "1810.HK", name: "小米集团", market: "HK", currency: "HKD" },
+    { code: "^HSI",    name: "恒生指数",   market: "HK", currency: "HKD" },
+    { code: "^HSTECH", name: "恒生科技",   market: "HK", currency: "HKD" },
+    { code: "^HSCE",   name: "国企指数",   market: "HK", currency: "HKD" },
+    { code: "0700.HK", name: "腾讯控股",   market: "HK", currency: "HKD" },
+    { code: "9988.HK", name: "阿里巴巴",   market: "HK", currency: "HKD" },
+    { code: "3690.HK", name: "美团",       market: "HK", currency: "HKD" },
+    { code: "1810.HK", name: "小米集团",   market: "HK", currency: "HKD" },
   ],
   "A 股 A-Shares": [
     { code: "000300.SS", name: "沪深 300", market: "CN", currency: "CNY" },
