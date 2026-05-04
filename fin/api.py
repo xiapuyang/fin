@@ -12,6 +12,7 @@ from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
 from fin.routers.settings import router as settings_router
+from fin.services.price_updater import start_price_updater
 
 setup_logging("fin-api")
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
+    start_price_updater()
     yield
     logger.info("Shutting down")
 
@@ -34,6 +36,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LoggingMiddleware)
+
+
+@app.middleware("http")
+async def no_cache_api(request: Request, call_next):
+    """Prevent browser caching of API responses."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 app.include_router(alerts_router)
 app.include_router(settings_router)

@@ -2,40 +2,40 @@
 
 const SYMBOLS = {
   "美股指数 US Index": [
-    { code: "^GSPC", name: "S&P 500", market: "US", price: 5847.20, prevClose: 5821.40, currency: "USD" },
-    { code: "^NDX",  name: "Nasdaq 100", market: "US", price: 20733.50, prevClose: 20612.10, currency: "USD" },
-    { code: "^DJI",  name: "Dow Jones", market: "US", price: 42114.40, prevClose: 42233.05, currency: "USD" },
-    { code: "^VIX",  name: "VIX", market: "US", price: 18.42, prevClose: 17.20, currency: "USD" },
+    { code: "^GSPC", name: "S&P 500",    market: "US", currency: "USD" },
+    { code: "^NDX",  name: "Nasdaq 100", market: "US", currency: "USD" },
+    { code: "^DJI",  name: "Dow Jones",  market: "US", currency: "USD" },
+    { code: "^VIX",  name: "VIX",        market: "US", currency: "USD" },
   ],
   "美股 ETF US ETF": [
-    { code: "SPY", name: "S&P ETF", market: "US", price: 581.10, prevClose: 578.42, currency: "USD" },
-    { code: "QQQ", name: "Nasdaq ETF", market: "US", price: 504.20, prevClose: 501.80, currency: "USD" },
-    { code: "IWM", name: "Russell 2000", market: "US", price: 226.30, prevClose: 228.10, currency: "USD" },
-    { code: "GLD", name: "Gold", market: "US", price: 254.80, prevClose: 252.60, currency: "USD" },
-    { code: "TLT", name: "20Y Treasury", market: "US", price: 88.34, prevClose: 88.92, currency: "USD" },
+    { code: "SPY", name: "S&P ETF",      market: "US", currency: "USD" },
+    { code: "QQQ", name: "Nasdaq ETF",   market: "US", currency: "USD" },
+    { code: "IWM", name: "Russell 2000", market: "US", currency: "USD" },
+    { code: "GLD", name: "Gold",         market: "US", currency: "USD" },
+    { code: "TLT", name: "20Y Treasury", market: "US", currency: "USD" },
   ],
   "Mag7": [
-    { code: "NVDA",  name: "Nvidia", market: "US", price: 144.20, prevClose: 138.50, currency: "USD" },
-    { code: "AAPL",  name: "Apple", market: "US", price: 232.10, prevClose: 234.40, currency: "USD" },
-    { code: "MSFT",  name: "Microsoft", market: "US", price: 425.30, prevClose: 421.80, currency: "USD" },
-    { code: "GOOGL", name: "Alphabet", market: "US", price: 174.20, prevClose: 171.10, currency: "USD" },
-    { code: "AMZN",  name: "Amazon", market: "US", price: 199.80, prevClose: 198.20, currency: "USD" },
-    { code: "META",  name: "Meta", market: "US", price: 591.40, prevClose: 583.20, currency: "USD" },
-    { code: "TSLA",  name: "Tesla", market: "US", price: 248.60, prevClose: 244.10, currency: "USD" },
+    { code: "NVDA",  name: "Nvidia",    market: "US", currency: "USD" },
+    { code: "AAPL",  name: "Apple",     market: "US", currency: "USD" },
+    { code: "MSFT",  name: "Microsoft", market: "US", currency: "USD" },
+    { code: "GOOGL", name: "Alphabet",  market: "US", currency: "USD" },
+    { code: "AMZN",  name: "Amazon",    market: "US", currency: "USD" },
+    { code: "META",  name: "Meta",      market: "US", currency: "USD" },
+    { code: "TSLA",  name: "Tesla",     market: "US", currency: "USD" },
   ],
   "港股 HK Stocks": [
-    { code: "^HSI",   name: "恒生指数", market: "HK", price: 21134.80, prevClose: 20987.10, currency: "HKD" },
-    { code: "0700.HK",name: "腾讯控股", market: "HK", price: 412.40, prevClose: 408.20, currency: "HKD" },
-    { code: "9988.HK",name: "阿里巴巴", market: "HK", price: 102.30, prevClose: 100.60, currency: "HKD" },
-    { code: "3690.HK",name: "美团", market: "HK", price: 184.20, prevClose: 181.50, currency: "HKD" },
-    { code: "1810.HK",name: "小米集团", market: "HK", price: 28.45, prevClose: 28.10, currency: "HKD" },
+    { code: "^HSI",    name: "恒生指数", market: "HK", currency: "HKD" },
+    { code: "0700.HK", name: "腾讯控股", market: "HK", currency: "HKD" },
+    { code: "9988.HK", name: "阿里巴巴", market: "HK", currency: "HKD" },
+    { code: "3690.HK", name: "美团",     market: "HK", currency: "HKD" },
+    { code: "1810.HK", name: "小米集团", market: "HK", currency: "HKD" },
   ],
   "A 股 A-Shares": [
-    { code: "000300.SS", name: "沪深 300", market: "CN", price: 4012.30, prevClose: 4001.20, currency: "CNY" },
-    { code: "000001.SS", name: "上证指数", market: "CN", price: 3287.40, prevClose: 3275.10, currency: "CNY" },
-    { code: "399006.SZ", name: "创业板指", market: "CN", price: 2241.60, prevClose: 2232.40, currency: "CNY" },
-    { code: "600519.SS", name: "贵州茅台", market: "CN", price: 1521.80, prevClose: 1508.20, currency: "CNY" },
-    { code: "300750.SZ", name: "宁德时代", market: "CN", price: 263.40, prevClose: 261.10, currency: "CNY" },
+    { code: "000300.SS", name: "沪深 300", market: "CN", currency: "CNY" },
+    { code: "000001.SS", name: "上证指数", market: "CN", currency: "CNY" },
+    { code: "399006.SZ", name: "创业板指", market: "CN", currency: "CNY" },
+    { code: "600519.SS", name: "贵州茅台", market: "CN", currency: "CNY" },
+    { code: "300750.SZ", name: "宁德时代", market: "CN", currency: "CNY" },
   ],
 };
 
@@ -60,8 +60,9 @@ function genSpark(seed, n = 30, base = 100, vol = 0.025, drift = 0) {
   return arr;
 }
 
-// pre-generate sparklines for everything
+// pre-generate sparklines only for symbols with known prices (holdings etc.)
 Object.values(SYMBOLS).flat().forEach((s, i) => {
+  if (!s.price) return;
   s.spark = genSpark(s.code.charCodeAt(0) + i * 7, 30, s.price * 0.95, 0.022, 0.001);
   s.spark[s.spark.length - 1] = s.price;
 });

@@ -19,6 +19,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   const [notifyEnabled, setNotifyEnabled] = React.useState(true);
 
   const [liveQuotes, setLiveQuotes] = React.useState({});
+  const [lastCheck, setLastCheck] = React.useState(null);
 
   // Load alerts, history, and settings from API on mount
   React.useEffect(() => {
@@ -30,15 +31,42 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
     }).catch(console.error);
   }, []);
 
+  // Fetch last-check timestamp; refresh every minute so relative time stays current
+  React.useEffect(() => {
+    const load = () => fetch("/api/last-check")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.checked_at && setLastCheck(new Date(d.checked_at)))
+      .catch(() => {});
+    load();
+    const timer = setInterval(load, 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch live quotes for all Quick Pick symbols; refresh every 3 minutes
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    const refresh = () => Object.values(SYMBOLS).flat().forEach(s => {
+      fetch(`/api/quote/${encodeURIComponent(s.code)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q && setLiveQuotes(prev => ({ ...prev, [s.code]: q })))
+        .catch(() => {});
+    });
+    refresh();
+    const timer = setInterval(refresh, 3 * 60 * 1000);
+    return () => { clearInterval(timer); ctrl.abort(); };
+  }, []);
+
   // Fetch live quotes whenever the alert symbol set changes
   React.useEffect(() => {
+    const ctrl = new AbortController();
     const symbols = [...new Set(alerts.map(a => a.code))];
     symbols.forEach(code => {
-      fetch(`/api/quote/${code}`)
+      fetch(`/api/quote/${encodeURIComponent(code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setLiveQuotes(prev => ({ ...prev, [code]: q })))
         .catch(() => {});
     });
+    return () => ctrl.abort();
   }, [alerts.map(a => a.code).join(",")]);
 
   // Form state
@@ -49,10 +77,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   React.useEffect(() => {
     if (!form.code) return;
     setLiveQuote(null);
-    fetch(`/api/quote/${form.code}`)
+    const ctrl = new AbortController();
+    fetch(`/api/quote/${encodeURIComponent(form.code)}`, { signal: ctrl.signal })
       .then(r => r.ok ? r.json() : null)
       .then(q => q && setLiveQuote(q))
       .catch(() => {});
+    return () => ctrl.abort();
   }, [form.code]);
 
   // Merge live quote over static symbol data for display
@@ -66,7 +96,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   // computed: distance to threshold
   const numThr = parseFloat(form.threshold);
   const effectiveThr = !cond.isPrice && !cond.isUp ? -numThr : numThr;
-  const distance = !isNaN(numThr) && selectedSym ? (
+  const distance = !isNaN(numThr) && selectedSym?.price != null ? (
     cond.isPrice
       ? ((effectiveThr - selectedSym.price) / selectedSym.price * 100)
       : (effectiveThr - ((selectedSym.price - selectedSym.prevClose) / selectedSym.prevClose * 100))
@@ -176,7 +206,14 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
         <StatTile label="ACTIVE 监控中" value={counts.active} accent="var(--up)" hint="Cron */20 min"/>
         <StatTile label="TRIGGERED 已触发" value={counts.triggered} accent="var(--ink)" hint="本月 this month"/>
         <StatTile label="MARKETS 覆盖市场" value="3" accent="var(--info)" hint="US · HK · CN"/>
-        <StatTile label="LAST CHECK 上次检查" value="2 min ago" mono={false} accent="var(--violet)" hint="next *:20"/>
+        <StatTile label="LAST CHECK 上次检查" value={(() => {
+          if (!lastCheck) return "—";
+          const s = Math.floor((Date.now() - lastCheck) / 1000);
+          if (s < 60) return `${s}s ago`;
+          const m = Math.floor(s / 60);
+          if (m < 60) return `${m} min ago`;
+          return `${Math.floor(m / 60)}h ago`;
+        })()} mono={false} accent="var(--violet)" hint="check_alerts.py"/>
       </div>
 
       {/* Two-column: form + symbol picker */}
@@ -206,9 +243,11 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
             </div>
           </div>
           <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 260, overflowY: "auto" }} className="scroll">
-            {SYMBOLS[category].map(s => (
-              <SymbolChip key={s.code} sym={s} onClick={pickSymbol} selected={form.code === s.code}/>
-            ))}
+            {SYMBOLS[category].map(s => {
+              const q = liveQuotes[s.code];
+              const liveSym = q ? { ...s, price: q.price, prevClose: q.prev_close } : s;
+              return <SymbolChip key={s.code} sym={liveSym} onClick={pickSymbol} selected={form.code === s.code}/>;
+            })}
           </div>
         </Card>
 
@@ -225,7 +264,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
           </div>
           <div style={{ padding: 18 }}>
             {/* Selected symbol live preview */}
-            {selectedSym && (
+            {selectedSym?.price != null && (
               <div style={{ background: "var(--bg-deep)", border: "1px solid var(--line)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                   <div>
@@ -262,7 +301,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
                   value={form.threshold}
                   onChange={v => setForm({ ...form, threshold: v })}
                   type="number"
-                  placeholder={cond.isPrice ? selectedSym?.price.toFixed(0) : "5"}
+                  placeholder={cond.isPrice ? selectedSym?.price?.toFixed(0) : "5"}
                   suffix={cond.isPrice ? selectedSym?.currency : "%"}
                 />
               </Field>
@@ -272,7 +311,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
             </div>
 
             {/* Distance hint */}
-            {distance != null && (
+            {distance != null && isFinite(distance) && (
               <div style={{
                 marginBottom: 14, padding: "8px 12px", borderRadius: 8,
                 background: Math.abs(distance) < 2 ? "var(--warn-soft)" : "var(--bg-deep)",
@@ -308,7 +347,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
           </div>
         </div>
         <div style={{ overflowX: "auto" }} className="scroll">
-          <TriggerTimeline events={history} width={1380} height={100} days={14}/>
+          <TriggerTimeline events={history} width={1380} height={120} days={14}/>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
           {history.slice().reverse().map((h, i) => {
