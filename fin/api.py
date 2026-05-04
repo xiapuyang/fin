@@ -12,6 +12,7 @@ from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
 from fin.routers.settings import router as settings_router
+from fin.routers.watchlist import router as watchlist_router
 from fin.services.price_updater import start_price_updater
 
 setup_logging("fin-api")
@@ -49,6 +50,7 @@ async def no_cache_api(request: Request, call_next):
 
 app.include_router(alerts_router)
 app.include_router(settings_router)
+app.include_router(watchlist_router)
 
 
 @app.exception_handler(Exception)

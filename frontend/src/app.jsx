@@ -11,12 +11,23 @@ const NAV = [
 
 const App = () => {
   const [route, setRoute] = React.useState("dashboard");
+  const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
 
+  const navigate = (target) => {
+    if (typeof target === "object") {
+      setRoute(target.route);
+      setAlertsCategory(target.category || null);
+    } else {
+      setRoute(target);
+      setAlertsCategory(null);
+    }
+  };
+
   const Page = {
-    dashboard: <Dashboard onNavigate={setRoute} alerts={alerts} history={history}/>,
-    alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory}/>,
+    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history}/>,
+    alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings/>,
     ledger:    <Ledger/>,
     balance:   <BalanceSheet/>,
@@ -25,7 +36,7 @@ const App = () => {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar route={route} setRoute={setRoute}/>
+      <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
         <TopBar route={route}/>
         <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
