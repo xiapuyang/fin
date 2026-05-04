@@ -12,7 +12,7 @@ const condMeta = (c) => COND_OPTIONS.find(o => o.value === c) || COND_OPTIONS[0]
 const WATCHLIST_TAB = "关注列表 Watchlist";
 
 const guessMarket = (symbol) => {
-  if (symbol.endsWith(".HK")) return "HK";
+  if (symbol.endsWith(".HK") || symbol.startsWith("^HSI") || symbol.startsWith("^HSCE") || symbol.startsWith("^HSTECH")) return "HK";
   if (symbol.endsWith(".SS") || symbol.endsWith(".SZ")) return "CN";
   return "US";
 };
@@ -69,10 +69,10 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     return () => { clearInterval(timer); ctrl.abort(); };
   }, []);
 
-  // Fetch live quotes whenever the alert symbol set changes
+  // Fetch live quotes whenever the alert symbol set changes (skip already-cached)
   React.useEffect(() => {
     const ctrl = new AbortController();
-    const symbols = [...new Set(alerts.map(a => a.code))];
+    const symbols = [...new Set(alerts.map(a => a.code))].filter(code => !liveQuotes[code]);
     symbols.forEach(code => {
       fetch(`/api/quote/${encodeURIComponent(code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
@@ -103,11 +103,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     const hasClientMatch = Object.values(SYMBOLS).flat().some(
       s => s.code.includes(upper) || s.name.toLowerCase().includes(search.toLowerCase())
     );
-    if (hasClientMatch) return;
-    if (upper.length > 12) return;
+    if (hasClientMatch) { setSearchLoading(false); return; }
+    if (upper.length > 12) { setSearchLoading(false); return; }
+    const ctrl = new AbortController();
     const timer = setTimeout(() => {
       setSearchLoading(true);
-      fetch(`/api/quote/${encodeURIComponent(upper)}`)
+      fetch(`/api/quote/${encodeURIComponent(upper)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => {
           if (q) setSearchResult({
@@ -122,7 +123,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         })
         .catch(() => setSearchLoading(false));
     }, 500);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); ctrl.abort(); };
   }, [search]);
 
   // Form state
