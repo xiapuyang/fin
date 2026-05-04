@@ -171,7 +171,11 @@ def main() -> None:
                     price_data[symbol] = (None, None)
                     continue
                 quote = quote_service.get_quote(symbol)
-                if not quote or not quote.get("price") or not quote.get("change_pct"):
+                if (
+                    not quote
+                    or quote.get("price") is None
+                    or quote.get("change_pct") is None
+                ):
                     logger.warning("Missing price data for %s", symbol)
                     price_data[symbol] = (None, None)
                     continue
@@ -228,11 +232,10 @@ def main() -> None:
                 logger.exception("Failed to send summary email")
 
     finally:
+        LAST_CHECK_PATH.write_text(
+            json.dumps({"checked_at": datetime.utcnow().isoformat() + "Z"})
+        )
         db.close()
-
-    LAST_CHECK_PATH.write_text(
-        json.dumps({"checked_at": datetime.utcnow().isoformat() + "Z"})
-    )
 
 
 if __name__ == "__main__":

@@ -44,26 +44,29 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
 
   // Fetch live quotes for all Quick Pick symbols; refresh every 3 minutes
   React.useEffect(() => {
+    const ctrl = new AbortController();
     const refresh = () => Object.values(SYMBOLS).flat().forEach(s => {
-      fetch(`/api/quote/${encodeURIComponent(s.code)}`)
+      fetch(`/api/quote/${encodeURIComponent(s.code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setLiveQuotes(prev => ({ ...prev, [s.code]: q })))
         .catch(() => {});
     });
     refresh();
     const timer = setInterval(refresh, 3 * 60 * 1000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); ctrl.abort(); };
   }, []);
 
   // Fetch live quotes whenever the alert symbol set changes
   React.useEffect(() => {
+    const ctrl = new AbortController();
     const symbols = [...new Set(alerts.map(a => a.code))];
     symbols.forEach(code => {
-      fetch(`/api/quote/${code}`)
+      fetch(`/api/quote/${encodeURIComponent(code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setLiveQuotes(prev => ({ ...prev, [code]: q })))
         .catch(() => {});
     });
+    return () => ctrl.abort();
   }, [alerts.map(a => a.code).join(",")]);
 
   // Form state
@@ -74,10 +77,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
   React.useEffect(() => {
     if (!form.code) return;
     setLiveQuote(null);
-    fetch(`/api/quote/${encodeURIComponent(form.code)}`)
+    const ctrl = new AbortController();
+    fetch(`/api/quote/${encodeURIComponent(form.code)}`, { signal: ctrl.signal })
       .then(r => r.ok ? r.json() : null)
       .then(q => q && setLiveQuote(q))
       .catch(() => {});
+    return () => ctrl.abort();
   }, [form.code]);
 
   // Merge live quote over static symbol data for display
@@ -306,7 +311,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory }) => {
             </div>
 
             {/* Distance hint */}
-            {distance != null && (
+            {distance != null && isFinite(distance) && (
               <div style={{
                 marginBottom: 14, padding: "8px 12px", borderRadius: 8,
                 background: Math.abs(distance) < 2 ? "var(--warn-soft)" : "var(--bg-deep)",

@@ -1,4 +1,5 @@
 import json
+import pytest
 from unittest.mock import patch
 
 
@@ -34,12 +35,15 @@ def test_get_symbols_not_found(client, tmp_path, monkeypatch):
 
 
 def test_get_quote_success(client):
-    live = {"price": 150.0, "prev_close": 148.0, "currency": "USD"}
+    # prev_close=100 → change_pct = (110-100)/100*100 = 10.0 exactly
+    live = {"price": 110.0, "prev_close": 100.0, "currency": "USD"}
     with patch("fin.services.quote._fetch_live", return_value=live):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 200
-    assert r.json()["price"] == 150.0
-    assert r.json()["symbol"] == "AAPL"
+    data = r.json()
+    assert data["price"] == 110.0
+    assert data["symbol"] == "AAPL"
+    assert data["change_pct"] == pytest.approx(10.0)
 
 
 def test_get_quote_missing_price(client):
@@ -49,7 +53,8 @@ def test_get_quote_missing_price(client):
 
 
 def test_get_quote_fetch_error(client):
-    # _fetch_live swallows exceptions and returns {}; QuoteService then returns None → 503
+    # The real _fetch_live swallows network exceptions and returns {}.
+    # Simulate that contract: QuoteService receives {} and returns None → 503.
     with patch("fin.services.quote._fetch_live", return_value={}):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 503
@@ -175,3 +180,37 @@ def test_history_empty(client):
 def test_history_limit_param(client):
     r = client.get("/api/history?limit=10")
     assert r.status_code == 200
+
+
+# ── Last Check ────────────────────────────────────────────────────────────────
+
+
+def test_last_check_missing_file(client, tmp_path, monkeypatch):
+    import fin.routers.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "LAST_CHECK_PATH", tmp_path / "missing.json")
+    r = client.get("/api/last-check")
+    assert r.status_code == 200
+    assert r.json() == {"checked_at": None}
+
+
+def test_last_check_present(client, tmp_path, monkeypatch):
+    import fin.routers.settings as settings_mod
+
+    p = tmp_path / "last_check.json"
+    p.write_text('{"checked_at": "2026-05-04T10:00:00Z"}')
+    monkeypatch.setattr(settings_mod, "LAST_CHECK_PATH", p)
+    r = client.get("/api/last-check")
+    assert r.status_code == 200
+    assert r.json()["checked_at"] == "2026-05-04T10:00:00Z"
+
+
+def test_last_check_malformed_file(client, tmp_path, monkeypatch):
+    import fin.routers.settings as settings_mod
+
+    p = tmp_path / "last_check.json"
+    p.write_text("not json{{")
+    monkeypatch.setattr(settings_mod, "LAST_CHECK_PATH", p)
+    r = client.get("/api/last-check")
+    assert r.status_code == 200
+    assert r.json() == {"checked_at": None}

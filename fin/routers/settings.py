@@ -28,4 +28,7 @@ def put_settings(data: SettingsPayload):
 def get_last_check():
     if not LAST_CHECK_PATH.exists():
         return {"checked_at": None}
-    return json.loads(LAST_CHECK_PATH.read_text())
+    try:
+        return json.loads(LAST_CHECK_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"checked_at": None}
