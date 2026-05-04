@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import BigInteger, Column, DateTime, String
 
 from fin.database import Base
 
@@ -10,7 +10,7 @@ class WatchlistModel(Base):
 
     __tablename__ = "watchlist"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     symbol = Column(String, unique=True, nullable=False, index=True)
     name = Column(String)
     market = Column(String)
