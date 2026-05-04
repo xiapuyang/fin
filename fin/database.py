@@ -49,7 +49,7 @@ def _migrate_alert_user_id(db: "Session") -> None:
 
     cols = [row[1] for row in db.execute(text("PRAGMA table_info(alerts)"))]
     if "user_id" not in cols:
-        db.execute(text("ALTER TABLE alerts ADD COLUMN user_id TEXT"))
+        db.execute(text("ALTER TABLE alerts ADD COLUMN user_id INTEGER"))
         db.execute(
             text("UPDATE alerts SET user_id = :uid WHERE user_id IS NULL"),
             {"uid": MOCK_USER_ID},
