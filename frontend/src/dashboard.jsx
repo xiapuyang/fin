@@ -14,10 +14,31 @@ const MARKET_HOURS = (now = new Date()) => {
 const Dashboard = ({ onNavigate, alerts, history }) => {
   const market = MARKET_HOURS();
   const all = Object.values(SYMBOLS).flat();
-  const watch = [
-    SYMBOL_INDEX["NVDA"], SYMBOL_INDEX["GOOGL"], SYMBOL_INDEX["TSLA"],
-    SYMBOL_INDEX["^GSPC"], SYMBOL_INDEX["QQQ"], SYMBOL_INDEX["0700.HK"],
-  ].filter(Boolean);
+
+  const [watchlist, setWatchlist] = React.useState([]);
+  const [watchQuotes, setWatchQuotes] = React.useState({});
+
+  React.useEffect(() => {
+    fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
+  }, []);
+
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    watchlist.forEach(w => {
+      if (watchQuotes[w.symbol]) return;
+      fetch(`/api/quote/${encodeURIComponent(w.symbol)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q && setWatchQuotes(prev => ({ ...prev, [w.symbol]: q })))
+        .catch(() => {});
+    });
+    return () => ctrl.abort();
+  }, [watchlist.map(w => w.symbol).join(",")]);
+
+  const watch = watchlist.map(w => {
+    const q = watchQuotes[w.symbol];
+    const base = SYMBOL_INDEX[w.symbol] || { code: w.symbol, name: w.name || w.symbol, market: w.market || "US", currency: w.currency || "USD" };
+    return q ? { ...base, price: q.price, prevClose: q.prev_close } : base;
+  }).filter(s => s.price != null);
 
   const activeAlerts = alerts.filter(a => a.enabled).length;
   const triggered = alerts.filter(a => a.triggered).length;
@@ -167,14 +188,16 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>关注列表 Watchlist</div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Top picks across markets</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{watchlist.length} 支 · 自选标的</div>
             </div>
-            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>Manage</Button>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate({ route: "alerts", category: WATCHLIST_TAB })}>Manage</Button>
           </div>
           <div>
+            {watch.length === 0 && (
+              <Empty icon="bell" title="自选为空" hint="在提醒页搜索标的并添加到自选"/>
+            )}
             {watch.map((s, i) => {
               const ch = (s.price - s.prevClose) / s.prevClose * 100;
-              const isUp = ch >= 0;
               return (
                 <div key={s.code} style={{
                   padding: "12px 20px", display: "grid", gridTemplateColumns: "auto 1fr 90px 120px 80px", gap: 16, alignItems: "center",

@@ -9,6 +9,8 @@ from fin.database import get_db
 from fin.models.alert import AlertFireModel, AlertModel
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
+from fin.repositories.watchlist_sqlite import WatchlistSQLiteRepository
+from fin.repositories.stock_sqlite import StockSQLiteRepository
 from fin.schemas.alert import (
     AlertCreate,
     AlertResponse,
@@ -21,6 +23,15 @@ from fin.services.quote import QuoteService, normalize_symbol as _normalize_symb
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+
+def _guess_market(symbol: str) -> str:
+    """Infer market from symbol format or well-known HK index prefixes."""
+    if symbol.endswith(".HK") or symbol.startswith(("^HSI", "^HSCE", "^HSTECH")):
+        return "HK"
+    if symbol.endswith(".SS") or symbol.endswith(".SZ"):
+        return "CN"
+    return "US"
 
 
 def _to_response(alert: AlertModel) -> AlertResponse:
@@ -110,6 +121,24 @@ def create_alert(data: AlertCreate, db: Session = Depends(get_db)):
         alert.condition,
         alert.value,
     )
+
+    # Auto-add symbol to watchlist — best-effort side effect, never fails the alert
+    try:
+        QuoteService(db).get_quote(
+            normalized.symbol
+        )  # populates stock cache if missing
+        stock = StockSQLiteRepository(db).get_by_symbol(normalized.symbol)
+        WatchlistSQLiteRepository(db).add(
+            symbol=normalized.symbol,
+            name=stock.name if stock else None,
+            market=_guess_market(normalized.symbol),
+            currency=stock.currency if stock else "USD",
+        )
+    except Exception:
+        logger.warning(
+            "Watchlist auto-add failed for %s (non-fatal)", normalized.symbol
+        )
+
     return _to_response(alert)
 
 
