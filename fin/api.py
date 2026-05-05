@@ -1,9 +1,10 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fin.config import FRONTEND_DIR
@@ -11,6 +12,7 @@ from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
+from fin.routers.holdings import router as holdings_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
 from fin.services.price_updater import start_price_updater
@@ -40,17 +42,27 @@ app.add_middleware(LoggingMiddleware)
 
 
 @app.middleware("http")
-async def no_cache_api(request: Request, call_next):
-    """Prevent browser caching of API responses."""
+async def no_cache(request: Request, call_next):
+    """Prevent browser caching of API responses and local JS/JSX files."""
     response = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    path = request.url.path
+    if path.startswith("/api/") or path.endswith((".jsx", ".js", ".css")):
         response.headers["Cache-Control"] = "no-store"
     return response
 
 
 app.include_router(alerts_router)
+app.include_router(holdings_router)
 app.include_router(settings_router)
 app.include_router(watchlist_router)
+
+_STATIC_VER = str(int(time.time()))
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    html = (FRONTEND_DIR / "index.html").read_text()
+    return html.replace("__VER__", _STATIC_VER)
 
 
 @app.exception_handler(Exception)

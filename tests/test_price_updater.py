@@ -48,7 +48,8 @@ def test_collect_symbols_reads_symbols_json(tmp_path, monkeypatch):
     monkeypatch.setattr(pu, "SYMBOLS_PATH", symbols_file)
 
     with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-        symbols = collect_symbols()
+        with patch("fin.services.price_updater._portfolio_symbols", return_value=set()):
+            symbols = collect_symbols()
 
     assert "AAPL" in symbols
     assert "GOOG" in symbols
@@ -65,7 +66,8 @@ def test_collect_symbols_includes_alert_symbols(tmp_path, monkeypatch, db):
         AlertCreate(symbol="TSLA", name="t", condition="price_lte", value=100.0)
     )
     with patch("fin.services.price_updater._alert_symbols", return_value={"TSLA"}):
-        symbols = collect_symbols()
+        with patch("fin.services.price_updater._portfolio_symbols", return_value=set()):
+            symbols = collect_symbols()
 
     assert "TSLA" in symbols
 
@@ -78,7 +80,8 @@ def test_collect_symbols_normalizes_aliases(tmp_path, monkeypatch):
     monkeypatch.setattr(pu, "SYMBOLS_PATH", symbols_file)
 
     with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-        symbols = collect_symbols()
+        with patch("fin.services.price_updater._portfolio_symbols", return_value=set()):
+            symbols = collect_symbols()
 
     assert "^GSPC" in symbols
     assert ".SPX" not in symbols
@@ -94,7 +97,10 @@ def test_run_update_cycle_upserts_into_db(db, tmp_path, monkeypatch):
     full_data = {"price": 150.0, "prev_close": 148.0, "currency": "USD"}
     with patch("fin.services.price_updater.fetch_full_quote", return_value=full_data):
         with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-            run_update_cycle(db)
+            with patch(
+                "fin.services.price_updater._portfolio_symbols", return_value=set()
+            ):
+                run_update_cycle(db)
 
     assert StockSQLiteRepository(db).get_by_symbol("AAPL").price == 150.0
 
@@ -108,6 +114,9 @@ def test_run_update_cycle_skips_failed_symbols(db, tmp_path, monkeypatch):
 
     with patch("fin.services.price_updater.fetch_full_quote", return_value={}):
         with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-            run_update_cycle(db)  # should not raise
+            with patch(
+                "fin.services.price_updater._portfolio_symbols", return_value=set()
+            ):
+                run_update_cycle(db)  # should not raise
 
     assert StockSQLiteRepository(db).get_by_symbol("AAPL") is None
