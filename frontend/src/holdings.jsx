@@ -683,18 +683,44 @@ const RebalancePanel = ({ positions, total }) => {
 
 const MARKET_CCY = { US: "USD", HK: "HKD", CN: "CNY" };
 
-// Symbol autocomplete combobox for code fields
+const _guessMarket = (code) => {
+  if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
+  if (code.endsWith(".SS") || code.endsWith(".SZ")) return "CN";
+  return "US";
+};
+
+// Symbol autocomplete combobox — presets + backend fallback for unknown tickers
 const SymbolCombobox = ({ value, onChange, placeholder }) => {
   const [open, setOpen] = React.useState(false);
+  const [backendSym, setBackendSym] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
   const upper = (value || "").toUpperCase();
-  const matches = upper.length === 0 ? [] : Object.values(SYMBOLS).flat().filter(
+
+  const presetMatches = upper.length === 0 ? [] : Object.values(SYMBOLS).flat().filter(
     s => s.code.startsWith(upper) && s.code !== upper
   ).slice(0, 8);
 
-  const select = (sym) => {
-    onChange(sym);
-    setOpen(false);
-  };
+  // Backend lookup when no preset matches
+  React.useEffect(() => {
+    setBackendSym(null);
+    if (upper.length === 0 || presetMatches.length > 0) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/quote/${encodeURIComponent(upper)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => {
+          if (q) setBackendSym({ code: upper, name: q.name || upper, market: _guessMarket(upper), currency: q.currency || "USD" });
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }, 400);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [upper, presetMatches.length]);
+
+  const allItems = backendSym ? [...presetMatches, backendSym] : presetMatches;
+
+  const select = (sym) => { onChange(sym); setOpen(false); };
 
   return (
     <div style={{ position: "relative" }}>
@@ -705,20 +731,20 @@ const SymbolCombobox = ({ value, onChange, placeholder }) => {
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={placeholder || "NVDA"}
       />
-      {open && matches.length > 0 && (
+      {open && (allItems.length > 0 || loading) && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
           background: "var(--paper)", border: "1px solid var(--line-2)", borderRadius: 8,
           boxShadow: "var(--shadow-md)", marginTop: 2, overflow: "hidden",
         }}>
-          {matches.map(s => (
+          {loading && (
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--ink-4)" }}>查询中…</div>
+          )}
+          {allItems.map(s => (
             <div
               key={s.code}
               onMouseDown={e => { e.preventDefault(); select(s); }}
-              style={{
-                padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
-                fontSize: 13,
-              }}
+              style={{ padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}
               onMouseEnter={e => e.currentTarget.style.background = "var(--bg-deep)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
