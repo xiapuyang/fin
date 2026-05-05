@@ -1,22 +1,68 @@
 /* Dashboard — overview of all 5 modules + market summary */
 
 const MARKET_HOURS = (now = new Date()) => {
-  // Simulated states for demo. In real cron these come from yfinance market_state.
-  const h = now.getUTCHours();
-  // ET ≈ UTC-4 (DST). Just provide a plausible mock
-  return {
-    US: { state: "REGULAR", label: "盘中 Open", nextEvent: "收盘 16:00 ET" },
-    HK: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 HKT" },
-    CN: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 CST" },
-  };
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const t = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const inRange = (lo, hi) => t >= lo && t < hi;
+  const weekday = day >= 1 && day <= 5;
+
+  // US: NYSE/NASDAQ regular session Mon-Fri 09:30-16:00 ET = 13:30-20:00 UTC (EDT)
+  const usOpen = weekday && inRange(13 * 60 + 30, 20 * 60);
+
+  // HK: HKEX Mon-Fri 09:30-12:00 and 13:00-16:00 HKT = 01:30-04:00 and 05:00-08:00 UTC
+  const hkOpen = weekday && (inRange(1 * 60 + 30, 4 * 60) || inRange(5 * 60, 8 * 60));
+
+  // CN: SSE/SZSE Mon-Fri 09:30-11:30 and 13:00-15:00 CST = 01:30-03:30 and 05:00-07:00 UTC
+  const cnOpen = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60));
+
+  const mk = (open) => ({ state: open ? "REGULAR" : "CLOSED", label: open ? "盘中 Open" : "休市 Closed" });
+  return { US: mk(usOpen), HK: mk(hkOpen), CN: mk(cnOpen) };
 };
 
+// Representative index per market for live market_state
+const MARKET_SYMBOLS = { US: "%5EGSPC", HK: "%5EHSI", CN: "000001.SS" };
+
 const Dashboard = ({ onNavigate, alerts, history }) => {
-  const market = MARKET_HOURS();
+  const [now, setNow] = React.useState(new Date());
+  const [liveMarket, setLiveMarket] = React.useState({});
+
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Fetch yfinance market_state for each market index (handles holidays)
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    const fetchMarketState = () => {
+      Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
+        fetch(`/api/quote/${sym}`, { signal: ctrl.signal })
+          .then(r => r.ok ? r.json() : null)
+          .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
+          .catch(() => {});
+      });
+    };
+    fetchMarketState();
+    const t = setInterval(fetchMarketState, 5 * 60 * 1000);
+    return () => { clearInterval(t); ctrl.abort(); };
+  }, []);
+
+  // Merge: prefer live yfinance state, fall back to time-based for markets not yet loaded
+  const timeBased = MARKET_HOURS(now);
+  const market = Object.fromEntries(
+    Object.entries(timeBased).map(([k, v]) => {
+      const live = liveMarket[k];
+      if (!live) return [k, v];
+      const open = live === "REGULAR";
+      return [k, { state: live, label: open ? "盘中 Open" : "休市 Closed" }];
+    })
+  );
+
   const all = Object.values(SYMBOLS).flat();
 
   const [watchlist, setWatchlist] = React.useState([]);
   const [watchQuotes, setWatchQuotes] = React.useState({});
+  const [alertQuotes, setAlertQuotes] = React.useState({});
 
   React.useEffect(() => {
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
@@ -33,6 +79,18 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
     });
     return () => ctrl.abort();
   }, [watchlist.map(w => w.symbol).join(",")]);
+
+  // Fetch live quotes for enabled alert symbols
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    alerts.filter(a => a.enabled).forEach(a => {
+      fetch(`/api/quote/${encodeURIComponent(a.code)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q && setAlertQuotes(prev => ({ ...prev, [a.code]: q })))
+        .catch(() => {});
+    });
+    return () => ctrl.abort();
+  }, [alerts.filter(a => a.enabled).map(a => a.code).join(",")]);
 
   const watch = watchlist.map(w => {
     const q = watchQuotes[w.symbol];
@@ -228,14 +286,15 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
             <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>查看全部</Button>
           </div>
           <div style={{ padding: "10px 14px" }}>
-            {alerts.filter(a => a.enabled).slice(0, 5).map(a => {
-              const sym = SYMBOL_INDEX[a.code];
-              if (!sym) return null;
-              const ch = (sym.price - sym.prevClose) / sym.prevClose * 100;
+            {alerts.filter(a => a.enabled).slice(0, 10).map(a => {
+              const q = alertQuotes[a.code];
               const isPriceCond = a.cond.startsWith("price");
-              const distance = isPriceCond
-                ? ((a.threshold - sym.price) / sym.price * 100)
-                : (a.threshold - ch);
+              const ch = q ? (q.price - q.prev_close) / q.prev_close * 100 : null;
+              const distance = q
+                ? (isPriceCond
+                    ? (a.threshold - q.price) / q.price * 100
+                    : a.threshold - ch)
+                : null;
               const condLabel = { price_gte: "≥", price_lte: "≤", change_gte: "Δ≥", change_lte: "Δ≤" }[a.cond];
               return (
                 <div key={a.id} style={{ padding: "8px 6px", display: "flex", alignItems: "center", gap: 10, borderRadius: 6 }}>
@@ -245,11 +304,13 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
                     <div style={{ fontSize: 11, color: "var(--ink-4)", display: "flex", alignItems: "center", gap: 6 }}>
                       <span className="mono">{a.code}</span>
                       <span>·</span>
-                      <span className="mono">{condLabel} {a.threshold}{a.cond.startsWith("change") ? "%" : ""}</span>
+                      <span className="mono">{condLabel} {a.threshold}{isPriceCond ? "" : "%"}</span>
                     </div>
                   </div>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                    {Math.abs(distance).toFixed(1)}{isPriceCond ? "%" : "pp"} away
+                    {distance != null && isFinite(distance)
+                      ? `${Math.abs(distance).toFixed(1)}${isPriceCond ? "%" : "pp"} away`
+                      : "—"}
                   </span>
                 </div>
               );

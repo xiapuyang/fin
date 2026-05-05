@@ -113,7 +113,7 @@ const Holdings = () => {
   const [editingIncome, setEditingIncome] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
-  const [summaryCcy, setSummaryCcy] = React.useState("CNY");
+  const [summaryCcy, setSummaryCcy] = React.useState("USD");
 
   React.useEffect(() => {
     Promise.all([apiGetAccounts(), apiGetHoldings(), apiGetTransactions(), apiGetIncome()])
@@ -683,6 +683,82 @@ const RebalancePanel = ({ positions, total }) => {
 
 const MARKET_CCY = { US: "USD", HK: "HKD", CN: "CNY" };
 
+const _guessMarket = (code) => {
+  if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
+  if (code.endsWith(".SS") || code.endsWith(".SZ")) return "CN";
+  return "US";
+};
+
+// Symbol autocomplete combobox — presets + backend fallback for unknown tickers
+const SymbolCombobox = ({ value, onChange, placeholder }) => {
+  const [open, setOpen] = React.useState(false);
+  const [backendSym, setBackendSym] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const upper = (value || "").toUpperCase();
+
+  const presetMatches = upper.length === 0 ? [] : Object.values(SYMBOLS).flat().filter(
+    s => s.code.startsWith(upper)
+  ).slice(0, 8);
+
+  // Backend lookup when no preset matches
+  React.useEffect(() => {
+    setBackendSym(null);
+    if (upper.length === 0 || presetMatches.length > 0) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/quote/${encodeURIComponent(upper)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => {
+          if (q) setBackendSym({ code: upper, name: q.name || upper, market: _guessMarket(upper), currency: q.currency || "USD" });
+          setLoading(false);
+        })
+        .catch(err => { if (err?.name !== 'AbortError') setLoading(false); });
+    }, 400);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [upper, presetMatches.length]);
+
+  const allItems = backendSym ? [...presetMatches, backendSym] : presetMatches;
+
+  const select = (sym) => { onChange(sym); setOpen(false); };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <Input
+        value={value}
+        onChange={v => { onChange({ code: v.toUpperCase(), market: null, currency: null }); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder || "NVDA"}
+      />
+      {open && (allItems.length > 0 || loading) && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
+          background: "var(--paper)", border: "1px solid var(--line-2)", borderRadius: 8,
+          boxShadow: "var(--shadow-md)", marginTop: 2, overflow: "hidden",
+        }}>
+          {loading && (
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--ink-4)" }}>查询中…</div>
+          )}
+          {allItems.map(s => (
+            <div
+              key={s.code}
+              onMouseDown={e => { e.preventDefault(); select(s); }}
+              style={{ padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--bg-deep)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <MarketDot market={s.market}/>
+              <span className="mono" style={{ fontWeight: 600, minWidth: 70 }}>{s.code}</span>
+              <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{s.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const FormRow = ({ label, children }) => (
   <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: 8, marginBottom: 12 }}>
     <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", textAlign: "right" }}>{label}</label>
@@ -758,10 +834,11 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
 
-  const setCode = (v) => {
-    const c = v.toUpperCase();
-    const market = inferMarket(c) || form.market;
-    setForm(f => ({ ...f, code: c, market, currency: MARKET_CCY[market] }));
+  const setCode = (sym) => {
+    const c = (typeof sym === "string" ? sym : sym.code || "").toUpperCase();
+    const market = (typeof sym === "object" && sym.market) || inferMarket(c) || form.market;
+    const currency = (typeof sym === "object" && sym.currency) || MARKET_CCY[market];
+    setForm(f => ({ ...f, code: c, market, currency }));
   };
   const setMarket = (m) => setForm(f => ({ ...f, market: m, currency: MARKET_CCY[m] }));
 
@@ -789,7 +866,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   return (
     <Modal open={true} onClose={onClose} title={editing ? "编辑持仓" : "添加持仓"} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="代码 *"><Input value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
+        <FormRow label="代码 *"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
         <FormRow label="市场">
           <Select value={form.market} onChange={setMarket} options={[{value:"US",label:"美股 US"},{value:"HK",label:"港股 HK"},{value:"CN",label:"A股 CN"}]}/>
         </FormRow>
@@ -827,7 +904,11 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
 
-  const setCode = (v) => { const c = v.toUpperCase(); set("code", c); set("currency", ccyFromCode(c)); };
+  const setCode = (sym) => {
+    const c = (typeof sym === "string" ? sym : sym.code || "").toUpperCase();
+    set("code", c);
+    set("currency", (typeof sym === "object" && sym.currency) || ccyFromCode(c));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -854,7 +935,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
     <Modal open={true} onClose={onClose} title={editing ? "编辑交易记录" : "新增交易记录"} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="日期 *"><Input value={form.date} onChange={v => set("date", v)} placeholder="YYYY-MM-DD"/></FormRow>
-        <FormRow label="代码 *"><Input value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
+        <FormRow label="代码 *"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
         <FormRow label="方向">
           <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:"买入 Buy"},{value:"sell",label:"卖出 Sell"}]}/>
         </FormRow>
@@ -892,7 +973,11 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
 
-  const setCode = (v) => { const c = v.toUpperCase(); set("code", c); set("currency", ccyFromCode(c)); };
+  const setCode = (sym) => {
+    const c = (typeof sym === "string" ? sym : sym.code || "").toUpperCase();
+    set("code", c);
+    set("currency", (typeof sym === "object" && sym.currency) || ccyFromCode(c));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -921,7 +1006,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
           <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).map(([value,label]) => ({value,label}))}/>
         </FormRow>
         <FormRow label="来源 *"><Input value={form.source} onChange={v => set("source", v)} placeholder="NVDA 分红 / IBKR 转入"/></FormRow>
-        <FormRow label="代码"><Input value={form.code} onChange={setCode} placeholder="NVDA（可选）"/></FormRow>
+        <FormRow label="代码"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA（可选）"/></FormRow>
         <FormRow label="金额 *"><Input value={form.amount} onChange={v => set("amount", v)} inputMode="decimal" placeholder="320.00" suffix={form.currency}/></FormRow>
         <FormRow label="账户"><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
         <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
