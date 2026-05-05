@@ -74,7 +74,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   // Fetch live quotes whenever the alert symbol set changes (skip already-cached)
   React.useEffect(() => {
     const ctrl = new AbortController();
-    const symbols = [...new Set(alerts.map(a => a.code))].filter(code => !liveQuotes[code]);
+    const symbols = [...new Set(alerts.map(a => a.code))];
     symbols.forEach(code => {
       fetch(`/api/quote/${encodeURIComponent(code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
@@ -88,7 +88,6 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   React.useEffect(() => {
     const ctrl = new AbortController();
     watchlist.forEach(w => {
-      if (liveQuotes[w.symbol]) return;
       fetch(`/api/quote/${encodeURIComponent(w.symbol)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setLiveQuotes(prev => ({ ...prev, [w.symbol]: q })))
@@ -594,10 +593,9 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
 
         {filtered.length === 0 && <Empty icon="bell" title="No alerts yet" hint="Pick a symbol above and add your first alert."/>}
 
-        {(showAllAlerts ? filtered : filtered.slice(0, 10)).map((a, idx) => {
-          const visible = showAllAlerts ? filtered : filtered.slice(0, 10);
-          return <AlertRow key={a.id} a={a} onToggle={toggle} onRemove={remove} onReEnable={reEnable} onEdit={setEditingAlert} last={idx === visible.length - 1} liveQuotes={liveQuotes}/>;
-        })}
+        {(showAllAlerts ? filtered : filtered.slice(0, 10)).map((a, idx, arr) => (
+          <AlertRow key={a.id} a={a} onToggle={toggle} onRemove={remove} onReEnable={reEnable} onEdit={setEditingAlert} last={idx === arr.length - 1} liveQuotes={liveQuotes}/>
+        ))}
         {filtered.length > 10 && (
           <div style={{ padding: "12px 18px", borderTop: "1px solid var(--line)" }}>
             <button onClick={() => setShowAllAlerts(v => !v)} style={{ ...watchBtnStyle, color: "var(--ink-3)" }}>
