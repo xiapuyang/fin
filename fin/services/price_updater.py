@@ -62,7 +62,6 @@ def collect_symbols() -> set[str]:
 def run_update_cycle(db: Session) -> None:
     providers = build_default_providers()
     service = QuoteService(db, providers)
-    repo = service._repo
     all_symbols = sorted(collect_symbols())
     logger.info("Price update: %d symbols", len(all_symbols))
     for i in range(0, len(all_symbols), BATCH_SIZE):
@@ -71,7 +70,7 @@ def run_update_cycle(db: Session) -> None:
             try:
                 data = service.get_full_quote(symbol)
                 if data:
-                    repo.upsert(symbol, data)
+                    service.upsert_quote(symbol, data)
                     logger.debug("Updated %s", symbol)
             except Exception:
                 logger.exception("Failed to update %s", symbol)

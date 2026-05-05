@@ -128,8 +128,9 @@ def test_fetch_live_returns_empty_on_malformed_response(provider):
 
 def test_fetch_full_returns_latest_nav(provider):
     df = _make_nav_df()
-    with patch("fin.services.providers.china_fund_provider.ak") as mock_ak:
-        mock_ak.fund_open_fund_info_em.return_value = df
+    mock_ak = MagicMock()
+    mock_ak.fund_open_fund_info_em.return_value = df
+    with patch.dict("sys.modules", {"akshare": mock_ak}):
         result = provider.fetch_full("013308")
 
     assert result["price"] == pytest.approx(1.2456)
@@ -140,15 +141,17 @@ def test_fetch_full_returns_latest_nav(provider):
 
 
 def test_fetch_full_returns_empty_on_empty_df(provider):
-    with patch("fin.services.providers.china_fund_provider.ak") as mock_ak:
-        mock_ak.fund_open_fund_info_em.return_value = pd.DataFrame()
+    mock_ak = MagicMock()
+    mock_ak.fund_open_fund_info_em.return_value = pd.DataFrame()
+    with patch.dict("sys.modules", {"akshare": mock_ak}):
         result = provider.fetch_full("013308")
     assert result == {}
 
 
 def test_fetch_full_returns_empty_on_exception(provider):
-    with patch("fin.services.providers.china_fund_provider.ak") as mock_ak:
-        mock_ak.fund_open_fund_info_em.side_effect = Exception("akshare error")
+    mock_ak = MagicMock()
+    mock_ak.fund_open_fund_info_em.side_effect = Exception("akshare error")
+    with patch.dict("sys.modules", {"akshare": mock_ak}):
         result = provider.fetch_full("999999")
     assert result == {}
 

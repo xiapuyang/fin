@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
 from fin.config import LAST_CHECK_PATH
-from fin.database import SessionLocal
+from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
 
@@ -16,14 +16,6 @@ logger = logging.getLogger(__name__)
 
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "EUR": "EURCNY=X"}
 _FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
-
-
-def _get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class SettingsPayload(BaseModel):
@@ -43,10 +35,11 @@ def put_settings(data: SettingsPayload):
 
 
 @router.get("/fx")
-def get_fx(db: Session = Depends(_get_db)):
+def get_fx(db: Session = Depends(get_db)):
     """Return CNY-based FX rates via QuoteService."""
     try:
-        return QuoteService(db, build_default_providers()).get_fx(_FX_PAIRS)
+        rates = QuoteService(db, build_default_providers()).get_fx(_FX_PAIRS)
+        return {**_FX_FALLBACK, **rates}
     except Exception as exc:
         logger.warning("FX fetch failed: %s", exc)
         return _FX_FALLBACK

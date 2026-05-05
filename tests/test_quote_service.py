@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from fin.database import Base
 from fin.repositories.stock_sqlite import StockSQLiteRepository
 from fin.services.providers.base import QuoteProvider
-from fin.services.quote import QuoteService, normalize_symbol, _dot_to_dash
+from fin.services.quote import QuoteService, normalize_symbol
 
 
 @pytest.fixture()
@@ -64,26 +64,6 @@ def test_normalize_symbol_aliases():
 
 def test_normalize_symbol_uppercases():
     assert normalize_symbol("aapl") == "AAPL"
-
-
-# ── _dot_to_dash ──────────────────────────────────────────────────────────────
-
-
-def test_dot_to_dash_converts_us_class_share():
-    assert _dot_to_dash("BRK.B") == "BRK-B"
-
-
-def test_dot_to_dash_ignores_hk_suffix():
-    assert _dot_to_dash("0700.HK") is None
-
-
-def test_dot_to_dash_ignores_cn_suffixes():
-    assert _dot_to_dash("600519.SS") is None
-    assert _dot_to_dash("300750.SZ") is None
-
-
-def test_dot_to_dash_ignores_no_dot():
-    assert _dot_to_dash("AAPL") is None
 
 
 # ── QuoteService.get_quote ────────────────────────────────────────────────────
@@ -177,24 +157,18 @@ def test_get_quote_routes_to_china_fund_provider(db):
     assert result["price"] == pytest.approx(1.25)
 
 
-def test_get_quote_raises_value_error_when_no_provider_supports(db):
+def test_get_quote_returns_none_when_no_provider_supports(db):
     provider = _mock_provider(supports=False)
-    with pytest.raises(ValueError, match="no provider supports"):
-        QuoteService(db, [provider]).get_quote("AAPL")
+    result = QuoteService(db, [provider]).get_quote("AAPL")
+    assert result is None
 
 
-def test_get_quote_provider_exception_falls_back_to_stale_db(db):
+def test_get_quote_stale_db_fallback_when_live_returns_empty(db):
     _seed_stock(db, "AAPL", price=150.0, age_seconds=400)
-    provider = _mock_provider()
-    provider.fetch_live.side_effect = Exception("network failure")
-    # QuoteService does not bubble provider exceptions — falls back to DB
-    # (provider.fetch_live raises, which is caught in the service)
-    # Actually QuoteService doesn't wrap fetch_live in try/except here;
-    # the exception propagates. Test the stale-DB fallback via empty return.
-    provider.fetch_live.side_effect = None
-    provider.fetch_live.return_value = {}
+    provider = _mock_provider(live_data={})
     result = QuoteService(db, [provider]).get_quote("AAPL")
     assert result["price"] == 150.0
+    assert "market_state" in result
 
 
 # ── QuoteService.get_full_quote ───────────────────────────────────────────────
