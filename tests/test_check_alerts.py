@@ -64,6 +64,22 @@ def test_check_condition_unknown_returns_false():
     assert not _check_condition("unknown_op", 100.0, 200.0, 50.0)
 
 
+def test_check_condition_price_gte_at_exact_boundary():
+    assert _check_condition("price_gte", 100.0, 100.0, 0.0)
+
+
+def test_check_condition_price_lte_at_exact_boundary():
+    assert _check_condition("price_lte", 100.0, 100.0, 0.0)
+
+
+def test_check_condition_change_gte_at_exact_boundary():
+    assert _check_condition("change_gte", 5.0, 0.0, 5.0)
+
+
+def test_check_condition_change_lte_at_exact_boundary():
+    assert _check_condition("change_lte", -3.0, 0.0, -3.0)
+
+
 # ── market_state gate ─────────────────────────────────────────────────────────
 
 
@@ -167,3 +183,60 @@ def test_market_state_closed_skips_alert(db):
         db, quote, alert_condition="price_lte", alert_value=150.0
     )
     assert len(fired) == 0
+
+
+def test_force_flag_bypasses_market_state_gate(db):
+    """--force should fire alerts even when market_state is PRE."""
+    quote = _make_quote(price=100.0, change_pct=2.0, market_state="PRE")
+
+    from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
+
+    alert_repo = AlertSQLiteRepository(db)
+    alert_repo.create(
+        AlertCreate(symbol="AAPL", name="test", condition="price_lte", value=150.0)
+    )
+    fire_repo = AlertFireSQLiteRepository(db)
+
+    mock_qs = MagicMock()
+    mock_qs.get_quote.return_value = quote
+
+    fired_ids = []
+    original_create = fire_repo.create
+
+    def track_create(alert_id, price, change_pct):
+        fired_ids.append(alert_id)
+        return original_create(alert_id, price, change_pct)
+
+    fire_repo.create = track_create
+
+    with patch("check_alerts.SessionLocal", return_value=db):
+        with patch("check_alerts.init_db"):
+            with patch("check_alerts.QuoteService", return_value=mock_qs):
+                with patch("check_alerts.build_default_providers", return_value=[]):
+                    with patch(
+                        "check_alerts.AlertSQLiteRepository", return_value=alert_repo
+                    ):
+                        with patch(
+                            "check_alerts.AlertFireSQLiteRepository",
+                            return_value=fire_repo,
+                        ):
+                            with patch(
+                                "check_alerts.settings_store.load",
+                                return_value={
+                                    "notify_email": "",
+                                    "notify_enabled": False,
+                                },
+                            ):
+                                with patch("check_alerts.LAST_CHECK_PATH") as mock_path:
+                                    mock_path.write_text = MagicMock()
+                                    import argparse
+
+                                    with patch(
+                                        "argparse.ArgumentParser.parse_args",
+                                        return_value=argparse.Namespace(force=True),
+                                    ):
+                                        from check_alerts import main
+
+                                        main()
+
+    assert len(fired_ids) == 1

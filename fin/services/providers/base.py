@@ -1,9 +1,10 @@
 import re
 from abc import ABC, abstractmethod
+from typing import Any
 
 # Matches 6-digit all-numeric codes (open-end funds and bare ETF codes).
 # Defined here so both ChinaFundProvider and YFinanceProvider share one source.
-_CN_FUND_PATTERN = re.compile(r"^\d{6}$")
+CN_FUND_PATTERN = re.compile(r"^\d{6}$")
 
 
 class QuoteProvider(ABC):
@@ -19,7 +20,7 @@ class QuoteProvider(ABC):
         ...
 
     @abstractmethod
-    def fetch_live(self, symbol: str) -> dict:
+    def fetch_live(self, symbol: str) -> dict[str, Any]:
         """Fetch a lightweight price snapshot.
 
         Returns a dict with at least: price, prev_close. May include
@@ -28,7 +29,7 @@ class QuoteProvider(ABC):
         ...
 
     @abstractmethod
-    def fetch_full(self, symbol: str) -> dict:
+    def fetch_full(self, symbol: str) -> dict[str, Any]:
         """Fetch a comprehensive quote including fundamentals.
 
         Returns a dict compatible with StockModel fields. Returns {} on failure.
