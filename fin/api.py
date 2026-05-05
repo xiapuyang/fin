@@ -15,6 +15,7 @@ from fin.routers.alerts import router as alerts_router
 from fin.routers.holdings import router as holdings_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
+from fin.services.market_state_updater import start_market_state_updater
 from fin.services.price_updater import start_price_updater
 
 setup_logging("fin-api")
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
+    start_market_state_updater()
     start_price_updater()
     yield
     logger.info("Shutting down")

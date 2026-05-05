@@ -1,60 +1,68 @@
 /* Dashboard — overview of all 5 modules + market summary */
 
+const STATE_LABEL = {
+  REGULAR: "盘中 Open",
+  PRE:     "盘前 Pre",
+  POST:    "盘后 After",
+  CLOSED:  "休市 Closed",
+};
+
 const MARKET_HOURS = (now = new Date()) => {
-  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const day = now.getUTCDay();
   const t = now.getUTCHours() * 60 + now.getUTCMinutes();
   const inRange = (lo, hi) => t >= lo && t < hi;
   const weekday = day >= 1 && day <= 5;
 
-  // US: NYSE/NASDAQ regular session Mon-Fri 09:30-16:00 ET = 13:30-20:00 UTC (EDT)
-  const usOpen = weekday && inRange(13 * 60 + 30, 20 * 60);
+  // US: NYSE/NASDAQ (EDT = UTC-4)
+  // PRE  04:00-09:30 EDT = 08:00-13:30 UTC
+  // REG  09:30-16:00 EDT = 13:30-20:00 UTC
+  // POST 16:00-20:00 EDT = 20:00-00:00 UTC
+  const usState = !weekday ? "CLOSED"
+    : inRange(13 * 60 + 30, 20 * 60) ? "REGULAR"
+    : inRange(20 * 60, 24 * 60)       ? "POST"
+    : inRange(8 * 60, 13 * 60 + 30)  ? "PRE"
+    : "CLOSED";
 
   // HK: HKEX Mon-Fri 09:30-12:00 and 13:00-16:00 HKT = 01:30-04:00 and 05:00-08:00 UTC
-  const hkOpen = weekday && (inRange(1 * 60 + 30, 4 * 60) || inRange(5 * 60, 8 * 60));
+  const hkState = weekday && (inRange(1 * 60 + 30, 4 * 60) || inRange(5 * 60, 8 * 60)) ? "REGULAR" : "CLOSED";
 
   // CN: SSE/SZSE Mon-Fri 09:30-11:30 and 13:00-15:00 CST = 01:30-03:30 and 05:00-07:00 UTC
-  const cnOpen = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60));
+  const cnState = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60)) ? "REGULAR" : "CLOSED";
 
-  const mk = (open) => ({ state: open ? "REGULAR" : "CLOSED", label: open ? "盘中 Open" : "休市 Closed" });
-  return { US: mk(usOpen), HK: mk(hkOpen), CN: mk(cnOpen) };
+  const mk = (state) => ({ state, label: STATE_LABEL[state] });
+  return { US: mk(usState), HK: mk(hkState), CN: mk(cnState) };
 };
-
-// Representative index per market for live market_state
-const MARKET_SYMBOLS = { US: "%5EGSPC", HK: "%5EHSI", CN: "000001.SS" };
 
 const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }) => {
   const [now, setNow] = React.useState(new Date());
-  const [liveMarket, setLiveMarket] = React.useState({});
+  const [serverStates, setServerStates] = React.useState({});
 
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Fetch yfinance market_state for each market index (handles holidays)
+  // Fetch authoritative market states from check_market_state.py output.
+  // Falls back to time-based calculation if the file is missing or stale (>5min).
   React.useEffect(() => {
     const ctrl = new AbortController();
-    const fetchMarketState = () => {
-      Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
-        fetch(`/api/quote/${sym}`, { signal: ctrl.signal })
-          .then(r => r.ok ? r.json() : null)
-          .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
-          .catch(() => {});
-      });
-    };
-    fetchMarketState();
-    const t = setInterval(fetchMarketState, 5 * 60 * 1000);
+    const fetch_ = () =>
+      fetch("/api/market-states", { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setServerStates(d))
+        .catch(() => {});
+    fetch_();
+    const t = setInterval(fetch_, 60 * 1000);
     return () => { clearInterval(t); ctrl.abort(); };
   }, []);
 
-  // Merge: prefer live yfinance state, fall back to time-based for markets not yet loaded
   const timeBased = MARKET_HOURS(now);
+  const serverFresh = serverStates.updated_at &&
+    (Date.now() - new Date(serverStates.updated_at).getTime()) < 5 * 60 * 1000;
   const market = Object.fromEntries(
     Object.entries(timeBased).map(([k, v]) => {
-      const live = liveMarket[k];
-      if (!live) return [k, v];
-      const open = live === "REGULAR";
-      return [k, { state: live, label: open ? "盘中 Open" : "休市 Closed" }];
+      const state = serverFresh ? (serverStates[k] || v.state) : v.state;
+      return [k, { state, label: STATE_LABEL[state] || v.label }];
     })
   );
 
@@ -160,7 +168,9 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
                 </span>
                 <span className={"pulse-dot"} style={{
                   display: "inline-block", width: 6, height: 6, borderRadius: 3,
-                  background: v.state === "REGULAR" ? "var(--up)" : "var(--ink-5)",
+                  background: v.state === "REGULAR" ? "var(--up)"
+                    : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
+                    : "var(--ink-5)",
                 }}/>
               </div>
               <div style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{v.label}</div>
