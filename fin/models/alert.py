@@ -1,7 +1,15 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import relationship
 
 from fin.database import Base
@@ -10,7 +18,7 @@ from fin.database import Base
 class AlertModel(Base):
     __tablename__ = "alerts"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String, nullable=False)
     name = Column(String, nullable=False)
     condition = Column(
@@ -35,9 +43,9 @@ class AlertModel(Base):
 class AlertFireModel(Base):
     __tablename__ = "alert_fires"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     alert_id = Column(
-        String, ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False
     )
     fired_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     price = Column(Float, nullable=False)
