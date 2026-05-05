@@ -7,10 +7,13 @@ from fin.schemas.transaction import TransactionCreate, TransactionUpdate
 
 
 class TransactionSQLiteRepository:
+    """SQLite-backed repository for buy/sell transaction records."""
+
     def __init__(self, db: Session) -> None:
         self._db = db
 
     def get_all(self, user_id: int) -> list[TransactionModel]:
+        """Return all transactions for a user, most recent first."""
         return (
             self._db.query(TransactionModel)
             .filter(TransactionModel.user_id == user_id)
@@ -19,6 +22,7 @@ class TransactionSQLiteRepository:
         )
 
     def get_by_id(self, id: int, user_id: int) -> TransactionModel | None:
+        """Return a single transaction by primary key, or None if not found."""
         return (
             self._db.query(TransactionModel)
             .filter(TransactionModel.id == id, TransactionModel.user_id == user_id)
@@ -26,6 +30,7 @@ class TransactionSQLiteRepository:
         )
 
     def create(self, data: TransactionCreate, user_id: int) -> TransactionModel:
+        """Insert a new transaction and return the persisted model."""
         txn = TransactionModel(
             user_id=user_id,
             date=data.date,
@@ -47,6 +52,11 @@ class TransactionSQLiteRepository:
     def update(
         self, id: int, data: TransactionUpdate, user_id: int
     ) -> TransactionModel:
+        """Apply a partial update to a transaction.
+
+        Raises:
+            ValueError: If the transaction does not exist.
+        """
         txn = self.get_by_id(id, user_id)
         if txn is None:
             raise ValueError(f"Transaction {id} not found")
@@ -58,6 +68,7 @@ class TransactionSQLiteRepository:
         return txn
 
     def delete(self, id: int, user_id: int) -> None:
+        """Delete a transaction by primary key. No-op if not found."""
         txn = self.get_by_id(id, user_id)
         if txn:
             self._db.delete(txn)
@@ -66,24 +77,39 @@ class TransactionSQLiteRepository:
     def bulk_create(
         self, rows: list[TransactionCreate], user_id: int
     ) -> list[TransactionModel]:
-        models = [
-            TransactionModel(
-                user_id=user_id,
-                date=r.date,
-                code=r.code,
-                name=r.name,
-                side=r.side,
-                shares=r.shares,
-                price=r.price,
-                currency=r.currency,
-                account=r.account,
-                realized=r.realized,
-                note=r.note,
+        """Bulk-insert transactions, skipping exact duplicates (same date/code/side/shares/price/currency)."""
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        now = datetime.now(timezone.utc)
+        inserted_ids: list[int] = []
+        for r in rows:
+            stmt = (
+                sqlite_insert(TransactionModel)
+                .values(
+                    user_id=user_id,
+                    date=r.date,
+                    code=r.code,
+                    name=r.name,
+                    side=r.side,
+                    shares=r.shares,
+                    price=r.price,
+                    currency=r.currency,
+                    account=r.account,
+                    realized=r.realized,
+                    note=r.note,
+                    create_time=now,
+                    update_time=now,
+                )
+                .on_conflict_do_nothing()
             )
-            for r in rows
-        ]
-        self._db.add_all(models)
+            result = self._db.execute(stmt)
+            if result.rowcount:
+                inserted_ids.append(result.inserted_primary_key[0])
         self._db.commit()
-        for m in models:
-            self._db.refresh(m)
-        return models
+        if not inserted_ids:
+            return []
+        return (
+            self._db.query(TransactionModel)
+            .filter(TransactionModel.id.in_(inserted_ids))
+            .all()
+        )

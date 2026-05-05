@@ -115,6 +115,7 @@ const Holdings = () => {
   const [transactions, setTransactions] = React.useState([]);
   const [income, setIncome] = React.useState([]);
   const [prices, setPrices] = React.useState({});
+  const [pricesReady, setPricesReady] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
   const [showHoldingModal, setShowHoldingModal] = React.useState(false);
@@ -124,6 +125,7 @@ const Holdings = () => {
   const [showIncomeModal, setShowIncomeModal] = React.useState(false);
   const [editingIncome, setEditingIncome] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
+  const [editingAccount, setEditingAccount] = React.useState(null);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
   const [summaryCcy, setSummaryCcy] = React.useState("USD");
 
@@ -133,20 +135,30 @@ const Holdings = () => {
         setAccounts(accts);
         if (accts.length > 0) setSelectedAccountId(accts[0].id);
         setHoldings(h); setTransactions(t); setIncome(i);
-        // Fetch prices for all unique codes across holdings + transactions
+        setLoading(false);
+        // Fetch prices in background — stat tiles show "—" until prices arrive
         const codes = [...new Set([...h, ...t].map(r => r.code).filter(Boolean))];
-        if (codes.length > 0) apiGetPrices(codes).then(setPrices).catch(() => {});
+        if (codes.length > 0) {
+          apiGetPrices(codes).then(p => { setPrices(p); setPricesReady(true); }).catch(() => setPricesReady(true));
+        } else {
+          setPricesReady(true);
+        }
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch(err => { console.error(err); setLoading(false); setPricesReady(true); });
   }, []);
 
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) || null;
   const acctName = selectedAccount?.name || null;
 
   // Filter by selected account (null acctName = "全部" view)
+  const acctCutoff = selectedAccount?.cutoff_date || null;
   const acctHoldings = acctName ? holdings.filter(h => h.account === acctName) : holdings;
+  // All account transactions for display (no cutoff filter)
   const acctTxns = acctName ? transactions.filter(t => t.account === acctName) : transactions;
+  // Cutoff-filtered transactions for P&L calculation only (excludes pre-transfer backup rows)
+  const acctTxnsForCalc = acctCutoff
+    ? acctTxns.filter(t => t.date >= acctCutoff)
+    : acctTxns;
   const acctIncome = acctName ? income.filter(i => i.account === acctName) : income;
 
   // Snapshots available for this account (null/empty → shown as "未命名")
@@ -167,6 +179,13 @@ const Holdings = () => {
     ? acctHoldings.filter(h => (h.snapshot_name || "未命名") === selectedSnapshot)
     : acctHoldings;
 
+  // Build per-account cutoff map — used by both allPositions and allRealized
+  const accountCutoffs = React.useMemo(() => {
+    const m = {};
+    accounts.forEach(a => { if (a.cutoff_date) m[a.name] = a.cutoff_date; });
+    return m;
+  }, [accounts]);
+
   // All-accounts aggregate — one row per (account, code), keeping the latest snapshot date
   const latestHoldings = React.useMemo(() => {
     const best = {};
@@ -176,12 +195,17 @@ const Holdings = () => {
     });
     return Object.values(best);
   }, [holdings]);
-  const allPositions = React.useMemo(() => computePositions(latestHoldings, transactions, prices), [latestHoldings, transactions, prices]);
+  // Apply per-account cutoffs so the aggregate is consistent with per-account P&L
+  const txnsForAllCalc = React.useMemo(() =>
+    transactions.filter(t => !accountCutoffs[t.account] || t.date >= accountCutoffs[t.account]),
+    [transactions, accountCutoffs]
+  );
+  const allPositions = React.useMemo(() => computePositions(latestHoldings, txnsForAllCalc, prices), [latestHoldings, txnsForAllCalc, prices]);
   const allTotal = allPositions.reduce((s, p) => s + p.value, 0);
   const allCost = allPositions.reduce((s, p) => s + p.cost, 0);
   const allUnrealized = allTotal - allCost;
   const allRealized = transactions
-    .filter(t => t.realized != null)
+    .filter(t => t.realized != null && (!accountCutoffs[t.account] || t.date >= accountCutoffs[t.account]))
     .reduce((s, t) => s + (t.realized || 0) * (FX[t.currency] || 1), 0);
   const allIncomeTotal = income
     .filter(i => !["deposit","withdrawal"].includes(i.category))
@@ -194,7 +218,7 @@ const Holdings = () => {
   // Per-account view — uses snapshot-filtered holdings
   const acctCcy = selectedAccount?.currency || "CNY";
   const acctFx = FX[acctCcy] || 1; // CNY rate for converting to account native currency
-  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxns, prices), [snapshotHoldings, acctTxns, prices]);
+  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxnsForCalc, prices), [snapshotHoldings, acctTxnsForCalc, prices]);
   // acctTotal/cost/unrealized in account's native currency (divide out CNY FX, apply account FX)
   const acctTotal = acctPositions.reduce((s, p) => s + p.value / acctFx, 0);
   const acctCost = acctPositions.reduce((s, p) => s + p.cost / acctFx, 0);
@@ -230,7 +254,36 @@ const Holdings = () => {
     if (selectedAccountId === id) setSelectedAccountId(next[0]?.id || null);
   };
 
-  if (loading) return <div style={{ padding: 48, textAlign: "center", color: "var(--ink-3)" }}>加载中…</div>;
+  if (loading) return (
+    <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ width: 120, height: 11, borderRadius: 4, background: "var(--line-2)", marginBottom: 10 }}/>
+        <div style={{ width: 200, height: 28, borderRadius: 6, background: "var(--line-2)", marginBottom: 6 }}/>
+        <div style={{ width: 300, height: 13, borderRadius: 4, background: "var(--line)" }}/>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 20 }}>
+            <div style={{ width: "60%", height: 10, borderRadius: 3, background: "var(--line-2)", marginBottom: 12 }}/>
+            <div style={{ width: "80%", height: 32, borderRadius: 6, background: "var(--line-2)", marginBottom: 8 }}/>
+            <div style={{ width: "50%", height: 10, borderRadius: 3, background: "var(--line)" }}/>
+          </div>
+        ))}
+      </div>
+      <div style={{ height: 36, borderRadius: 20, background: "var(--line)", marginBottom: 16, width: 320 }}/>
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12 }}>
+        {[0,1,2,3,4].map(i => (
+          <div key={i} style={{ padding: "14px 18px", borderBottom: i < 4 ? "1px solid var(--line)" : "none", display: "flex", gap: 16, alignItems: "center" }}>
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: "var(--line-2)" }}/>
+            <div style={{ flex: 1, height: 12, borderRadius: 4, background: "var(--line-2)" }}/>
+            <div style={{ width: 60, height: 12, borderRadius: 4, background: "var(--line)" }}/>
+            <div style={{ width: 80, height: 12, borderRadius: 4, background: "var(--line)" }}/>
+            <div style={{ width: 80, height: 12, borderRadius: 4, background: "var(--line-2)" }}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
@@ -253,28 +306,31 @@ const Holdings = () => {
             </div>
           </div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
-            {summarySym}{fmtNum(allTotal/summaryFx, 0)}
+            {pricesReady ? `${summarySym}${fmtNum(allTotal/summaryFx, 0)}` : "—"}
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
             <div>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{summarySym}{fmtNum(allMarketValue/summaryFx, 2)}</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${summarySym}${fmtNum(allMarketValue/summaryFx, 2)}` : "—"}</span>
             </div>
             <div>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{summarySym}{fmtNum(allCashValue/summaryFx, 2)}</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${summarySym}${fmtNum(allCashValue/summaryFx, 2)}` : "—"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
-              <ChangeNum value={allTotal ? allDayPnl/allTotal*100 : 0} size="sm"/>
-              {allDayPnl !== 0 && (
-                <span className="mono" style={{ fontSize: 11, color: allDayPnl >= 0 ? "var(--up)" : "var(--down)" }}>
-                  {allDayPnl >= 0 ? "+" : "−"}{summarySym}{fmtNum(Math.abs(allDayPnl/summaryFx), 0)}
-                </span>
-              )}
+              {pricesReady
+                ? <><ChangeNum value={allTotal ? allDayPnl/allTotal*100 : 0} size="sm"/>
+                    {allDayPnl !== 0 && (
+                      <span className="mono" style={{ fontSize: 11, color: allDayPnl >= 0 ? "var(--up)" : "var(--down)" }}>
+                        {allDayPnl >= 0 ? "+" : "−"}{summarySym}{fmtNum(Math.abs(allDayPnl/summaryFx), 0)}
+                      </span>
+                    )}</>
+                : <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>—</span>
+              }
             </div>
           </div>
-          {allTotal > 0 && (
+          {pricesReady && allTotal > 0 && (
             <div style={{ marginTop: 14 }}>
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden" }}>
                 {byMarket.map(b => <div key={b.label} style={{ flex: b.value || 0.001, background: b.color }}/>)}
@@ -285,45 +341,39 @@ const Holdings = () => {
             </div>
           )}
         </Card>
-        <StatTile label="UNREALIZED P&L · 未实现盈亏" value={`${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}`} tone={allUnrealized >= 0 ? "up" : "down"} pct={allCost ? (allUnrealized/allCost)*100 : null} sub={`总成本 ${summarySym}${fmtNum(allCost/summaryFx, 0)}（持仓均价 × 股数）`}/>
+        <StatTile label="UNREALIZED P&L · 未实现盈亏" value={pricesReady ? `${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}` : "—"} tone={!pricesReady ? "neutral" : allUnrealized >= 0 ? "up" : "down"} pct={pricesReady && allCost ? (allUnrealized/allCost)*100 : null} sub={pricesReady ? `总成本 ${summarySym}${fmtNum(allCost/summaryFx, 0)}（持仓均价 × 股数）` : "加载价格中…"}/>
         <StatTile label="REALIZED + 收入 · 已实现" value={`+${summarySym}${fmtNum((allRealized+allIncomeTotal)/summaryFx, 0)}`} tone="up" sub={`已实现 ${summarySym}${fmtNum(allRealized/summaryFx, 0)} · 收入 ${summarySym}${fmtNum(allIncomeTotal/summaryFx, 0)}`}/>
-        {allXIRR != null
-          ? <StatTile label="年化回报率 (MWRR)" value={`${allXIRR >= 0 ? "+" : ""}${allXIRR.toFixed(1)}%`} tone={allXIRR >= 0 ? "up" : "down"} sub="所有账户 · 基于转入记录计算"/>
-          : <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="添加转入记录后可计算"/>
+        {!pricesReady
+          ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
+          : allXIRR != null
+            ? <StatTile label="年化回报率 (MWRR)" value={`${allXIRR >= 0 ? "+" : ""}${allXIRR.toFixed(1)}%`} tone={allXIRR >= 0 ? "up" : "down"} sub="所有账户 · 基于转入记录计算"/>
+            : <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="添加转入记录后可计算"/>
         }
       </div>
 
       {/* ── Account switcher ──────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-4)", marginRight: 4 }}>账户</span>
-        {accounts.map(a => (
+        {accounts.map(a => {
+          const active = selectedAccountId === a.id;
+          const btnBase = {
+            border: `1px solid ${active ? "var(--ink)" : "var(--line)"}`,
+            background: active ? "var(--ink)" : "var(--paper)",
+            color: active ? "var(--paper)" : "var(--ink-2)",
+            cursor: "pointer", transition: "all .15s",
+          };
+          return (
           <div key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 0 }}>
-            <button
-              onClick={() => setSelectedAccountId(a.id)}
-              style={{
-                padding: "5px 14px", borderRadius: accounts.length > 0 ? "20px 0 0 20px" : 20,
-                border: `1px solid ${selectedAccountId === a.id ? "var(--ink)" : "var(--line)"}`,
-                borderRight: "none",
-                background: selectedAccountId === a.id ? "var(--ink)" : "var(--paper)",
-                color: selectedAccountId === a.id ? "var(--paper)" : "var(--ink-2)",
-                cursor: "pointer", fontSize: 13, fontWeight: selectedAccountId === a.id ? 600 : 400,
-                transition: "all .15s",
-              }}
-            >{a.name}</button>
-            <button
-              onClick={() => deleteAccount(a.id, a.name)}
-              title={`删除账户 ${a.name}`}
-              style={{
-                padding: "5px 8px", borderRadius: "0 20px 20px 0",
-                border: `1px solid ${selectedAccountId === a.id ? "var(--ink)" : "var(--line)"}`,
-                background: selectedAccountId === a.id ? "var(--ink)" : "var(--paper)",
-                color: selectedAccountId === a.id ? "rgba(255,255,255,0.5)" : "var(--ink-4)",
-                cursor: "pointer", fontSize: 11, lineHeight: 1,
-                transition: "all .15s",
-              }}
-            >✕</button>
+            <button onClick={() => setSelectedAccountId(a.id)} style={{ ...btnBase, padding: "5px 14px", borderRadius: "20px 0 0 20px", borderRight: "none", fontSize: 13, fontWeight: active ? 600 : 400 }}>
+              {a.name}
+              {a.cutoff_date && <span style={{ fontSize: 9, opacity: .6, marginLeft: 5 }}>↑{a.cutoff_date.slice(0,7)}</span>}
+            </button>
+            <button onClick={() => setEditingAccount(a)} title="编辑账户设置" style={{ ...btnBase, padding: "5px 6px", borderRight: "none", borderRadius: 0, color: active ? "rgba(255,255,255,0.55)" : "var(--ink-4)", fontSize: 11 }}>
+              <Icon name="settings" size={11}/>
+            </button>
+            <button onClick={() => deleteAccount(a.id, a.name)} title={`删除账户 ${a.name}`} style={{ ...btnBase, padding: "5px 8px", borderRadius: "0 20px 20px 0", color: active ? "rgba(255,255,255,0.5)" : "var(--ink-4)", fontSize: 11, lineHeight: 1 }}>✕</button>
           </div>
-        ))}
+        );})}
         <button
           onClick={() => setShowAccountModal(true)}
           style={{ padding: "5px 14px", borderRadius: 20, border: "1px dashed var(--line-2)", background: "transparent", color: "var(--ink-3)", cursor: "pointer", fontSize: 13 }}
@@ -338,7 +388,7 @@ const Holdings = () => {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16, padding: "14px 18px", background: "var(--paper-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>{selectedAccount.name} · 市值</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3 }}>{ccySymbol(acctCcy)}{fmtNum(acctTotal, 0)}</div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3 }}>{pricesReady ? `${ccySymbol(acctCcy)}${fmtNum(acctTotal, 0)}` : "—"}</div>
             <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{acctCcy}</div>
           </div>
           <div>
@@ -348,15 +398,17 @@ const Holdings = () => {
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>未实现 P&L</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: acctUnrealized >= 0 ? "var(--up)" : "var(--down)" }}>
-              {acctUnrealized >= 0 ? "+" : "−"}{ccySymbol(acctCcy)}{fmtNum(Math.abs(acctUnrealized), 0)}
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: !pricesReady ? "var(--ink-4)" : acctUnrealized >= 0 ? "var(--up)" : "var(--down)" }}>
+              {pricesReady ? `${acctUnrealized >= 0 ? "+" : "−"}${ccySymbol(acctCcy)}${fmtNum(Math.abs(acctUnrealized), 0)}` : "—"}
             </div>
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>
-              年化回报率 {acctXIRR != null ? "(MWRR)" : "(CAGR 估算)"}
+              年化回报率 {pricesReady && acctXIRR != null ? "(MWRR)" : "(CAGR 估算)"}
             </div>
-            {acctXIRR != null ? (
+            {!pricesReady ? (
+              <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-4)" }}>—</div>
+            ) : acctXIRR != null ? (
               <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: acctXIRR >= 0 ? "var(--up)" : "var(--down)" }}>
                 {acctXIRR >= 0 ? "+" : ""}{acctXIRR.toFixed(1)}%
               </div>
@@ -409,6 +461,8 @@ const Holdings = () => {
           onSaved={i => { setIncome(prev => editingIncome ? prev.map(x => x.id === i.id ? i : x) : [i, ...prev]); setShowIncomeModal(false); }}/>}
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
           onSaved={a => { setAccounts(prev => [...prev, a]); setSelectedAccountId(a.id); setShowAccountModal(false); }}/>}
+      {editingAccount && <AccountEditModal account={editingAccount} onClose={() => setEditingAccount(null)}
+          onSaved={a => { setAccounts(prev => prev.map(x => x.id === a.id ? a : x)); setEditingAccount(null); }}/>}
 
       <ComingSoonBanner module="Holdings" features={["批量分配账户", "Auto-import 券商 CSV", "Tax-loss harvesting hints", "Dividend calendar"]} />
     </div>
@@ -620,7 +674,7 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
             <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport}/>
-            <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 IBKR</Button>
+            <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 CSV</Button>
             <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>添加记录</Button>
           </div>
         </div>
@@ -837,7 +891,7 @@ const useForm = (initial) => {
 };
 
 const AccountModal = ({ onClose, onSaved }) => {
-  const [form, set] = useForm({ name: "", currency: "CNY", note: "" });
+  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "" });
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const submit = async (e) => {
@@ -845,23 +899,81 @@ const AccountModal = ({ onClose, onSaved }) => {
     if (!form.name.trim()) { setErr("账户名不能为空"); return; }
     setSaving(true); setErr(null);
     try {
-      const saved = await apiCreateAccount({ name: form.name.trim(), currency: form.currency, note: form.note || null });
+      const saved = await apiCreateAccount({
+        name: form.name.trim(), currency: form.currency,
+        note: form.note || null,
+        cutoff_date: form.cutoff_date.trim() || null,
+      });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }
   };
   return (
-    <Modal open={true} onClose={onClose} title="新增账户" width={380}>
+    <Modal open={true} onClose={onClose} title="新增账户" width={400}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / 招商证券 / 支付宝基金"/></FormRow>
         <FormRow label="货币">
           <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+        </FormRow>
+        <FormRow label="截止日期">
+          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD（忽略此日期前的交易）"/>
         </FormRow>
         <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
           <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "创建账户"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+const AccountEditModal = ({ account, onClose, onSaved }) => {
+  const [form, set] = useForm({
+    name: account.name || "",
+    currency: account.currency || "CNY",
+    note: account.note || "",
+    cutoff_date: account.cutoff_date || "",
+  });
+  const [err, setErr] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setErr("账户名不能为空"); return; }
+    setSaving(true); setErr(null);
+    try {
+      const saved = await apiUpdateAccount(account.id, {
+        name: form.name.trim(),
+        currency: form.currency,
+        note: form.note || null,
+        cutoff_date: form.cutoff_date.trim() || null,
+      });
+      onSaved(saved);
+    } catch (ex) { setErr(ex.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title={`编辑账户 · ${account.name}`} width={420}>
+      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+        <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
+        <FormRow label="货币">
+          <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+        </FormRow>
+        <FormRow label="截止日期">
+          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD"/>
+        </FormRow>
+        <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
+          此日期之前的交易记录只用作 backup，不参与已实现 / XIRR 计算。<br/>
+          IBKR 转仓前的历史记录建议设为 <span className="mono">2024-09-01</span>。
+        </div>
+        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
         </div>
       </form>
     </Modal>

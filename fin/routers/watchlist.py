@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from fin.database import get_db
+from fin.models.user import MOCK_USER_ID
 from fin.models.watchlist import WatchlistModel
 from fin.repositories.watchlist_sqlite import WatchlistSQLiteRepository
 from fin.schemas.watchlist import WatchlistAdd, WatchlistItem
@@ -42,7 +43,7 @@ def list_watchlist(db: Session = Depends(get_db)) -> list[WatchlistItem]:
         List of WatchlistItem instances.
     """
     repo = WatchlistSQLiteRepository(db)
-    return [_to_item(w) for w in repo.get_all()]
+    return [_to_item(w) for w in repo.get_all(MOCK_USER_ID)]
 
 
 @router.post("/watchlist", response_model=WatchlistItem, status_code=201)
@@ -61,7 +62,7 @@ def add_watchlist(data: WatchlistAdd, db: Session = Depends(get_db)) -> Watchlis
     """
     symbol = normalize_symbol(data.symbol.upper())
     repo = WatchlistSQLiteRepository(db)
-    item = repo.add(symbol, data.name, data.market, data.currency)
+    item = repo.add(symbol, data.name, data.market, data.currency, MOCK_USER_ID)
     if item is None:
         raise HTTPException(
             status_code=500, detail="Watchlist entry unavailable after insert"
@@ -83,5 +84,5 @@ def remove_watchlist(symbol: str, db: Session = Depends(get_db)) -> Response:
     """
     normalized = normalize_symbol(symbol.upper())
     repo = WatchlistSQLiteRepository(db)
-    repo.remove(normalized)
+    repo.remove(normalized, MOCK_USER_ID)
     return Response(status_code=204)
