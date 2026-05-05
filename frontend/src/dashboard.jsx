@@ -54,15 +54,11 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
   ];
 
   const netWorth = allocation.reduce((s, a) => s + a.value, 0); // ¥2.263M
-  const totalCost = HOLDINGS.reduce((sum, h) => {
-    const sym = SYMBOL_INDEX[h.code] || h;
-    return sum + h.cost * h.shares * (FX[sym.currency || "USD"] || 1);
-  }, 0);
   const pnlPct = 24.3; // mock — coherent with display
 
   const modules = [
     { id: "alerts",   icon: "bell",      kicker: "MODULE 01", title: "提醒",     en: "Alerts",       color: "var(--up)",     stat: `${activeAlerts} active · ${triggered} triggered`, blurb: "盘中价格 & 涨跌触发邮件" },
-    { id: "holdings", icon: "wallet",    kicker: "MODULE 02", title: "投资组合", en: "Portfolio",     color: "var(--info)",   stat: `${HOLDINGS.length} positions · ${fmtPct(pnlPct,1)}`, blurb: "成本 & 盈亏 & 年化 IRR" },
+    { id: "holdings", icon: "wallet",    kicker: "MODULE 02", title: "投资组合", en: "Portfolio",     color: "var(--info)",   stat: `Portfolio · ${fmtPct(pnlPct,1)}`, blurb: "成本 & 盈亏 & 年化 IRR" },
     { id: "ledger",   icon: "book",      kicker: "MODULE 03", title: "记账",     en: "Ledger",       color: "var(--violet)", stat: `${LEDGER.length} entries this week`, blurb: "支出收入 & 月度报表" },
     { id: "balance",  icon: "target",    kicker: "MODULE 04", title: "资产负债",  en: "Balance Sheet",color: "var(--warn)",   stat: `${BS_ITEMS.length} items · ${BS_SNAPSHOTS.length} 快照`, blurb: "净资产 & 历史快照" },
     { id: "fire",     icon: "spark",     kicker: "MODULE 05", title: "退休计划",  en: "FIRE",         color: "var(--down)",   stat: "11.2y to 财务自由", blurb: "FIRE 数字 & 复利推演 & 里程碑" },
@@ -229,7 +225,7 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
               <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>提醒概览 Alerts</div>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{activeAlerts} active · {triggered} fired this month</div>
             </div>
-            <Button size="sm" icon="plus" variant="secondary" onClick={() => onNavigate("alerts")}>Add</Button>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>查看全部</Button>
           </div>
           <div style={{ padding: "10px 14px" }}>
             {alerts.filter(a => a.enabled).slice(0, 5).map(a => {
