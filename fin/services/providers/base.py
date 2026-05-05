@@ -1,4 +1,9 @@
+import re
 from abc import ABC, abstractmethod
+
+# Matches 6-digit all-numeric codes (open-end funds and bare ETF codes).
+# Defined here so both ChinaFundProvider and YFinanceProvider share one source.
+_CN_FUND_PATTERN = re.compile(r"^\d{6}$")
 
 
 class QuoteProvider(ABC):

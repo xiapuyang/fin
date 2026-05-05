@@ -15,8 +15,6 @@ STALE_SECONDS = 300
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
-_EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ")
-
 _SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
 
 
@@ -47,19 +45,6 @@ def _write_market_state(symbol: str, state: str) -> None:
 def normalize_symbol(symbol: str) -> str:
     s = symbol.upper()
     return SYMBOL_ALIASES.get(s, s)
-
-
-def _dot_to_dash(symbol: str) -> str | None:
-    """Return a dot-to-dash variant for US class-share tickers (BRK.B → BRK-B).
-
-    Returns None for exchange-suffixed symbols (.HK, .SS, .SZ) or symbols
-    without a dot.
-    """
-    if "." not in symbol:
-        return None
-    if any(symbol.endswith(s) for s in _EXCHANGE_SUFFIXES):
-        return None
-    return symbol.replace(".", "-")
 
 
 def _stock_to_dict(stock: StockModel) -> dict:
@@ -102,6 +87,7 @@ class QuoteService:
         self._providers = providers
 
     def _select_provider(self, symbol: str) -> QuoteProvider:
+        """Return the first provider that supports symbol, or raise ValueError."""
         for p in self._providers:
             if p.supports(symbol):
                 return p
@@ -117,14 +103,19 @@ class QuoteService:
             result["market_state"] = states.get(_market_for_symbol(symbol))
             return result
 
-        provider = self._select_provider(symbol)
+        try:
+            provider = self._select_provider(symbol)
+        except ValueError:
+            return None
         data = provider.fetch_live(symbol)
 
         if data:
             if data.get("market_state"):
                 _write_market_state(symbol, data["market_state"])
             safe = {
-                k: v for k, v in data.items() if k not in ("market_state", "change_pct")
+                k: v
+                for k, v in data.items()
+                if k not in ("market_state", "change_pct", "name")
             }
             self._repo.upsert(symbol, safe)
             stock = self._repo.get_by_symbol(symbol)
@@ -133,9 +124,21 @@ class QuoteService:
             return result
 
         if stock and stock.price:
-            return _stock_to_dict(stock)
+            result = _stock_to_dict(stock)
+            states = _read_market_states()
+            result["market_state"] = states.get(_market_for_symbol(symbol))
+            return result
 
         return None
+
+    def upsert_quote(self, symbol: str, data: dict) -> None:
+        """Persist a quote data dict for symbol, ignoring non-DB fields."""
+        safe = {
+            k: v
+            for k, v in data.items()
+            if k not in ("market_state", "change_pct", "name")
+        }
+        self._repo.upsert(symbol, safe)
 
     def get_full_quote(self, symbol: str) -> dict:
         """Fetch comprehensive quote via the appropriate provider."""

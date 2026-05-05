@@ -95,9 +95,12 @@ def test_run_update_cycle_upserts_into_db(db, tmp_path, monkeypatch):
     monkeypatch.setattr(pu, "SYMBOLS_PATH", symbols_file)
 
     full_data = {"price": 150.0, "prev_close": 148.0, "currency": "USD"}
+    real_repo = StockSQLiteRepository(db)
     mock_service = MagicMock()
     mock_service.get_full_quote.return_value = full_data
-    mock_service._repo = StockSQLiteRepository(db)
+    mock_service.upsert_quote.side_effect = lambda sym, data: real_repo.upsert(
+        sym, data
+    )
 
     with patch("fin.services.price_updater.QuoteService", return_value=mock_service):
         with patch(
@@ -122,7 +125,6 @@ def test_run_update_cycle_skips_failed_symbols(db, tmp_path, monkeypatch):
 
     mock_service = MagicMock()
     mock_service.get_full_quote.return_value = {}
-    mock_service._repo = StockSQLiteRepository(db)
 
     with patch("fin.services.price_updater.QuoteService", return_value=mock_service):
         with patch(
