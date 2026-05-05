@@ -144,7 +144,7 @@ const Holdings = () => {
           setPricesReady(true);
         }
       })
-      .catch(err => { console.error(err); setLoading(false); });
+      .catch(err => { console.error(err); setLoading(false); setPricesReady(true); });
   }, []);
 
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) || null;

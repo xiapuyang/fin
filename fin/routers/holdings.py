@@ -227,6 +227,8 @@ def delete_holding(holding_id: int, db: Session = Depends(get_db)):
 @router.post("/transactions/import")
 async def import_transactions(file: UploadFile, db: Session = Depends(get_db)):
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
