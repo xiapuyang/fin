@@ -85,7 +85,7 @@ def _migrate_alerts_to_int_id(db: "Session") -> None:
         db.commit()
 
 
-_KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts"}
+_KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts", "stocks"}
 
 
 def _migrate_columns(db: "Session") -> None:
@@ -107,6 +107,7 @@ def _migrate_columns(db: "Session") -> None:
             "currency",
             "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'CNY'",
         ),
+        ("stocks", "asset_type", "ALTER TABLE stocks ADD COLUMN asset_type TEXT"),
     ]
     for table, col, stmt in pending:
         assert table in _KNOWN_TABLES, f"unexpected table name: {table!r}"
