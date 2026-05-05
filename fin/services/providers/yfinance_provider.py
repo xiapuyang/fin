@@ -42,21 +42,54 @@ class YFinanceProvider(QuoteProvider):
 
     def _fetch_live_raw(self, symbol: str) -> dict:
         try:
-            fi = yf.Ticker(symbol).fast_info
+            ticker = yf.Ticker(symbol)
+            fi = ticker.fast_info
             price = fi.last_price
             prev_close = (
                 getattr(fi, "regular_market_previous_close", None) or fi.previous_close
             )
             if not price or not prev_close or prev_close == 0:
                 return {}
+
+            market_state = getattr(fi, "market_state", None)
+            regular_close = None
+
+            # Some symbols (e.g. GOOG) don't expose market_state via fast_info.
+            # Call .info to get marketState and extended-hours price when needed.
+            if not market_state:
+                try:
+                    info = ticker.info
+                    market_state = info.get("marketState")
+                    regular_close = info.get("regularMarketPrice")
+                    if market_state == "PRE":
+                        price = info.get("preMarketPrice") or price
+                    elif market_state == "POST":
+                        price = info.get("postMarketPrice") or price
+                except Exception:
+                    pass
+
+            # fast_info.last_price is regular-session only; use extended price
+            # from .info when market_state is already known from fast_info.
+            elif market_state in ("PRE", "POST"):
+                try:
+                    info = ticker.info
+                    regular_close = info.get("regularMarketPrice")
+                    field = (
+                        "preMarketPrice" if market_state == "PRE" else "postMarketPrice"
+                    )
+                    price = info.get(field) or price
+                except Exception:
+                    pass
+
             return {
                 "price": price,
+                "regular_close": regular_close,
                 "prev_close": prev_close,
                 "open_price": getattr(fi, "open", None),
                 "high": getattr(fi, "day_high", None),
                 "low": getattr(fi, "day_low", None),
                 "currency": getattr(fi, "currency", "USD") or "USD",
-                "market_state": getattr(fi, "market_state", None),
+                "market_state": market_state,
             }
         except Exception as e:
             logger.warning("live fetch failed for %s: %s", symbol, e)
@@ -66,7 +99,13 @@ class YFinanceProvider(QuoteProvider):
         """Fetch comprehensive quote via yfinance .info."""
         try:
             info = yf.Ticker(symbol).info
-            price = info.get("regularMarketPrice") or info.get("currentPrice")
+            regular_close = info.get("regularMarketPrice") or info.get("currentPrice")
+            price = regular_close
+            market_state = info.get("marketState")
+            if market_state == "PRE":
+                price = info.get("preMarketPrice") or price
+            elif market_state == "POST":
+                price = info.get("postMarketPrice") or price
             prev_close = info.get("regularMarketPreviousClose") or info.get(
                 "previousClose"
             )
@@ -89,6 +128,7 @@ class YFinanceProvider(QuoteProvider):
                 "currency": info.get("currency", "USD"),
                 "asset_type": asset_type,
                 "price": price,
+                "regular_close": regular_close,
                 "prev_close": prev_close,
                 "open_price": info.get("regularMarketOpen") or info.get("open"),
                 "high": info.get("dayHigh") or info.get("regularMarketDayHigh"),
