@@ -18,6 +18,9 @@ def get_db():
     db: Session = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -63,13 +66,52 @@ def _migrate_alert_user_id(db: "Session") -> None:
         db.commit()
 
 
+_KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts"}
+
+
+def _migrate_columns(db: "Session") -> None:
+    """Idempotently add new columns across all tables."""
+    from sqlalchemy import text
+
+    pending = [
+        ("income", "code", "ALTER TABLE income ADD COLUMN code TEXT"),
+        ("income", "account", "ALTER TABLE income ADD COLUMN account TEXT"),
+        ("holdings", "account", "ALTER TABLE holdings ADD COLUMN account TEXT"),
+        (
+            "holdings",
+            "snapshot_name",
+            "ALTER TABLE holdings ADD COLUMN snapshot_name TEXT",
+        ),
+        ("transactions", "account", "ALTER TABLE transactions ADD COLUMN account TEXT"),
+        (
+            "accounts",
+            "currency",
+            "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'CNY'",
+        ),
+    ]
+    for table, col, stmt in pending:
+        assert table in _KNOWN_TABLES, f"unexpected table name: {table!r}"
+        cols = [row[1] for row in db.execute(text(f"PRAGMA table_info({table})"))]
+        if col not in cols:
+            db.execute(text(stmt))
+    db.commit()
+
+
 def init_db() -> None:
-    from fin.models import alert, stock, user, watchlist  # noqa: F401
+    import fin.models.alert  # noqa: F401
+    import fin.models.stock  # noqa: F401
+    import fin.models.user  # noqa: F401
+    import fin.models.watchlist  # noqa: F401
+    import fin.models.account  # noqa: F401
+    import fin.models.holding  # noqa: F401
+    import fin.models.income  # noqa: F401
+    import fin.models.transaction  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
     try:
         _seed_mock_user(db)
         _migrate_alert_user_id(db)
+        _migrate_columns(db)
     finally:
         db.close()

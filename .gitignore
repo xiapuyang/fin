@@ -51,3 +51,4 @@ htmlcov/
 # Claude Code local settings
 .claude/
 .context/
+.playwright-mcp/

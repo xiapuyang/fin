@@ -11,6 +11,8 @@ from fin.services.quote import fetch_full_quote, normalize_symbol
 logger = logging.getLogger(__name__)
 
 UPDATE_INTERVAL = 300  # 5 minutes
+BATCH_SIZE = 20
+BATCH_PAUSE = 0.5  # seconds between batches
 
 
 def _alert_symbols() -> set[str]:
@@ -20,6 +22,25 @@ def _alert_symbols() -> set[str]:
     db = SessionLocal()
     try:
         return {a.symbol for a in AlertSQLiteRepository(db).get_enabled()}
+    finally:
+        db.close()
+
+
+def _portfolio_symbols() -> set[str]:
+    """Collect unique symbols from holdings, transactions, and income tables."""
+    from fin.database import SessionLocal
+    from fin.models.holding import HoldingModel
+    from fin.models.transaction import TransactionModel
+    from fin.models.income import IncomeModel
+
+    db = SessionLocal()
+    try:
+        h = {row[0] for row in db.query(HoldingModel.code).distinct().all() if row[0]}
+        t = {
+            row[0] for row in db.query(TransactionModel.code).distinct().all() if row[0]
+        }
+        i = {row[0] for row in db.query(IncomeModel.code).distinct().all() if row[0]}
+        return h | t | i
     finally:
         db.close()
 
@@ -34,19 +55,26 @@ def collect_symbols() -> set[str]:
             for entry in group:
                 symbols.add(normalize_symbol(entry["code"]))
     symbols |= _alert_symbols()
+    symbols |= _portfolio_symbols()
     return symbols
 
 
 def run_update_cycle(db: Session) -> None:
     repo = StockSQLiteRepository(db)
-    for symbol in collect_symbols():
-        try:
-            data = fetch_full_quote(symbol)
-            if data:
-                repo.upsert(symbol, data)
-                logger.debug("Updated %s", symbol)
-        except Exception:
-            logger.exception("Failed to update %s", symbol)
+    all_symbols = sorted(collect_symbols())
+    logger.info("Price update: %d symbols", len(all_symbols))
+    for i in range(0, len(all_symbols), BATCH_SIZE):
+        batch = all_symbols[i : i + BATCH_SIZE]
+        for symbol in batch:
+            try:
+                data = fetch_full_quote(symbol)
+                if data:
+                    repo.upsert(symbol, data)
+                    logger.debug("Updated %s", symbol)
+            except Exception:
+                logger.exception("Failed to update %s", symbol)
+        if i + BATCH_SIZE < len(all_symbols):
+            time.sleep(BATCH_PAUSE)
 
 
 def _loop() -> None:

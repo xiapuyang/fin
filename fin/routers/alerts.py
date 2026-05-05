@@ -67,6 +67,19 @@ def get_quote(symbol: str, db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/prices")
+def get_prices(symbols: str = "", db: Session = Depends(get_db)):
+    """Return cached price data for a comma-separated list of symbols."""
+    codes = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    svc = QuoteService(db)
+    result = {}
+    for code in codes:
+        q = svc.get_quote(code)
+        if q:
+            result[code] = {"price": q["price"], "prev_close": q["prev_close"]}
+    return result
+
+
 @router.get("/symbols")
 def get_symbols():
     if not SYMBOLS_PATH.exists():
