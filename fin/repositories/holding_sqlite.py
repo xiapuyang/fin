@@ -18,8 +18,12 @@ class HoldingSQLiteRepository:
             .all()
         )
 
-    def get_by_id(self, id: int) -> HoldingModel | None:
-        return self._db.query(HoldingModel).filter(HoldingModel.id == id).first()
+    def get_by_id(self, id: int, user_id: int) -> HoldingModel | None:
+        return (
+            self._db.query(HoldingModel)
+            .filter(HoldingModel.id == id, HoldingModel.user_id == user_id)
+            .first()
+        )
 
     def create(self, data: HoldingCreate, user_id: int) -> HoldingModel:
         holding = HoldingModel(
@@ -40,8 +44,8 @@ class HoldingSQLiteRepository:
         self._db.refresh(holding)
         return holding
 
-    def update(self, id: int, data: HoldingUpdate) -> HoldingModel:
-        holding = self.get_by_id(id)
+    def update(self, id: int, data: HoldingUpdate, user_id: int) -> HoldingModel:
+        holding = self.get_by_id(id, user_id)
         if holding is None:
             raise ValueError(f"Holding {id} not found")
         for field, val in data.model_dump(exclude_unset=True).items():
@@ -51,8 +55,8 @@ class HoldingSQLiteRepository:
         self._db.refresh(holding)
         return holding
 
-    def delete(self, id: int) -> None:
-        holding = self.get_by_id(id)
+    def delete(self, id: int, user_id: int) -> None:
+        holding = self.get_by_id(id, user_id)
         if holding:
             self._db.delete(holding)
             self._db.commit()

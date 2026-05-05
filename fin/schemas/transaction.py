@@ -50,7 +50,7 @@ class TransactionResponse(BaseModel):
     date: str
     code: str
     name: Optional[str]
-    side: str
+    side: Literal["buy", "sell"]
     shares: float
     price: float
     currency: str

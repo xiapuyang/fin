@@ -18,9 +18,11 @@ class TransactionSQLiteRepository:
             .all()
         )
 
-    def get_by_id(self, id: int) -> TransactionModel | None:
+    def get_by_id(self, id: int, user_id: int) -> TransactionModel | None:
         return (
-            self._db.query(TransactionModel).filter(TransactionModel.id == id).first()
+            self._db.query(TransactionModel)
+            .filter(TransactionModel.id == id, TransactionModel.user_id == user_id)
+            .first()
         )
 
     def create(self, data: TransactionCreate, user_id: int) -> TransactionModel:
@@ -42,8 +44,10 @@ class TransactionSQLiteRepository:
         self._db.refresh(txn)
         return txn
 
-    def update(self, id: str, data: TransactionUpdate) -> TransactionModel:
-        txn = self.get_by_id(id)
+    def update(
+        self, id: int, data: TransactionUpdate, user_id: int
+    ) -> TransactionModel:
+        txn = self.get_by_id(id, user_id)
         if txn is None:
             raise ValueError(f"Transaction {id} not found")
         for field, val in data.model_dump(exclude_unset=True).items():
@@ -53,8 +57,8 @@ class TransactionSQLiteRepository:
         self._db.refresh(txn)
         return txn
 
-    def delete(self, id: str) -> None:
-        txn = self.get_by_id(id)
+    def delete(self, id: int, user_id: int) -> None:
+        txn = self.get_by_id(id, user_id)
         if txn:
             self._db.delete(txn)
             self._db.commit()

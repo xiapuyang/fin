@@ -247,3 +247,108 @@ def test_delete_income(client):
     r = client.delete(f"/api/income/{income_id}")
     assert r.status_code == 204
     assert client.get("/api/income").json() == []
+
+
+# ── 404 paths ────────────────────────────────────────────────────────────────
+
+
+def test_update_holding_not_found(client):
+    r = client.put("/api/holdings/99999", json={"shares": 10})
+    assert r.status_code == 404
+
+
+def test_update_transaction_not_found(client):
+    r = client.put(
+        "/api/transactions/99999",
+        json={"note": "ghost"},
+    )
+    assert r.status_code == 404
+
+
+# ── Account endpoints ─────────────────────────────────────────────────────────
+
+
+def test_create_and_list_accounts(client):
+    r = client.post(
+        "/api/accounts",
+        json={"name": "IBKR", "currency": "USD"},
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["name"] == "IBKR"
+    assert data["currency"] == "USD"
+
+    r2 = client.get("/api/accounts")
+    assert r2.status_code == 200
+    assert len(r2.json()) == 1
+
+
+def test_delete_account(client):
+    r = client.post("/api/accounts", json={"name": "Futu", "currency": "HKD"})
+    account_id = r.json()["id"]
+    r = client.delete(f"/api/accounts/{account_id}")
+    assert r.status_code == 204
+    assert client.get("/api/accounts").json() == []
+
+
+# ── Validation edge cases ─────────────────────────────────────────────────────
+
+
+def test_holding_negative_shares_invalid(client):
+    r = client.post(
+        "/api/holdings",
+        json={"code": "TSLA", "market": "US", "shares": -1, "avg_cost": 100},
+    )
+    assert r.status_code == 422
+
+
+def test_transaction_negative_shares_invalid(client):
+    r = client.post(
+        "/api/transactions",
+        json={
+            "date": "2024-01-01",
+            "code": "AAPL",
+            "side": "buy",
+            "shares": -5,
+            "price": 100,
+        },
+    )
+    assert r.status_code == 422
+
+
+# ── CSV import edge cases ─────────────────────────────────────────────────────
+
+
+def test_import_unknown_side_skipped(client):
+    csv_content = (
+        "Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词\n"
+        'NVDA,$78.40,100,"$7,840.00",持有,,"June 12, 2024",\n'
+    )
+    r = client.post(
+        "/api/transactions/import",
+        files={"file": ("t.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["imported"] == 0
+    assert len(data["skipped"]) == 1
+    assert "持有" in data["skipped"][0]["reason"]
+
+
+def test_import_realized_only_row(client):
+    """Rows with shares=0 and price=0 but a realized value must import successfully."""
+    csv_content = (
+        "Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词\n"
+        'VTI,,,"$0.00",卖,"$5,496.00","March 19, 2024",\n'
+    )
+    r = client.post(
+        "/api/transactions/import",
+        files={"file": ("t.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["imported"] == 1
+    assert data["skipped"] == []
+    txns = client.get("/api/transactions").json()
+    assert txns[0]["shares"] == 0.0
+    assert "5,496" in (txns[0]["note"] or "")
