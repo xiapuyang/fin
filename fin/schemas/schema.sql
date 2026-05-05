@@ -2,14 +2,13 @@
 -- Source of truth: fin/models/*.py + fin/database.py migrations
 -- Recreate: sqlite3 data/fin.db < schema.sql
 
-PRAGMA foreign_keys = ON;
-
 -- ── users ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-    id         VARCHAR  NOT NULL PRIMARY KEY,
-    name       VARCHAR  NOT NULL,
-    email      VARCHAR  NOT NULL UNIQUE,
-    created_at DATETIME NOT NULL
+    id          INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name        VARCHAR  NOT NULL,
+    email       VARCHAR  NOT NULL UNIQUE,
+    create_time DATETIME NOT NULL,
+    update_time DATETIME NOT NULL
 );
 
 -- ── accounts ──────────────────────────────────────────────────────────────────
@@ -94,13 +93,13 @@ CREATE TABLE IF NOT EXISTS alerts (
     value      FLOAT   NOT NULL,
     enabled    BOOLEAN NOT NULL DEFAULT 1,
     user_id    BIGINT,
-    created_at DATETIME NOT NULL,
-    updated_at DATETIME NOT NULL
+    create_time DATETIME NOT NULL,
+    update_time DATETIME NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS alert_fires (
     id         INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    alert_id   INTEGER NOT NULL REFERENCES alerts (id) ON DELETE CASCADE,
+    alert_id   INTEGER NOT NULL,
     fired_at   DATETIME NOT NULL,
     price      FLOAT NOT NULL,
     change_pct FLOAT NOT NULL
