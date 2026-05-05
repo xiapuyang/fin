@@ -38,7 +38,10 @@ class AccountSQLiteRepository:
         account = self.get_by_id(id)
         if account is None:
             return None
+        non_null_fields = {"name", "currency"}
         for field, val in data.model_dump(exclude_unset=True).items():
+            if val is None and field in non_null_fields:
+                continue
             setattr(account, field, val)
         account.update_time = datetime.now(timezone.utc)
         self._db.commit()
