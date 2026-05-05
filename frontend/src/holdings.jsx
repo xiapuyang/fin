@@ -179,6 +179,13 @@ const Holdings = () => {
     ? acctHoldings.filter(h => (h.snapshot_name || "未命名") === selectedSnapshot)
     : acctHoldings;
 
+  // Build per-account cutoff map — used by both allPositions and allRealized
+  const accountCutoffs = React.useMemo(() => {
+    const m = {};
+    accounts.forEach(a => { if (a.cutoff_date) m[a.name] = a.cutoff_date; });
+    return m;
+  }, [accounts]);
+
   // All-accounts aggregate — one row per (account, code), keeping the latest snapshot date
   const latestHoldings = React.useMemo(() => {
     const best = {};
@@ -188,16 +195,15 @@ const Holdings = () => {
     });
     return Object.values(best);
   }, [holdings]);
-  const allPositions = React.useMemo(() => computePositions(latestHoldings, transactions, prices), [latestHoldings, transactions, prices]);
+  // Apply per-account cutoffs so the aggregate is consistent with per-account P&L
+  const txnsForAllCalc = React.useMemo(() =>
+    transactions.filter(t => !accountCutoffs[t.account] || t.date >= accountCutoffs[t.account]),
+    [transactions, accountCutoffs]
+  );
+  const allPositions = React.useMemo(() => computePositions(latestHoldings, txnsForAllCalc, prices), [latestHoldings, txnsForAllCalc, prices]);
   const allTotal = allPositions.reduce((s, p) => s + p.value, 0);
   const allCost = allPositions.reduce((s, p) => s + p.cost, 0);
   const allUnrealized = allTotal - allCost;
-  // Build per-account cutoff map for aggregate realized filter
-  const accountCutoffs = React.useMemo(() => {
-    const m = {};
-    accounts.forEach(a => { if (a.cutoff_date) m[a.name] = a.cutoff_date; });
-    return m;
-  }, [accounts]);
   const allRealized = transactions
     .filter(t => t.realized != null && (!accountCutoffs[t.account] || t.date >= accountCutoffs[t.account]))
     .reduce((s, t) => s + (t.realized || 0) * (FX[t.currency] || 1), 0);
