@@ -5,6 +5,7 @@ import math
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fin.database import get_db
@@ -179,7 +180,10 @@ def create_account(data: AccountCreate, db: Session = Depends(get_db)):
 
 @router.put("/accounts/{account_id}", response_model=AccountResponse)
 def update_account(account_id: int, data: AccountUpdate, db: Session = Depends(get_db)):
-    updated = AccountSQLiteRepository(db).update(account_id, data)
+    try:
+        updated = AccountSQLiteRepository(db).update(account_id, data)
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Account name already exists")
     if updated is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return _account_response(updated)
