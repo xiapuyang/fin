@@ -111,6 +111,12 @@ async function apiGetIncome()           { return _apiFetch("/api/income"); }
 async function apiCreateIncome(data)    { return _apiFetch("/api/income", _JSON(data)); }
 async function apiUpdateIncome(id,data) { return _apiFetch(`/api/income/${id}`, _PUT(data)); }
 async function apiDeleteIncome(id)      { return _apiFetch(`/api/income/${id}`, _DEL()); }
+async function apiImportIncome(file, account) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const qs = account ? `?account=${encodeURIComponent(account)}` : "";
+  return _apiFetch(`/api/income/import${qs}`, { method: "POST", body: fd });
+}
 
 async function apiGetAccounts()        { return _apiFetch("/api/accounts"); }
 async function apiCreateAccount(data)  { return _apiFetch("/api/accounts", _JSON(data)); }
@@ -195,6 +201,6 @@ Object.assign(window, {
   apiGetPrices,
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
-  apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome,
+  apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
   apiGetAccounts, apiCreateAccount, apiDeleteAccount,
 });
