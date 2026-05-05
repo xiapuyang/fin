@@ -18,8 +18,12 @@ class IncomeSQLiteRepository:
             .all()
         )
 
-    def get_by_id(self, id: int) -> IncomeModel | None:
-        return self._db.query(IncomeModel).filter(IncomeModel.id == id).first()
+    def get_by_id(self, id: int, user_id: int) -> IncomeModel | None:
+        return (
+            self._db.query(IncomeModel)
+            .filter(IncomeModel.id == id, IncomeModel.user_id == user_id)
+            .first()
+        )
 
     def create(self, data: IncomeCreate, user_id: int) -> IncomeModel:
         income = IncomeModel(
@@ -38,8 +42,8 @@ class IncomeSQLiteRepository:
         self._db.refresh(income)
         return income
 
-    def update(self, id: str, data: IncomeUpdate) -> IncomeModel:
-        income = self.get_by_id(id)
+    def update(self, id: int, data: IncomeUpdate, user_id: int) -> IncomeModel:
+        income = self.get_by_id(id, user_id)
         if income is None:
             raise ValueError(f"Income {id} not found")
         for field, val in data.model_dump(exclude_unset=True).items():
@@ -49,8 +53,8 @@ class IncomeSQLiteRepository:
         self._db.refresh(income)
         return income
 
-    def delete(self, id: str) -> None:
-        income = self.get_by_id(id)
+    def delete(self, id: int, user_id: int) -> None:
+        income = self.get_by_id(id, user_id)
         if income:
             self._db.delete(income)
             self._db.commit()
