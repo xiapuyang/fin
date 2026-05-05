@@ -53,6 +53,27 @@ class IncomeSQLiteRepository:
         self._db.refresh(income)
         return income
 
+    def bulk_create(self, items: list[IncomeCreate], user_id: int) -> list[IncomeModel]:
+        models = [
+            IncomeModel(
+                user_id=user_id,
+                date=d.date,
+                source=d.source,
+                category=d.category,
+                amount=d.amount,
+                currency=d.currency,
+                account=d.account,
+                code=d.code,
+                note=d.note,
+            )
+            for d in items
+        ]
+        self._db.add_all(models)
+        self._db.commit()
+        for m in models:
+            self._db.refresh(m)
+        return models
+
     def delete(self, id: int, user_id: int) -> None:
         income = self.get_by_id(id, user_id)
         if income:
