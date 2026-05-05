@@ -13,6 +13,7 @@ class StockModel(Base):
     currency = Column(String)
     price = Column(Float)
     prev_close = Column(Float)
+    regular_close = Column(Float)
     open_price = Column(Float)
     high = Column(Float)
     low = Column(Float)
