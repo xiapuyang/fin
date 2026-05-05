@@ -528,42 +528,6 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         </Card>
       </div>
 
-      {/* Trigger timeline */}
-      <Card padding={20} style={{ marginBottom: 22 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div>
-            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>触发历史 Trigger Timeline</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Last 14 days · {history.length} triggers</div>
-          </div>
-          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--ink-3)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--up)", borderRadius: 4 }}/>突破上行</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--down)", borderRadius: 4 }}/>跌破下行</span>
-          </div>
-        </div>
-        <div style={{ overflowX: "auto" }} className="scroll">
-          <TriggerTimeline events={history} width={1380} height={120} days={14}/>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
-          {history.slice().reverse().map((h, i) => {
-            const cm = condMeta(h.cond);
-            const chg = h.change_pct;
-            return (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "130px 90px 1fr 140px 80px", gap: 10, fontSize: 12, padding: "4px 0", alignItems: "center" }}>
-                <span className="mono" style={{ color: "var(--ink-3)" }}>{h.time}</span>
-                <span className="mono" style={{ fontWeight: 600 }}>{h.code}</span>
-                <span style={{ color: "var(--ink-2)" }}>{h.name}</span>
-                <span className="mono" style={{ color: cm.isUp ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
-                  {cm.symbol} {h.threshold}{!cm.isPrice ? "%" : ""} → {parseFloat(h.actual).toFixed(2)}{!cm.isPrice ? "%" : ""}
-                </span>
-                <span className="mono" style={{ color: chg >= 0 ? "var(--up)" : "var(--down)", fontSize: 11.5 }}>
-                  {chg >= 0 ? "+" : ""}{parseFloat(chg).toFixed(2)}%
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
       {/* Alerts list */}
       <Card padding={0}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -603,6 +567,42 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
             </button>
           </div>
         )}
+      </Card>
+
+      {/* Trigger timeline */}
+      <Card padding={20} style={{ marginTop: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div>
+            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>触发历史 Trigger Timeline</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Last 14 days · {history.length} triggers</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--ink-3)" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--up)", borderRadius: 4 }}/>突破上行</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--down)", borderRadius: 4 }}/>跌破下行</span>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }} className="scroll">
+          <TriggerTimeline events={history} width={1380} height={120} days={14}/>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
+          {history.slice().reverse().map((h, i) => {
+            const cm = condMeta(h.cond);
+            const chg = h.change_pct;
+            return (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "130px 90px 1fr 140px 80px", gap: 10, fontSize: 12, padding: "4px 0", alignItems: "center" }}>
+                <span className="mono" style={{ color: "var(--ink-3)" }}>{h.time}</span>
+                <span className="mono" style={{ fontWeight: 600 }}>{h.code}</span>
+                <span style={{ color: "var(--ink-2)" }}>{h.name}</span>
+                <span className="mono" style={{ color: cm.isUp ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                  {cm.symbol} {h.threshold}{!cm.isPrice ? "%" : ""} → {parseFloat(h.actual).toFixed(2)}{!cm.isPrice ? "%" : ""}
+                </span>
+                <span className="mono" style={{ color: chg >= 0 ? "var(--up)" : "var(--down)", fontSize: 11.5 }}>
+                  {chg >= 0 ? "+" : ""}{parseFloat(chg).toFixed(2)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </Card>
 
       {editingAlert && (

@@ -15,46 +15,43 @@ class WatchlistSQLiteRepository:
         """
         self._db = db
 
-    def get_all(self) -> list[WatchlistModel]:
-        """Return all watchlist entries ordered by creation time.
-
-        Returns:
-            List of WatchlistModel instances.
-        """
-        return self._db.query(WatchlistModel).order_by(WatchlistModel.create_time).all()
+    def get_all(self, user_id: int) -> list[WatchlistModel]:
+        return (
+            self._db.query(WatchlistModel)
+            .filter(WatchlistModel.user_id == user_id)
+            .order_by(WatchlistModel.create_time)
+            .all()
+        )
 
     def add(
-        self, symbol: str, name: str | None, market: str | None, currency: str | None
+        self,
+        symbol: str,
+        name: str | None,
+        market: str | None,
+        currency: str | None,
+        user_id: int = 1,
     ) -> WatchlistModel | None:
-        """Insert a watchlist entry, ignoring conflicts on symbol.
-
-        Args:
-            symbol: Normalized stock symbol (unique key).
-            name: Human-readable name, may be None.
-            market: Market identifier (US, HK, CN), may be None.
-            currency: ISO currency code, may be None.
-
-        Returns:
-            The existing or newly inserted WatchlistModel, or None on concurrent deletion.
-        """
         stmt = (
             sqlite_insert(WatchlistModel)
-            .values(symbol=symbol, name=name, market=market, currency=currency)
-            .on_conflict_do_nothing(index_elements=["symbol"])
+            .values(
+                user_id=user_id,
+                symbol=symbol,
+                name=name,
+                market=market,
+                currency=currency,
+            )
+            .on_conflict_do_nothing(index_elements=["user_id", "symbol"])
         )
         self._db.execute(stmt)
         self._db.commit()
         return (
             self._db.query(WatchlistModel)
-            .filter(WatchlistModel.symbol == symbol)
+            .filter(WatchlistModel.user_id == user_id, WatchlistModel.symbol == symbol)
             .first()
         )
 
-    def remove(self, symbol: str) -> None:
-        """Delete the watchlist entry for the given symbol (no-op if absent).
-
-        Args:
-            symbol: Normalized stock symbol to remove.
-        """
-        self._db.query(WatchlistModel).filter(WatchlistModel.symbol == symbol).delete()
+    def remove(self, symbol: str, user_id: int = 1) -> None:
+        self._db.query(WatchlistModel).filter(
+            WatchlistModel.user_id == user_id, WatchlistModel.symbol == symbol
+        ).delete()
         self._db.commit()

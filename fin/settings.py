@@ -7,6 +7,7 @@ from fin.config import SETTINGS_PATH
 _DEFAULTS = {
     "notify_email": "",
     "notify_enabled": True,
+    "timezone": "America/Toronto",
 }
 
 

@@ -57,25 +57,47 @@ class IncomeSQLiteRepository:
         return income
 
     def bulk_create(self, items: list[IncomeCreate], user_id: int) -> list[IncomeModel]:
-        """Bulk-insert income records atomically.
+        """Bulk-insert income records, skipping exact duplicates (same date/source/amount/currency).
 
         Args:
             items: List of income records to insert.
             user_id: Owner user ID for all records.
 
         Returns:
-            The persisted models with database-assigned IDs.
+            Only the newly inserted models (duplicates are silently skipped).
         """
-        models = [self._build_model(d, user_id) for d in items]
-        try:
-            self._db.add_all(models)
-            self._db.commit()
-        except Exception:
-            self._db.rollback()
-            raise
-        for m in models:
-            self._db.refresh(m)
-        return models
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        inserted: list[IncomeModel] = []
+        for d in items:
+            stmt = (
+                sqlite_insert(IncomeModel)
+                .values(
+                    user_id=user_id,
+                    date=d.date,
+                    source=d.source,
+                    category=d.category,
+                    amount=d.amount,
+                    currency=d.currency,
+                    account=d.account,
+                    code=d.code,
+                    note=d.note,
+                    create_time=datetime.now(timezone.utc),
+                    update_time=datetime.now(timezone.utc),
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["user_id", "date", "source", "amount", "currency"]
+                )
+            )
+            result = self._db.execute(stmt)
+            if result.rowcount:
+                inserted.append(
+                    self._db.query(IncomeModel)
+                    .filter(IncomeModel.id == result.inserted_primary_key[0])
+                    .first()
+                )
+        self._db.commit()
+        return [m for m in inserted if m is not None]
 
     def delete(self, id: int, user_id: int) -> None:
         income = self.get_by_id(id, user_id)

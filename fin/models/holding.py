@@ -1,12 +1,25 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 
 from fin.database import Base
 
 
 class HoldingModel(Base):
     __tablename__ = "holdings"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "account", "code", "snapshot_name", name="uq_holding_snapshot"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)
