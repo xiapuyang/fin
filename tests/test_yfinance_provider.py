@@ -125,6 +125,13 @@ def test_fetch_full_returns_empty_on_zero_price(provider):
     assert result == {}
 
 
+def test_fetch_full_returns_empty_on_exception(provider):
+    with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
+        mock_yf.Ticker.side_effect = Exception("network error")
+        result = provider.fetch_full("AAPL")
+    assert result == {}
+
+
 # ── fetch_fx ──────────────────────────────────────────────────────────────────
 
 
@@ -157,3 +164,11 @@ def test_fetch_fx_refetches_after_ttl_expiry(provider):
         provider._fx_cache["USD"] = (7.20, time.monotonic() - 120)
         provider.fetch_fx({"USD": "USDCNY=X"})
     assert mock_yf.Ticker.call_count == 1  # cache expired, re-fetched
+
+
+def test_fetch_fx_falls_back_to_stale_cache_on_exception(provider):
+    provider._fx_cache["USD"] = (7.20, time.monotonic() - 120)  # expired but present
+    with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
+        mock_yf.Ticker.side_effect = Exception("network error")
+        result = provider.fetch_fx({"USD": "USDCNY=X"})
+    assert result["USD"] == pytest.approx(7.20)

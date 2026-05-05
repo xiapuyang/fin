@@ -15,6 +15,11 @@ STALE_SECONDS = 300
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
+# Fields from provider responses that are not DB columns and must be stripped
+# before persisting (market_state and change_pct are computed/transient;
+# name exclusion prevents live-price fetches from clobbering the full quote name).
+_NON_DB_FIELDS = frozenset({"market_state", "change_pct", "name"})
+
 _SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
 
 
@@ -112,11 +117,7 @@ class QuoteService:
         if data:
             if data.get("market_state"):
                 _write_market_state(symbol, data["market_state"])
-            safe = {
-                k: v
-                for k, v in data.items()
-                if k not in ("market_state", "change_pct", "name")
-            }
+            safe = {k: v for k, v in data.items() if k not in _NON_DB_FIELDS}
             self._repo.upsert(symbol, safe)
             stock = self._repo.get_by_symbol(symbol)
             result = _stock_to_dict(stock)
@@ -133,21 +134,28 @@ class QuoteService:
 
     def upsert_quote(self, symbol: str, data: dict) -> None:
         """Persist a quote data dict for symbol, ignoring non-DB fields."""
-        safe = {
-            k: v
-            for k, v in data.items()
-            if k not in ("market_state", "change_pct", "name")
-        }
+        safe = {k: v for k, v in data.items() if k not in _NON_DB_FIELDS}
         self._repo.upsert(symbol, safe)
 
     def get_full_quote(self, symbol: str) -> dict:
-        """Fetch comprehensive quote via the appropriate provider."""
+        """Fetch comprehensive quote via the appropriate provider.
+
+        Returns {} when no provider supports the symbol (matches fetch_full
+        contract on the base class).
+        """
         symbol = normalize_symbol(symbol)
-        provider = self._select_provider(symbol)
+        try:
+            provider = self._select_provider(symbol)
+        except ValueError:
+            return {}
         return provider.fetch_full(symbol)
 
     def get_fx(self, pairs: dict[str, str]) -> dict:
-        """Fetch FX rates, delegating to the first provider that supports it."""
+        """Fetch FX rates, delegating to the first provider that supports it.
+
+        Raises:
+            RuntimeError: If no provider implements FX fetching.
+        """
         for provider in self._providers:
             try:
                 return provider.fetch_fx(pairs)
