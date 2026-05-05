@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from fin.config import MARKET_STATE_PATH
 from fin.models.stock import StockModel
 from fin.repositories.stock_sqlite import StockSQLiteRepository
-from fin.services.providers.base import QuoteProvider
+from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,17 @@ STALE_SECONDS = 300
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
 # Fields from provider responses that are not DB columns and must be stripped
-# before persisting (market_state and change_pct are computed/transient;
-# name exclusion prevents live-price fetches from clobbering the full quote name).
-_NON_DB_FIELDS = frozenset({"market_state", "change_pct", "name"})
+# before persisting (market_state and change_pct are computed/transient).
+_NON_DB_FIELDS = frozenset({"market_state", "change_pct"})
 
 _SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
 
 
 def _market_for_symbol(symbol: str) -> str:
+    # 6-digit CN fund codes have no exchange suffix; give them their own bucket
+    # so they never inherit the US market state from market_state.json.
+    if CN_FUND_PATTERN.match(symbol):
+        return "CN_FUND"
     for suffix, market in _SUFFIX_TO_MARKET.items():
         if symbol.endswith(suffix):
             return market
