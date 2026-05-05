@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import json
 
-import yfinance as yf
 from agentmail import AgentMail
 
 from fin.config import LAST_CHECK_PATH
@@ -19,6 +18,7 @@ from fin.database import SessionLocal, init_db
 from fin.logger import setup_logging
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
+from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
 from fin import settings as settings_store
 
@@ -156,20 +156,10 @@ def main() -> None:
         symbols = list({a.symbol for a in alerts})
         logger.info("Fetching data for %d symbols: %s", len(symbols), symbols)
 
-        quote_service = QuoteService(db)
+        quote_service = QuoteService(db, build_default_providers())
         price_data: dict[str, tuple[float, float]] = {}
         for symbol in symbols:
             try:
-                fi = yf.Ticker(symbol).fast_info
-                market_state = getattr(fi, "market_state", None)
-                if not args.force and market_state != "REGULAR":
-                    logger.info(
-                        "Market not REGULAR for %s (state=%s), skipping",
-                        symbol,
-                        market_state,
-                    )
-                    price_data[symbol] = (None, None)
-                    continue
                 quote = quote_service.get_quote(symbol)
                 if (
                     not quote
@@ -177,6 +167,20 @@ def main() -> None:
                     or quote.get("change_pct") is None
                 ):
                     logger.warning("Missing price data for %s", symbol)
+                    price_data[symbol] = (None, None)
+                    continue
+                market_state = quote.get("market_state")
+                # None market_state means the provider has no session concept (e.g. CN funds).
+                if (
+                    not args.force
+                    and market_state is not None
+                    and market_state != "REGULAR"
+                ):
+                    logger.info(
+                        "Market not REGULAR for %s (state=%s), skipping",
+                        symbol,
+                        market_state,
+                    )
                     price_data[symbol] = (None, None)
                     continue
                 price_data[symbol] = (quote["price"], quote["change_pct"])
