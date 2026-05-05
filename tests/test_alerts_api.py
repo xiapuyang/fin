@@ -37,7 +37,10 @@ def test_get_symbols_not_found(client, tmp_path, monkeypatch):
 def test_get_quote_success(client):
     # prev_close=100 → change_pct = (110-100)/100*100 = 10.0 exactly
     live = {"price": 110.0, "prev_close": 100.0, "currency": "USD"}
-    with patch("fin.services.quote._fetch_live", return_value=live):
+    with patch(
+        "fin.services.providers.yfinance_provider.YFinanceProvider.fetch_live",
+        return_value=live,
+    ):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 200
     data = r.json()
@@ -47,15 +50,21 @@ def test_get_quote_success(client):
 
 
 def test_get_quote_missing_price(client):
-    with patch("fin.services.quote._fetch_live", return_value={}):
+    with patch(
+        "fin.services.providers.yfinance_provider.YFinanceProvider.fetch_live",
+        return_value={},
+    ):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 503
 
 
 def test_get_quote_fetch_error(client):
-    # The real _fetch_live swallows network exceptions and returns {}.
+    # Providers swallow network exceptions and return {}.
     # Simulate that contract: QuoteService receives {} and returns None → 503.
-    with patch("fin.services.quote._fetch_live", return_value={}):
+    with patch(
+        "fin.services.providers.yfinance_provider.YFinanceProvider.fetch_live",
+        return_value={},
+    ):
         r = client.get("/api/quote/AAPL")
     assert r.status_code == 503
 

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import fin.settings as settings_mod
 
 
@@ -30,3 +32,27 @@ def test_put_settings_persists(client, tmp_path, monkeypatch):
     client.put("/api/settings", json={"notify_email": "persist@example.com"})
     r = client.get("/api/settings")
     assert r.json()["notify_email"] == "persist@example.com"
+
+
+def test_get_fx_returns_rates_via_quote_service(client):
+    fake_rates = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
+    with patch("fin.routers.settings.QuoteService") as mock_qs:
+        mock_qs.return_value.get_fx.return_value = fake_rates
+        with patch("fin.routers.settings.build_default_providers", return_value=[]):
+            r = client.get("/api/fx")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["USD"] == 7.24
+    assert data["CNY"] == 1.0
+
+
+def test_get_fx_falls_back_on_error(client):
+    with patch("fin.routers.settings.QuoteService") as mock_qs:
+        mock_qs.return_value.get_fx.side_effect = Exception("provider down")
+        with patch("fin.routers.settings.build_default_providers", return_value=[]):
+            r = client.get("/api/fx")
+    assert r.status_code == 200
+    data = r.json()
+    # Fallback values should be returned
+    assert "USD" in data
+    assert data["CNY"] == 1.0
