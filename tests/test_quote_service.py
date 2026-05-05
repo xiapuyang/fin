@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from fin.database import Base
 from fin.repositories.stock_sqlite import StockSQLiteRepository
-from fin.services.quote import QuoteService, normalize_symbol
+from fin.services.quote import QuoteService, normalize_symbol, _dot_to_dash
 
 
 @pytest.fixture()
@@ -109,3 +109,42 @@ def test_get_quote_fetches_live_when_db_empty(db):
     with patch("fin.services.quote._fetch_live", return_value=live_data):
         result = QuoteService(db).get_quote("AAPL")
     assert result["price"] == 155.0
+
+
+# ── _dot_to_dash ──────────────────────────────────────────────────────────────
+
+
+def test_dot_to_dash_converts_us_class_share():
+    assert _dot_to_dash("BRK.B") == "BRK-B"
+
+
+def test_dot_to_dash_ignores_hk_suffix():
+    assert _dot_to_dash("0700.HK") is None
+
+
+def test_dot_to_dash_ignores_cn_suffixes():
+    assert _dot_to_dash("600519.SS") is None
+    assert _dot_to_dash("300750.SZ") is None
+
+
+def test_dot_to_dash_ignores_no_dot():
+    assert _dot_to_dash("AAPL") is None
+
+
+def test_get_quote_retries_dot_to_dash(db):
+    live_data = {"price": 420.0, "prev_close": 415.0, "currency": "USD"}
+
+    def fake_fetch(symbol):
+        return live_data if symbol == "BRK-B" else {}
+
+    with patch("fin.services.quote._fetch_live", side_effect=fake_fetch):
+        result = QuoteService(db).get_quote("BRK.B")
+    assert result is not None
+    assert result["price"] == 420.0
+
+
+def test_get_quote_no_dash_retry_for_exchange_suffix(db):
+    with patch("fin.services.quote._fetch_live", return_value={}) as mock:
+        result = QuoteService(db).get_quote("0700.HK")
+    assert mock.call_count == 1
+    assert result is None

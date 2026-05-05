@@ -76,7 +76,10 @@ def _migrate_alerts_to_int_id(db: "Session") -> None:
     from sqlalchemy import text
 
     cols = {r[1]: r[2].upper() for r in db.execute(text("PRAGMA table_info(alerts)"))}
-    if cols.get("id", "INTEGER") in ("TEXT", "VARCHAR", "STRING", "CHAR"):
+    if any(
+        cols.get("id", "INTEGER").startswith(t)
+        for t in ("TEXT", "VARCHAR", "STRING", "CHAR")
+    ):
         db.execute(text("DROP TABLE IF EXISTS alert_fires"))
         db.execute(text("DROP TABLE IF EXISTS alerts"))
         db.commit()
