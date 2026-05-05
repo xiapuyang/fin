@@ -18,6 +18,7 @@ from fin.schemas.alert import (
     HistoryResponse,
     TriggeredInfo,
 )
+from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService, normalize_symbol as _normalize_symbol
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ def health():
 
 @router.get("/quote/{symbol}")
 def get_quote(symbol: str, db: Session = Depends(get_db)):
-    result = QuoteService(db).get_quote(symbol)
+    result = QuoteService(db, build_default_providers()).get_quote(symbol)
     if result is None:
         raise HTTPException(status_code=503, detail="Price data unavailable")
     return result
@@ -71,7 +72,7 @@ def get_quote(symbol: str, db: Session = Depends(get_db)):
 def get_prices(symbols: str = "", db: Session = Depends(get_db)):
     """Return cached price data for a comma-separated list of symbols."""
     codes = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    svc = QuoteService(db)
+    svc = QuoteService(db, build_default_providers())
     result = {}
     for code in codes:
         q = svc.get_quote(code)
@@ -142,7 +143,7 @@ def create_alert(data: AlertCreate, db: Session = Depends(get_db)):
 
     # Auto-add symbol to watchlist — best-effort side effect, never fails the alert
     try:
-        QuoteService(db).get_quote(
+        QuoteService(db, build_default_providers()).get_quote(
             normalized.symbol
         )  # populates stock cache if missing
         stock = StockSQLiteRepository(db).get_by_symbol(normalized.symbol)

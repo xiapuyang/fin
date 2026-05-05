@@ -5,8 +5,8 @@ import time
 from sqlalchemy.orm import Session
 
 from fin.config import SYMBOLS_PATH
-from fin.repositories.stock_sqlite import StockSQLiteRepository
-from fin.services.quote import fetch_full_quote, normalize_symbol
+from fin.services.providers import build_default_providers
+from fin.services.quote import QuoteService, normalize_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +60,17 @@ def collect_symbols() -> set[str]:
 
 
 def run_update_cycle(db: Session) -> None:
-    repo = StockSQLiteRepository(db)
+    providers = build_default_providers()
+    service = QuoteService(db, providers)
     all_symbols = sorted(collect_symbols())
     logger.info("Price update: %d symbols", len(all_symbols))
     for i in range(0, len(all_symbols), BATCH_SIZE):
         batch = all_symbols[i : i + BATCH_SIZE]
         for symbol in batch:
             try:
-                data = fetch_full_quote(symbol)
+                data = service.get_full_quote(symbol)
                 if data:
-                    repo.upsert(symbol, data)
+                    service.upsert_quote(symbol, data)
                     logger.debug("Updated %s", symbol)
             except Exception:
                 logger.exception("Failed to update %s", symbol)
