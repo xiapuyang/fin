@@ -73,54 +73,46 @@ const INITIAL_ALERTS = [];
 
 const TRIGGER_HISTORY = [];
 
-// Module 2 — holdings sample
-const HOLDINGS = [
-  { code: "NVDA",     shares: 320, cost: 92.4, market: "US" },
-  { code: "GOOGL",    shares: 180, cost: 142.6, market: "US" },
-  { code: "TSM",      shares: 240, cost: 168.2, market: "US", price: 198.4, prevClose: 195.2, currency: "USD" },
-  { code: "QQQ",      shares: 60,  cost: 462.1, market: "US" },
-  { code: "AAPL",     shares: 90,  cost: 198.2, market: "US" },
-  { code: "0700.HK",  shares: 800, cost: 348.0, market: "HK" },
-  { code: "600519.SS",shares: 40,  cost: 1612.0,market: "CN" },
-];
+// ── Holdings API helpers ────────────────────────────────────────────────────
 
-// Module 2 extension — transaction log (买入/卖出)
-// Average cost & realized PnL get computed from this in holdings.jsx.
-const TRANSACTIONS = [
-  // NVDA — accumulated 320 shares @ avg 92.4
-  { id: "t1",  date: "2024-06-12", code: "NVDA",     side: "buy",  shares: 100, price: 78.40,   ccy: "USD" },
-  { id: "t2",  date: "2024-09-04", code: "NVDA",     side: "buy",  shares: 120, price: 95.20,   ccy: "USD" },
-  { id: "t3",  date: "2025-01-15", code: "NVDA",     side: "buy",  shares: 100, price: 102.10,  ccy: "USD" },
-  // GOOGL
-  { id: "t4",  date: "2024-08-02", code: "GOOGL",    side: "buy",  shares: 100, price: 138.20,  ccy: "USD" },
-  { id: "t5",  date: "2025-02-18", code: "GOOGL",    side: "buy",  shares: 80,  price: 148.10,  ccy: "USD" },
-  // TSM
-  { id: "t6",  date: "2024-07-19", code: "TSM",      side: "buy",  shares: 140, price: 158.40,  ccy: "USD" },
-  { id: "t7",  date: "2024-12-03", code: "TSM",      side: "buy",  shares: 100, price: 181.90,  ccy: "USD" },
-  // QQQ
-  { id: "t8",  date: "2025-03-21", code: "QQQ",      side: "buy",  shares: 60,  price: 462.10,  ccy: "USD" },
-  // AAPL — partial trim
-  { id: "t9",  date: "2024-04-10", code: "AAPL",     side: "buy",  shares: 120, price: 175.30,  ccy: "USD" },
-  { id: "t10", date: "2025-01-09", code: "AAPL",     side: "sell", shares: 30,  price: 235.40,  ccy: "USD", realized: 1803 },
-  { id: "t11", date: "2026-01-22", code: "AAPL",     side: "buy",  shares: 0,   price: 0,       ccy: "USD" }, // (placeholder kept consistent)
-  // 0700.HK
-  { id: "t12", date: "2024-05-08", code: "0700.HK",  side: "buy",  shares: 500, price: 332.40,  ccy: "HKD" },
-  { id: "t13", date: "2024-11-14", code: "0700.HK",  side: "buy",  shares: 300, price: 374.00,  ccy: "HKD" },
-  // 600519.SS
-  { id: "t14", date: "2024-10-08", code: "600519.SS",side: "buy",  shares: 40,  price: 1612.00, ccy: "CNY" },
-];
-// remove the no-op placeholder for AAPL
-TRANSACTIONS.splice(TRANSACTIONS.findIndex(t => t.id === "t11"), 1);
+async function _apiFetch(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || r.statusText);
+  }
+  return r.status === 204 ? null : r.json();
+}
 
-// Manual income / "外部利润" entries (e.g. 分红, 利息, 期权权利金, 套利收益)
-const HOLDINGS_INCOME = [
-  { id: "i1", date: "2024-12-15", source: "NVDA 分红",       category: "dividend", amount: 320,   ccy: "USD", note: "Q4 dividend" },
-  { id: "i2", date: "2025-03-08", source: "0700.HK 分红",    category: "dividend", amount: 480,   ccy: "HKD", note: "腾讯派息" },
-  { id: "i3", date: "2025-06-22", source: "卖出 SPY put",    category: "option",   amount: 820,   ccy: "USD", note: "Cash-secured put 权利金" },
-  { id: "i4", date: "2025-11-04", source: "余额宝 利息",      category: "interest", amount: 612,   ccy: "CNY", note: "" },
-  { id: "i5", date: "2026-02-19", source: "TSM 分红",        category: "dividend", amount: 156,   ccy: "USD", note: "" },
-  { id: "i6", date: "2026-04-11", source: "卖出 NVDA call",  category: "option",   amount: 1240,  ccy: "USD", note: "Covered call 权利金" },
-];
+const _JSON = body => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const _PUT  = body => ({ method: "PUT",  headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const _DEL  = ()   => ({ method: "DELETE" });
+
+async function apiGetPrices(symbols)      { return _apiFetch(`/api/prices?symbols=${symbols.join(",")}`); }
+
+async function apiGetHoldings()           { return _apiFetch("/api/holdings"); }
+async function apiCreateHolding(data)     { return _apiFetch("/api/holdings", _JSON(data)); }
+async function apiUpdateHolding(id, data) { return _apiFetch(`/api/holdings/${id}`, _PUT(data)); }
+async function apiDeleteHolding(id)       { return _apiFetch(`/api/holdings/${id}`, _DEL()); }
+
+async function apiGetTransactions()           { return _apiFetch("/api/transactions"); }
+async function apiCreateTransaction(data)     { return _apiFetch("/api/transactions", _JSON(data)); }
+async function apiUpdateTransaction(id, data) { return _apiFetch(`/api/transactions/${id}`, _PUT(data)); }
+async function apiDeleteTransaction(id)       { return _apiFetch(`/api/transactions/${id}`, _DEL()); }
+async function apiImportTransactions(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return _apiFetch("/api/transactions/import", { method: "POST", body: fd });
+}
+
+async function apiGetIncome()           { return _apiFetch("/api/income"); }
+async function apiCreateIncome(data)    { return _apiFetch("/api/income", _JSON(data)); }
+async function apiUpdateIncome(id,data) { return _apiFetch(`/api/income/${id}`, _PUT(data)); }
+async function apiDeleteIncome(id)      { return _apiFetch(`/api/income/${id}`, _DEL()); }
+
+async function apiGetAccounts()        { return _apiFetch("/api/accounts"); }
+async function apiCreateAccount(data)  { return _apiFetch("/api/accounts", _JSON(data)); }
+async function apiDeleteAccount(id)    { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
 
 // Module 4 — Balance Sheet snapshots
 // Each item is one row. `inSnapshot: ["s3","s4"]` says which historical snapshots include it.
@@ -196,7 +188,11 @@ const GOALS = [
 
 Object.assign(window, {
   SYMBOLS, SYMBOL_INDEX, FX, INITIAL_ALERTS, TRIGGER_HISTORY,
-  HOLDINGS, TRANSACTIONS, HOLDINGS_INCOME,
   BS_CATEGORIES, BS_CAT_COLORS, BS_SNAPSHOTS, BS_ITEMS,
   LEDGER, GOALS, genSpark,
+  apiGetPrices,
+  apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
+  apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
+  apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome,
+  apiGetAccounts, apiCreateAccount, apiDeleteAccount,
 });

@@ -170,7 +170,7 @@ const Tabs = ({ tabs, value, onChange, variant = "underline" }) => {
 };
 
 // === Field / Input =========================================================
-const Input = ({ value, onChange, placeholder, prefix, suffix, type = "text", style = {}, ...rest }) => {
+const Input = ({ value, onChange, placeholder, prefix, suffix, type = "text", inputMode, style = {}, ...rest }) => {
   return (
     <div style={{
       display: "flex", alignItems: "center",
@@ -180,10 +180,10 @@ const Input = ({ value, onChange, placeholder, prefix, suffix, type = "text", st
     }}>
       {prefix && <span style={{ color: "var(--ink-4)", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>{prefix}</span>}
       <input
-        type={type} value={value ?? ""} placeholder={placeholder}
+        {...rest}
+        type={type} inputMode={inputMode} value={value ?? ""} placeholder={placeholder}
         onChange={e => onChange?.(e.target.value)}
         style={{ flex: 1, border: "none", background: "transparent", height: "100%", fontSize: 13, color: "var(--ink)" }}
-        {...rest}
       />
       {suffix && <span style={{ color: "var(--ink-4)", fontSize: 12 }}>{suffix}</span>}
     </div>
