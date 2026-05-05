@@ -3,7 +3,7 @@ import io
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from fin.database import get_db
@@ -296,3 +296,69 @@ def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_
 def delete_income(income_id: int, db: Session = Depends(get_db)):
     IncomeSQLiteRepository(db).delete(income_id, MOCK_USER_ID)
     return Response(status_code=204)
+
+
+@router.post("/income/import")
+async def import_income(
+    file: UploadFile,
+    account: str = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("gbk", errors="replace")
+
+    reader = csv.reader(io.StringIO(text))
+    next(reader, None)  # skip header
+
+    valid: list[IncomeCreate] = []
+    skipped: list[dict] = []
+
+    for i, row in enumerate(reader):
+        if not row or not row[0].strip():
+            continue
+        try:
+            date = row[0].strip()
+            ref = row[1].strip()
+            method = row[2].strip()
+            raw_amount = row[12].strip().strip('"')
+            status = row[13].strip() if len(row) > 13 else ""
+
+            if status != "可用":
+                skipped.append({"row": i, "reason": f"status={status}"})
+                continue
+
+            # parse "USD 65,000.00" → ("USD", 65000.0)
+            parts = raw_amount.split(None, 1)
+            if len(parts) != 2:
+                skipped.append({"row": i, "reason": f"bad amount: {raw_amount}"})
+                continue
+            currency = parts[0]
+            amount = float(parts[1].replace(",", ""))
+
+            valid.append(
+                IncomeCreate(
+                    date=date,
+                    source=f"{method} {ref}",
+                    category="deposit",
+                    amount=amount,
+                    currency=currency,
+                    account=account or None,
+                )
+            )
+        except Exception as e:
+            skipped.append({"row": i, "reason": str(e)})
+
+    repo = IncomeSQLiteRepository(db)
+    imported = repo.bulk_create(valid, MOCK_USER_ID)
+    all_income = repo.get_all(MOCK_USER_ID)
+    logger.info(
+        "Income CSV import: %d imported, %d skipped", len(imported), len(skipped)
+    )
+    return {
+        "imported": len(imported),
+        "skipped": skipped,
+        "income": [_income_response(i) for i in all_income],
+    }
