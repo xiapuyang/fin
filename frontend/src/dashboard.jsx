@@ -17,6 +17,7 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
 
   const [watchlist, setWatchlist] = React.useState([]);
   const [watchQuotes, setWatchQuotes] = React.useState({});
+  const [alertQuotes, setAlertQuotes] = React.useState({});
 
   React.useEffect(() => {
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
@@ -33,6 +34,19 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
     });
     return () => ctrl.abort();
   }, [watchlist.map(w => w.symbol).join(",")]);
+
+  // Fetch live quotes for enabled alert symbols
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    alerts.filter(a => a.enabled).forEach(a => {
+      if (alertQuotes[a.code]) return;
+      fetch(`/api/quote/${encodeURIComponent(a.code)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q && setAlertQuotes(prev => ({ ...prev, [a.code]: q })))
+        .catch(() => {});
+    });
+    return () => ctrl.abort();
+  }, [alerts.filter(a => a.enabled).map(a => a.code).join(",")]);
 
   const watch = watchlist.map(w => {
     const q = watchQuotes[w.symbol];
@@ -228,14 +242,15 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
             <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>查看全部</Button>
           </div>
           <div style={{ padding: "10px 14px" }}>
-            {alerts.filter(a => a.enabled).slice(0, 5).map(a => {
-              const sym = SYMBOL_INDEX[a.code];
-              if (!sym) return null;
-              const ch = (sym.price - sym.prevClose) / sym.prevClose * 100;
+            {alerts.filter(a => a.enabled).slice(0, 10).map(a => {
+              const q = alertQuotes[a.code];
               const isPriceCond = a.cond.startsWith("price");
-              const distance = isPriceCond
-                ? ((a.threshold - sym.price) / sym.price * 100)
-                : (a.threshold - ch);
+              const ch = q ? (q.price - q.prev_close) / q.prev_close * 100 : null;
+              const distance = q
+                ? (isPriceCond
+                    ? (a.threshold - q.price) / q.price * 100
+                    : a.threshold - ch)
+                : null;
               const condLabel = { price_gte: "≥", price_lte: "≤", change_gte: "Δ≥", change_lte: "Δ≤" }[a.cond];
               return (
                 <div key={a.id} style={{ padding: "8px 6px", display: "flex", alignItems: "center", gap: 10, borderRadius: 6 }}>
@@ -245,11 +260,13 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
                     <div style={{ fontSize: 11, color: "var(--ink-4)", display: "flex", alignItems: "center", gap: 6 }}>
                       <span className="mono">{a.code}</span>
                       <span>·</span>
-                      <span className="mono">{condLabel} {a.threshold}{a.cond.startsWith("change") ? "%" : ""}</span>
+                      <span className="mono">{condLabel} {a.threshold}{isPriceCond ? "" : "%"}</span>
                     </div>
                   </div>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                    {Math.abs(distance).toFixed(1)}{isPriceCond ? "%" : "pp"} away
+                    {distance != null && isFinite(distance)
+                      ? `${Math.abs(distance).toFixed(1)}${isPriceCond ? "%" : "pp"} away`
+                      : "—"}
                   </span>
                 </div>
               );

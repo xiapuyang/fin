@@ -12,10 +12,25 @@ STALE_SECONDS = 300
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
+_EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ")
+
 
 def normalize_symbol(symbol: str) -> str:
     s = symbol.upper()
     return SYMBOL_ALIASES.get(s, s)
+
+
+def _dot_to_dash(symbol: str) -> str | None:
+    """Return a dot-to-dash variant for US class-share tickers (BRK.B → BRK-B).
+
+    Returns None for exchange-suffixed symbols (.HK, .SS, .SZ) or symbols
+    without a dot.
+    """
+    if "." not in symbol:
+        return None
+    if any(symbol.endswith(s) for s in _EXCHANGE_SUFFIXES):
+        return None
+    return symbol.replace(".", "-")
 
 
 def _fetch_live(symbol: str) -> dict:
@@ -135,6 +150,13 @@ class QuoteService:
             return _stock_to_dict(stock)
 
         data = _fetch_live(symbol)
+        if not data:
+            alt = _dot_to_dash(symbol)
+            if alt:
+                data = _fetch_live(alt)
+                if data:
+                    symbol = alt
+
         if data:
             safe = {
                 k: v for k, v in data.items() if k not in ("market_state", "change_pct")

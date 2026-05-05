@@ -32,6 +32,8 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   const [watchlist, setWatchlist] = React.useState([]);
   const [searchResult, setSearchResult] = React.useState(null);
   const [searchLoading, setSearchLoading] = React.useState(false);
+  const [showAllAlerts, setShowAllAlerts] = React.useState(false);
+  const [showAllWatch, setShowAllWatch] = React.useState(false);
 
   // Load alerts, history, settings, and watchlist from API on mount
   React.useEffect(() => {
@@ -100,10 +102,10 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     setSearchResult(null);
     if (!search) return;
     const upper = search.trim().toUpperCase();
-    const hasClientMatch = Object.values(SYMBOLS).flat().some(
-      s => s.code.includes(upper) || s.name.toLowerCase().includes(search.toLowerCase())
-    );
-    if (hasClientMatch) { setSearchLoading(false); return; }
+    // Only skip backend fetch if the user typed an exact known ticker.
+    // Substring check (old logic) caused GOOGL to block GOOG from being fetched.
+    const hasExactPresetMatch = Object.values(SYMBOLS).flat().some(s => s.code === upper);
+    if (hasExactPresetMatch) { setSearchLoading(false); return; }
     if (upper.length > 12) { setSearchLoading(false); return; }
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
@@ -260,6 +262,9 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     return true;
   });
 
+  // Reset pagination when filter changes
+  React.useEffect(() => { setShowAllAlerts(false); }, [tab, search]);
+
   const counts = {
     active: alerts.filter(a => a.enabled).length,
     triggered: alerts.filter(a => a.triggered).length,
@@ -275,6 +280,8 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     : [];
   const isSearchMode = search.length > 0;
   const isWatchlistTab = category === WATCHLIST_TAB;
+
+  React.useEffect(() => { setShowAllWatch(false); }, [category]);
 
   const categoryTabs = [WATCHLIST_TAB, ...Object.keys(SYMBOLS)];
 
@@ -401,22 +408,29 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
               watchlist.length === 0 ? (
                 <Empty icon="bell" title="自选为空" hint="搜索标的并点击 + Watch，或添加提醒后自动加入"/>
               ) : (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {watchlist.map(w => {
-                    const q = liveQuotes[w.symbol];
-                    const sym = { code: w.symbol, name: w.name || w.symbol, market: w.market || "US", currency: w.currency || "USD" };
-                    const liveSym = q ? { ...sym, price: q.price, prevClose: q.prev_close } : sym;
-                    return (
-                      <div key={w.symbol} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                        <SymbolChip sym={liveSym} onClick={pickSymbol} selected={form.code === w.symbol}/>
-                        <button
-                          onClick={() => removeFromWatch(w.symbol)}
-                          title="从关注列表移除"
-                          style={removeBtnStyle}
-                        >×</button>
-                      </div>
-                    );
-                  })}
+                <div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {(showAllWatch ? watchlist : watchlist.slice(0, 10)).map(w => {
+                      const q = liveQuotes[w.symbol];
+                      const sym = { code: w.symbol, name: w.name || w.symbol, market: w.market || "US", currency: w.currency || "USD" };
+                      const liveSym = q ? { ...sym, price: q.price, prevClose: q.prev_close } : sym;
+                      return (
+                        <div key={w.symbol} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                          <SymbolChip sym={liveSym} onClick={pickSymbol} selected={form.code === w.symbol}/>
+                          <button
+                            onClick={() => removeFromWatch(w.symbol)}
+                            title="从关注列表移除"
+                            style={removeBtnStyle}
+                          >×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {watchlist.length > 10 && (
+                    <button onClick={() => setShowAllWatch(v => !v)} style={{ ...watchBtnStyle, marginTop: 8, color: "var(--ink-3)" }}>
+                      {showAllWatch ? "收起" : `显示更多 (+${watchlist.length - 10})`}
+                    </button>
+                  )}
                 </div>
               )
             ) : (
@@ -580,9 +594,17 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
 
         {filtered.length === 0 && <Empty icon="bell" title="No alerts yet" hint="Pick a symbol above and add your first alert."/>}
 
-        {filtered.map((a, idx) => (
-          <AlertRow key={a.id} a={a} onToggle={toggle} onRemove={remove} onReEnable={reEnable} onEdit={setEditingAlert} last={idx === filtered.length - 1} liveQuotes={liveQuotes}/>
-        ))}
+        {(showAllAlerts ? filtered : filtered.slice(0, 10)).map((a, idx) => {
+          const visible = showAllAlerts ? filtered : filtered.slice(0, 10);
+          return <AlertRow key={a.id} a={a} onToggle={toggle} onRemove={remove} onReEnable={reEnable} onEdit={setEditingAlert} last={idx === visible.length - 1} liveQuotes={liveQuotes}/>;
+        })}
+        {filtered.length > 10 && (
+          <div style={{ padding: "12px 18px", borderTop: "1px solid var(--line)" }}>
+            <button onClick={() => setShowAllAlerts(v => !v)} style={{ ...watchBtnStyle, color: "var(--ink-3)" }}>
+              {showAllAlerts ? "收起" : `显示更多 Show more (+${filtered.length - 10})`}
+            </button>
+          </div>
+        )}
       </Card>
 
       {editingAlert && (
