@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import logging
 import math
@@ -94,7 +95,12 @@ class ChinaFundProvider(QuoteProvider):
             return {}
 
         try:
-            df = ak.fund_open_fund_info_em(symbol=symbol, indicator="单位净值走势")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(
+                    ak.fund_open_fund_info_em, symbol=symbol, indicator="单位净值走势"
+                )
+                df = future.result(timeout=30)
+
             if df is None or df.empty:
                 logger.warning("no NAV data from akshare for %s", symbol)
                 return {}
@@ -117,6 +123,9 @@ class ChinaFundProvider(QuoteProvider):
                 "asset_type": "mutualfund",
                 "market_state": None,
             }
+        except concurrent.futures.TimeoutError:
+            logger.warning("akshare fetch_full timed out for %s", symbol)
+            return {}
         except Exception as e:
             logger.warning("akshare fetch_full failed for %s: %s", symbol, e)
             return {}
