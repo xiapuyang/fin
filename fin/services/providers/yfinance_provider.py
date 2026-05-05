@@ -1,19 +1,17 @@
 import logging
-import re
 import time
 
 import yfinance as yf
 
-from fin.services.providers.base import QuoteProvider
+from fin.services.providers.base import QuoteProvider, _CN_FUND_PATTERN
 
 logger = logging.getLogger(__name__)
 
 _EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ")
 
-# 6-digit all-numeric codes belong to ChinaFundProvider.
-_CN_FUND_PATTERN = re.compile(r"^\d{6}$")
-
 _FX_TTL = 60  # seconds
+
+_ASSET_TYPES = frozenset({"equity", "etf", "bond", "mutualfund", "index"})
 
 
 class YFinanceProvider(QuoteProvider):
@@ -27,6 +25,7 @@ class YFinanceProvider(QuoteProvider):
         self._fx_cache: dict[str, tuple[float, float]] = {}
 
     def supports(self, symbol: str) -> bool:
+        """Return True for any symbol that is not a 6-digit all-numeric CN fund code."""
         return not _CN_FUND_PATTERN.match(symbol)
 
     def fetch_live(self, symbol: str) -> dict:
@@ -76,7 +75,6 @@ class YFinanceProvider(QuoteProvider):
             volume = info.get("regularMarketVolume") or info.get("volume")
             float_shares = info.get("floatShares")
             dividend_yield = info.get("dividendYield")
-            _ASSET_TYPES = {"equity", "etf", "bond", "mutualfund", "index"}
             category = info.get("category") or ""
             quote_type = (info.get("quoteType") or "equity").lower()
             if "bond" in category.lower():

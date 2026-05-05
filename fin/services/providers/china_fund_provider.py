@@ -1,19 +1,15 @@
 import json
 import logging
+import math
 import re
 import urllib.request
 
-import akshare as ak
-
-from fin.services.providers.base import QuoteProvider
+from fin.services.providers.base import QuoteProvider, _CN_FUND_PATTERN
 
 logger = logging.getLogger(__name__)
 
-# Matches 6-digit all-numeric codes (open-end funds and bare ETF codes like 510310).
-_CN_FUND_PATTERN = re.compile(r"^\d{6}$")
-
 # EastMoney JSONP endpoint returns intraday estimated NAV + last confirmed NAV.
-_EASTMONEY_URL = "http://fundgz.1234567.com.cn/js/{code}.js"
+_EASTMONEY_URL = "https://fundgz.1234567.com.cn/js/{code}.js"
 
 
 class ChinaFundProvider(QuoteProvider):
@@ -28,6 +24,7 @@ class ChinaFundProvider(QuoteProvider):
     """
 
     def supports(self, symbol: str) -> bool:
+        """Return True if symbol is a 6-digit all-numeric CN fund code."""
         return bool(_CN_FUND_PATTERN.match(symbol))
 
     def fetch_live(self, symbol: str) -> dict:
@@ -41,9 +38,10 @@ class ChinaFundProvider(QuoteProvider):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=10) as resp:
-                text = resp.read().decode("utf-8")
+                # JSONP payload is always <500 bytes; cap read to avoid slow-drip stalls.
+                text = resp.read(4096).decode("utf-8")
 
-            match = re.search(r"jsonpgz\((.*)\)", text)
+            match = re.search(r"jsonpgz\(({.*?})\)", text)
             if not match:
                 logger.warning(
                     "unexpected EastMoney response for %s: %s", symbol, text[:120]
@@ -60,6 +58,12 @@ class ChinaFundProvider(QuoteProvider):
 
             price = float(gsz)
             prev_close = float(dwjz)
+
+            if not math.isfinite(price) or not math.isfinite(prev_close):
+                logger.warning(
+                    "non-finite NAV for %s: gsz=%s dwjz=%s", symbol, gsz, dwjz
+                )
+                return {}
 
             if price <= 0 or prev_close <= 0:
                 return {}
@@ -81,6 +85,8 @@ class ChinaFundProvider(QuoteProvider):
         Returns {} on failure. Fields not available for open-end funds
         (pe_ttm, market_cap, etc.) are omitted.
         """
+        import akshare as ak
+
         try:
             df = ak.fund_open_fund_info_em(symbol=symbol, indicator="单位净值走势")
             if df is None or df.empty:
