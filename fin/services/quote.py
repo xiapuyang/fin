@@ -102,9 +102,17 @@ def fetch_full_quote(symbol: str) -> dict:
         volume = info.get("regularMarketVolume") or info.get("volume")
         float_shares = info.get("floatShares")
         dividend_yield = info.get("dividendYield")
+        category = info.get("category") or ""
+        quote_type = (info.get("quoteType") or "equity").lower()
+        if "bond" in category.lower():
+            asset_type = "bond"
+        else:
+            asset_type = quote_type
+
         return {
             "name": info.get("shortName") or info.get("longName"),
             "currency": info.get("currency", "USD"),
+            "asset_type": asset_type,
             "price": price,
             "prev_close": prev_close,
             "open_price": info.get("regularMarketOpen") or info.get("open"),
@@ -162,6 +170,7 @@ def _stock_to_dict(stock: StockModel) -> dict:
         "dividend_ttm": stock.dividend_ttm,
         "dividend_rate": stock.dividend_rate,
         "currency": stock.currency or "USD",
+        "asset_type": stock.asset_type,
         "updated_at": stock.updated_at.isoformat(),
     }
 
