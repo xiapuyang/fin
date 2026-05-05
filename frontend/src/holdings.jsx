@@ -211,14 +211,16 @@ const Holdings = () => {
   const summarySym = ccySymbol(summaryCcy);
 
   const isBond = (p) => p.sym?.asset_type === "bond";
+  const knownMarkets = ["US", "HK", "CN"];
   const byMarket = [
-    ...["US", "HK", "CN"].map(m => {
+    ...knownMarkets.map(m => {
       const v = allPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
       return { label: m === "US" ? "美股" : m === "HK" ? "港股" : "A股", value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A" }[m] };
     }),
     { label: "美债", value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
+    { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
     { label: "现金", value: allCashValue, color: "#888" },
-  ];
+  ].filter(b => b.value > 0);
 
   const deleteAccount = async (id, name) => {
     if (!confirm(`删除账户「${name}」？\n相关持仓/交易/收入记录不会删除，但将变为未分配状态。`)) return;
