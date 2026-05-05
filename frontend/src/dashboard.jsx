@@ -1,18 +1,31 @@
 /* Dashboard — overview of all 5 modules + market summary */
 
 const MARKET_HOURS = (now = new Date()) => {
-  // Simulated states for demo. In real cron these come from yfinance market_state.
-  const h = now.getUTCHours();
-  // ET ≈ UTC-4 (DST). Just provide a plausible mock
-  return {
-    US: { state: "REGULAR", label: "盘中 Open", nextEvent: "收盘 16:00 ET" },
-    HK: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 HKT" },
-    CN: { state: "CLOSED",  label: "休市 Closed", nextEvent: "开盘 09:30 CST" },
-  };
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const t = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const inRange = (lo, hi) => t >= lo && t < hi;
+  const weekday = day >= 1 && day <= 5;
+
+  // US: NYSE/NASDAQ regular session Mon-Fri 09:30-16:00 ET = 13:30-20:00 UTC (EDT)
+  const usOpen = weekday && inRange(13 * 60 + 30, 20 * 60);
+
+  // HK: HKEX Mon-Fri 09:30-12:00 and 13:00-16:00 HKT = 01:30-04:00 and 05:00-08:00 UTC
+  const hkOpen = weekday && (inRange(1 * 60 + 30, 4 * 60) || inRange(5 * 60, 8 * 60));
+
+  // CN: SSE/SZSE Mon-Fri 09:30-11:30 and 13:00-15:00 CST = 01:30-03:30 and 05:00-07:00 UTC
+  const cnOpen = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60));
+
+  const mk = (open) => ({ state: open ? "REGULAR" : "CLOSED", label: open ? "盘中 Open" : "休市 Closed" });
+  return { US: mk(usOpen), HK: mk(hkOpen), CN: mk(cnOpen) };
 };
 
 const Dashboard = ({ onNavigate, alerts, history }) => {
-  const market = MARKET_HOURS();
+  const [now, setNow] = React.useState(new Date());
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  const market = MARKET_HOURS(now);
   const all = Object.values(SYMBOLS).flat();
 
   const [watchlist, setWatchlist] = React.useState([]);
