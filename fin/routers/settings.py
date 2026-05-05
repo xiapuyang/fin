@@ -34,7 +34,7 @@ def get_fx():
         import yfinance as yf
 
         pairs = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "EUR": "EURCNY=X"}
-        rates = {"CNY": 1.0}
+        rates = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
         for ccy, ticker in pairs.items():
             try:
                 info = yf.Ticker(ticker).fast_info
