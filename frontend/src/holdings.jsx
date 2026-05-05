@@ -227,8 +227,9 @@ const Holdings = () => {
   const acctIncomeTotal = acctIncome
     .filter(i => !["deposit","withdrawal"].includes(i.category))
     .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx), 0);
-  const acctDeposits = acctIncome.filter(i => i.category === "deposit")
-    .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx), 0);
+  const acctDeposits = acctIncome
+    .filter(i => i.category === "deposit" || i.category === "withdrawal")
+    .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx) * (i.category === "withdrawal" ? -1 : 1), 0);
   const acctXIRR = React.useMemo(() => computeAccountXIRR(acctIncome, acctPositions), [acctIncome, acctPositions]);
 
   const summaryFx = FX[summaryCcy] || 1;
@@ -385,22 +386,32 @@ const Holdings = () => {
 
       {/* ── Per-account stats strip ───────────────────────────────────────── */}
       {selectedAccount && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16, padding: "14px 18px", background: "var(--paper-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16, padding: "14px 18px", background: "var(--paper-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>{selectedAccount.name} · 市值</div>
             <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3 }}>{pricesReady ? `${ccySymbol(acctCcy)}${fmtNum(acctTotal, 0)}` : "—"}</div>
             <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{acctCcy}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>已转入</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-2)" }}>{ccySymbol(acctCcy)}{fmtNum(acctDeposits, 0)}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>记录转入合计</div>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>净转入</div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-2)" }}>{acctDeposits > 0 ? "" : "−"}{ccySymbol(acctCcy)}{fmtNum(Math.abs(acctDeposits), 0)}</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>转入 − 转出</div>
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>未实现 P&L</div>
             <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: !pricesReady ? "var(--ink-4)" : acctUnrealized >= 0 ? "var(--up)" : "var(--down)" }}>
               {pricesReady ? `${acctUnrealized >= 0 ? "+" : "−"}${ccySymbol(acctCcy)}${fmtNum(Math.abs(acctUnrealized), 0)}` : "—"}
             </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>持有收益率</div>
+            {(() => {
+              const hpr = pricesReady && acctDeposits > 0 ? acctUnrealized / acctDeposits * 100 : null;
+              return hpr != null
+                ? <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: hpr >= 0 ? "var(--up)" : "var(--down)" }}>{hpr >= 0 ? "+" : ""}{hpr.toFixed(2)}%</div>
+                : <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-4)" }}>—</div>;
+            })()}
+            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>未实现 P&L / 净转入</div>
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>
@@ -439,6 +450,7 @@ const Holdings = () => {
           onDeleteHolding={id => apiDeleteHolding(id).then(() => setHoldings(p => p.filter(h => h.id !== id))).catch(console.error)}
         />}
       {tab === "transactions" && <TransactionsTable txns={acctTxns}
+          assetTypeOf={code => (prices[code] || {}).asset_type ?? null}
           onAdd={() => { setEditingTxn(null); setShowTxnModal(true); }}
           onEdit={t => { setEditingTxn(t); setShowTxnModal(true); }}
           onDelete={id => apiDeleteTransaction(id).then(() => setTransactions(p => p.filter(t => t.id !== id))).catch(console.error)}
@@ -482,6 +494,8 @@ const StatTile = ({ label, value, sub, tone, pct }) => (
 );
 
 // ── Positions table ───────────────────────────────────────────────────────────
+const priceDp = (p) => p.sym?.asset_type === "mutualfund" ? 4 : 2;
+
 const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapshots, selectedSnapshot, onSnapshotChange, onAddHolding, onEditHolding, onDeleteHolding }) => {
   const sym = ccySymbol(acctCcy);
   return <Card padding={0}>
@@ -521,8 +535,8 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                 </div>
               </div>
               <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
-              <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, 2)}</span>
-              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, 2) : "—")}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
               <span style={{textAlign:"right"}}>{cash ? "—" : <ChangeNum value={p.dayChange} size="sm"/>}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{sym}{fmtNum(p.value / acctFx, 0)}</span>
               <div style={{textAlign:"right"}}>
@@ -547,7 +561,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
 };
 
 // ── Transactions table ────────────────────────────────────────────────────────
-const TransactionsTable = ({ txns, onAdd, onEdit, onDelete, onImportDone }) => {
+const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
   const sorted = [...txns].sort((a,b) => b.date.localeCompare(a.date));
   const fileRef = React.useRef(null);
   const [importMsg, setImportMsg] = React.useState(null);
@@ -600,7 +614,7 @@ const TransactionsTable = ({ txns, onAdd, onEdit, onDelete, onImportDone }) => {
                   <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? "买入" : "卖出"}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
                   <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? t.shares : "—"}</span>
-                  <span className="mono" style={{textAlign:"right"}}>{t.price > 0 ? fmtMoney(t.price, t.currency, 2) : "—"}</span>
+                  <span className="mono" style={{textAlign:"right"}}>{t.price > 0 ? fmtMoney(t.price, t.currency, assetTypeOf(t.code) === "mutualfund" ? 4 : 2) : "—"}</span>
                   <span className="mono" style={{textAlign:"right",fontWeight:600}}>{amt > 0 ? fmtMoney(amt, t.currency, 0) : "—"}</span>
                   <span className="mono" style={{textAlign:"right",color:t.realized>=0?"var(--up)":t.realized!=null?"var(--down)":"var(--ink-4)",fontWeight:600}}>
                     {t.realized != null ? (t.realized >= 0 ? "+" : "−") + fmtMoney(Math.abs(t.realized), t.currency, 0) : "—"}
@@ -996,7 +1010,8 @@ const CCY_MARKET = { USD: "US", HKD: "HK", CNY: "CN" };
 const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) => {
   const inferMarket = (code) => SYMBOL_INDEX[code]?.market || null;
   const initCode = editing?.code || "";
-  const initMarket = editing?.market || inferMarket(initCode) || "US";
+  const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
+  const initMarket = editing?.market || inferMarket(initCode) || CCY_MARKET[acctCcy] || "US";
   const today = new Date().toISOString().slice(0, 10);
   const initDate = editing?.as_of_date || today;
   const [isCash, setIsCash] = React.useState(editing?.code === "CASH");
@@ -1071,7 +1086,10 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
           </>
         ) : (
           <>
-            <FormRow label="代码 *"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
+            <FormRow label="代码 *">
+              <SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/>
+              {/^\d{6}$/.test(form.code) && <div style={{fontSize:11,color:"var(--ink-3)",marginTop:3}}>6位纯数字为基金代码；A股股票请加交易所后缀（如 002594.SZ / 600519.SS）</div>}
+            </FormRow>
             <FormRow label="市场">
               <Select value={form.market} onChange={setMarket} options={[{value:"US",label:"美股 US"},{value:"HK",label:"港股 HK"},{value:"CN",label:"A股 CN"}]}/>
             </FormRow>
@@ -1098,13 +1116,14 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
     const sym = SYMBOL_INDEX[code.toUpperCase()];
     return sym ? (MARKET_CCY[sym.market] || "USD") : "USD";
   };
+  const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
   const [form, set] = useForm({
     date: editing?.date || today,
     code: editing?.code || "",
     side: editing?.side || "buy",
     shares: editing?.shares ?? "",
     price: editing?.price ?? "",
-    currency: editing?.currency || ccyFromCode(editing?.code || ""),
+    currency: editing?.currency || (editing?.code ? ccyFromCode(editing.code) : null) || acctCcy || "USD",
     account: editing?.account || defaultAccount || "",
     note: editing?.note || "",
   });
@@ -1168,6 +1187,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
   };
   const catLabels = { dividend: "分红 Dividend", interest: "利息 Interest", deposit: "转入 Deposit", withdrawal: "转出 Withdrawal" };
   const ccyOptions = ["USD", "HKD", "CNY"].map(c => ({ value: c, label: c }));
+  const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
 
   const [form, set] = useForm({
     date: editing?.date || today,
@@ -1175,7 +1195,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
     source: editing?.source || "",
     category: editing?.category || "dividend",
     amount: editing?.amount ?? "",
-    currency: editing?.currency || ccyFromCode(editing?.code || ""),
+    currency: editing?.currency || (editing?.code ? ccyFromCode(editing.code) : null) || acctCcy || "USD",
     account: editing?.account || defaultAccount || "",
     note: editing?.note || "",
   });
