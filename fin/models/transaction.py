@@ -1,12 +1,32 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 
 from fin.database import Base
 
 
 class TransactionModel(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "date",
+            "code",
+            "side",
+            "shares",
+            "price",
+            "currency",
+            name="uq_txn_dedup",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)

@@ -66,24 +66,48 @@ class TransactionSQLiteRepository:
     def bulk_create(
         self, rows: list[TransactionCreate], user_id: int
     ) -> list[TransactionModel]:
-        models = [
-            TransactionModel(
-                user_id=user_id,
-                date=r.date,
-                code=r.code,
-                name=r.name,
-                side=r.side,
-                shares=r.shares,
-                price=r.price,
-                currency=r.currency,
-                account=r.account,
-                realized=r.realized,
-                note=r.note,
+        """Bulk-insert transactions, skipping exact duplicates (same date/code/side/shares/price/currency)."""
+        from datetime import datetime, timezone
+
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        inserted: list[TransactionModel] = []
+        for r in rows:
+            stmt = (
+                sqlite_insert(TransactionModel)
+                .values(
+                    user_id=user_id,
+                    date=r.date,
+                    code=r.code,
+                    name=r.name,
+                    side=r.side,
+                    shares=r.shares,
+                    price=r.price,
+                    currency=r.currency,
+                    account=r.account,
+                    realized=r.realized,
+                    note=r.note,
+                    create_time=datetime.now(timezone.utc),
+                    update_time=datetime.now(timezone.utc),
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        "user_id",
+                        "date",
+                        "code",
+                        "side",
+                        "shares",
+                        "price",
+                        "currency",
+                    ]
+                )
             )
-            for r in rows
-        ]
-        self._db.add_all(models)
+            result = self._db.execute(stmt)
+            if result.rowcount:
+                inserted.append(
+                    self._db.query(TransactionModel)
+                    .filter(TransactionModel.id == result.inserted_primary_key[0])
+                    .first()
+                )
         self._db.commit()
-        for m in models:
-            self._db.refresh(m)
-        return models
+        return [m for m in inserted if m is not None]
