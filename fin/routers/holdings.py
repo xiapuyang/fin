@@ -5,6 +5,7 @@ import math
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fin.database import get_db
@@ -17,7 +18,7 @@ from fin.repositories.account_sqlite import AccountSQLiteRepository
 from fin.repositories.holding_sqlite import HoldingSQLiteRepository
 from fin.repositories.income_sqlite import IncomeSQLiteRepository
 from fin.repositories.transaction_sqlite import TransactionSQLiteRepository
-from fin.schemas.account import AccountCreate, AccountResponse
+from fin.schemas.account import AccountCreate, AccountResponse, AccountUpdate
 from fin.schemas.holding import HoldingCreate, HoldingResponse, HoldingUpdate
 from fin.schemas.income import IncomeCreate, IncomeResponse, IncomeUpdate
 from fin.schemas.transaction import (
@@ -39,6 +40,7 @@ def _account_response(a: AccountModel) -> AccountResponse:
         name=a.name,
         currency=a.currency or "CNY",
         note=a.note,
+        cutoff_date=a.cutoff_date,
         create_time=a.create_time.strftime(_TS_FMT),
         update_time=a.update_time.strftime(_TS_FMT),
     )
@@ -176,6 +178,17 @@ def create_account(data: AccountCreate, db: Session = Depends(get_db)):
     return _account_response(AccountSQLiteRepository(db).create(data, MOCK_USER_ID))
 
 
+@router.put("/accounts/{account_id}", response_model=AccountResponse)
+def update_account(account_id: int, data: AccountUpdate, db: Session = Depends(get_db)):
+    try:
+        updated = AccountSQLiteRepository(db).update(account_id, data)
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Account name already exists")
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return _account_response(updated)
+
+
 @router.delete("/accounts/{account_id}", status_code=204)
 def delete_account(account_id: int, db: Session = Depends(get_db)):
     AccountSQLiteRepository(db).delete(account_id)
@@ -218,6 +231,8 @@ def delete_holding(holding_id: int, db: Session = Depends(get_db)):
 @router.post("/transactions/import")
 async def import_transactions(file: UploadFile, db: Session = Depends(get_db)):
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:

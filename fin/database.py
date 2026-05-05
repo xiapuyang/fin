@@ -108,12 +108,81 @@ def _migrate_columns(db: "Session") -> None:
             "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'CNY'",
         ),
         ("stocks", "asset_type", "ALTER TABLE stocks ADD COLUMN asset_type TEXT"),
+        ("accounts", "cutoff_date", "ALTER TABLE accounts ADD COLUMN cutoff_date TEXT"),
+        ("watchlist", "user_id", "ALTER TABLE watchlist ADD COLUMN user_id BIGINT"),
     ]
+    _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:
         assert table in _KNOWN_TABLES, f"unexpected table name: {table!r}"
         cols = [row[1] for row in db.execute(text(f"PRAGMA table_info({table})"))]
         if col not in cols:
             db.execute(text(stmt))
+    db.commit()
+
+
+def _backfill_watchlist_user_id(db: "Session") -> None:
+    """Backfill user_id = MOCK_USER_ID for watchlist rows added before the column existed."""
+    from fin.models.user import MOCK_USER_ID
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(watchlist)"))]
+    if "user_id" in cols:
+        db.execute(
+            text("UPDATE watchlist SET user_id = :uid WHERE user_id IS NULL"),
+            {"uid": MOCK_USER_ID},
+        )
+        db.commit()
+
+
+def _migrate_indexes(db: "Session") -> None:
+    """Idempotently create unique indexes for deduplication."""
+    from sqlalchemy import text
+
+    indexes = [
+        (
+            "uq_income_dedup",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_income_dedup "
+            "ON income(user_id, date, source, amount, currency)",
+        ),
+        (
+            "uq_txn_dedup",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_txn_dedup "
+            "ON transactions(user_id, date, code, side, shares, price, currency)",
+        ),
+        (
+            "uq_account_name",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_account_name "
+            "ON accounts(user_id, name)",
+        ),
+        (
+            "uq_holding_snapshot",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_holding_snapshot "
+            "ON holdings(user_id, account, code, snapshot_name)",
+        ),
+        (
+            "uq_watchlist_user_symbol",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_user_symbol "
+            "ON watchlist(user_id, symbol)",
+        ),
+        (
+            "ix_users_email",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email)",
+        ),
+    ]
+    existing = {
+        row[1]
+        for row in db.execute(
+            text("SELECT type, name FROM sqlite_master WHERE type='index'")
+        )
+    }
+    for name, stmt in indexes:
+        if name not in existing:
+            try:
+                db.execute(text(stmt))
+            except Exception as exc:
+                import logging
+
+                logging.getLogger(__name__).warning("Index %s skipped: %s", name, exc)
     db.commit()
 
 
@@ -140,5 +209,7 @@ def init_db() -> None:
         _seed_mock_user(db)
         _migrate_alert_user_id(db)
         _migrate_columns(db)
+        _backfill_watchlist_user_id(db)
+        _migrate_indexes(db)
     finally:
         db.close()

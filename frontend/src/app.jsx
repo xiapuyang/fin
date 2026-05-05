@@ -14,10 +14,26 @@ const App = () => {
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
+  const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, EUR: 7.84, CNY: 1 });
+  const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
+  const [showSettings, setShowSettings] = React.useState(false);
 
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
+    fetch("/api/settings").then(r => r.json()).then(s => setSettings(prev => ({ ...prev, ...s }))).catch(() => {});
+  }, []);
+
+  // Fetch FX rates on load and every 5 minutes; also update global FX object
+  React.useEffect(() => {
+    const refresh = () =>
+      fetch("/api/fx").then(r => r.json()).then(rates => {
+        setFxRates(rates);
+        Object.assign(FX, rates);
+      }).catch(() => {});
+    refresh();
+    const t = setInterval(refresh, 5 * 60 * 1000);
+    return () => clearInterval(t);
   }, []);
 
   const navigate = (target) => {
@@ -31,7 +47,7 @@ const App = () => {
   };
 
   const Page = {
-    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history}/>,
+    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings/>,
     ledger:    <Ledger/>,
@@ -43,11 +59,18 @@ const App = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route}/>
+        <TopBar route={route} fxRates={fxRates} onOpenSettings={() => setShowSettings(true)}/>
         <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
           {Page}
         </div>
       </main>
+      {showSettings && (
+        <AppSettingsModal
+          settings={settings}
+          onClose={() => setShowSettings(false)}
+          onSaved={s => setSettings(prev => ({ ...prev, ...s }))}
+        />
+      )}
     </div>
   );
 };
@@ -111,8 +134,10 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route }) => {
+const TopBar = ({ route, fxRates = {}, onOpenSettings }) => {
   const cur = NAV.find(n => n.id === route);
+  const usd = fxRates.USD ?? 7.24;
+  const hkd = fxRates.HKD ?? 0.93;
   return (
     <div style={{
       height: 52, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -123,13 +148,55 @@ const TopBar = ({ route }) => {
         <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{cur?.cn} {cur?.label}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥7.24 · HKD ¥0.93</span>
+        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)}</span>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <Button variant="ghost" size="sm" icon="search">Search…</Button>
-        <Button variant="ghost" size="sm" icon="settings"/>
+        <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
         <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>S</div>
       </div>
     </div>
+  );
+};
+
+const TIMEZONE_OPTIONS = [
+  { value: "America/Toronto",    label: "Toronto (ET)" },
+  { value: "America/Vancouver",  label: "Vancouver (PT)" },
+  { value: "America/New_York",   label: "New York (ET)" },
+  { value: "Asia/Shanghai",      label: "上海 / 北京 (CST)" },
+  { value: "Asia/Hong_Kong",     label: "香港 (HKT)" },
+  { value: "UTC",                label: "UTC" },
+];
+
+const AppSettingsModal = ({ settings, onClose, onSaved }) => {
+  const [tz, setTz] = React.useState(settings.timezone || "America/Toronto");
+  const [saving, setSaving] = React.useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone: tz }),
+      });
+      if (res.ok) { onSaved({ timezone: tz }); onClose(); }
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title="应用设置 App Settings" width={400}>
+      <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
+          <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>影响日期显示和时间相关计算</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 
