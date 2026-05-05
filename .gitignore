@@ -21,6 +21,7 @@ data/.credentials.json
 data/settings.json
 data/last_check.json
 fin.pid
+data/market_state.json
 
 # Logs
 logs/
