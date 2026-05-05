@@ -66,6 +66,25 @@ def _migrate_alert_user_id(db: "Session") -> None:
         db.commit()
 
 
+def _migrate_alerts_to_int_id(db: "Session") -> None:
+    """Drop alerts / alert_fires tables if they still use UUID (TEXT) primary keys.
+
+    SQLite cannot ALTER column types, so we drop both tables and let create_all
+    recreate them with INTEGER primary keys. Existing alert rows are lost, which
+    is acceptable for this personal tool.
+    """
+    from sqlalchemy import text
+
+    cols = {r[1]: r[2].upper() for r in db.execute(text("PRAGMA table_info(alerts)"))}
+    if any(
+        cols.get("id", "INTEGER").startswith(t)
+        for t in ("TEXT", "VARCHAR", "STRING", "CHAR")
+    ):
+        db.execute(text("DROP TABLE IF EXISTS alert_fires"))
+        db.execute(text("DROP TABLE IF EXISTS alerts"))
+        db.commit()
+
+
 _KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts"}
 
 
@@ -107,8 +126,15 @@ def init_db() -> None:
     import fin.models.income  # noqa: F401
     import fin.models.transaction  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
+    try:
+        _migrate_alerts_to_int_id(db)
+    finally:
+        db.close()
+
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
     try:
         _seed_mock_user(db)
         _migrate_alert_user_id(db)

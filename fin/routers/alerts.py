@@ -99,7 +99,7 @@ def _check_duplicate(
     symbol: str,
     condition: str,
     value: float,
-    exclude_id: str | None = None,
+    exclude_id: int | None = None,
 ) -> None:
     existing = [
         a
@@ -156,7 +156,7 @@ def create_alert(data: AlertCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/alerts/{alert_id}", response_model=AlertResponse)
-def update_alert(alert_id: str, data: AlertUpdate, db: Session = Depends(get_db)):
+def update_alert(alert_id: int, data: AlertUpdate, db: Session = Depends(get_db)):
     repo = AlertSQLiteRepository(db)
     if data.condition is not None or data.value is not None:
         current = repo.get_by_id(alert_id)
@@ -174,14 +174,14 @@ def update_alert(alert_id: str, data: AlertUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/alerts/{alert_id}", status_code=204)
-def delete_alert(alert_id: str, db: Session = Depends(get_db)):
+def delete_alert(alert_id: int, db: Session = Depends(get_db)):
     repo = AlertSQLiteRepository(db)
     repo.delete(alert_id)
     return Response(status_code=204)
 
 
 @router.post("/alerts/{alert_id}/reset", response_model=AlertResponse)
-def reset_alert(alert_id: str, db: Session = Depends(get_db)):
+def reset_alert(alert_id: int, db: Session = Depends(get_db)):
     repo = AlertSQLiteRepository(db)
     try:
         alert = repo.reset(alert_id)
