@@ -1,14 +1,21 @@
 import json
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
 from fin.config import LAST_CHECK_PATH
+from fin.database import get_db
+from fin.services.providers import build_default_providers
+from fin.services.quote import QuoteService
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+
+_FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "EUR": "EURCNY=X"}
+_FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
 
 
 class SettingsPayload(BaseModel):
@@ -28,27 +35,14 @@ def put_settings(data: SettingsPayload):
 
 
 @router.get("/fx")
-def get_fx():
-    """Return CNY-based FX rates fetched live from yfinance."""
+def get_fx(db: Session = Depends(get_db)):
+    """Return CNY-based FX rates via QuoteService."""
     try:
-        import yfinance as yf
-
-        pairs = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "EUR": "EURCNY=X"}
-        rates = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
-        for ccy, ticker in pairs.items():
-            try:
-                info = yf.Ticker(ticker).fast_info
-                price = getattr(info, "last_price", None) or getattr(
-                    info, "regularMarketPrice", None
-                )
-                if price and price > 0:
-                    rates[ccy] = round(float(price), 4)
-            except Exception:
-                pass
-        return rates
+        rates = QuoteService(db, build_default_providers()).get_fx(_FX_PAIRS)
+        return {**_FX_FALLBACK, **rates}
     except Exception as exc:
         logger.warning("FX fetch failed: %s", exc)
-        return {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
+        return _FX_FALLBACK
 
 
 @router.get("/last-check")

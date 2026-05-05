@@ -1,7 +1,7 @@
 """Tests for PriceUpdater symbol collection and update logic."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import create_engine
@@ -95,14 +95,25 @@ def test_run_update_cycle_upserts_into_db(db, tmp_path, monkeypatch):
     monkeypatch.setattr(pu, "SYMBOLS_PATH", symbols_file)
 
     full_data = {"price": 150.0, "prev_close": 148.0, "currency": "USD"}
-    with patch("fin.services.price_updater.fetch_full_quote", return_value=full_data):
-        with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-            with patch(
-                "fin.services.price_updater._portfolio_symbols", return_value=set()
-            ):
-                run_update_cycle(db)
+    real_repo = StockSQLiteRepository(db)
+    mock_service = MagicMock()
+    mock_service.get_full_quote.return_value = full_data
+    mock_service.upsert_quote.side_effect = lambda sym, data: real_repo.upsert(
+        sym, data
+    )
+
+    with patch("fin.services.price_updater.QuoteService", return_value=mock_service):
+        with patch(
+            "fin.services.price_updater.build_default_providers", return_value=[]
+        ):
+            with patch("fin.services.price_updater._alert_symbols", return_value=set()):
+                with patch(
+                    "fin.services.price_updater._portfolio_symbols", return_value=set()
+                ):
+                    run_update_cycle(db)
 
     assert StockSQLiteRepository(db).get_by_symbol("AAPL").price == 150.0
+    mock_service.get_full_quote.assert_called_once_with("AAPL")
 
 
 def test_run_update_cycle_skips_failed_symbols(db, tmp_path, monkeypatch):
@@ -112,11 +123,17 @@ def test_run_update_cycle_skips_failed_symbols(db, tmp_path, monkeypatch):
 
     monkeypatch.setattr(pu, "SYMBOLS_PATH", symbols_file)
 
-    with patch("fin.services.price_updater.fetch_full_quote", return_value={}):
-        with patch("fin.services.price_updater._alert_symbols", return_value=set()):
-            with patch(
-                "fin.services.price_updater._portfolio_symbols", return_value=set()
-            ):
-                run_update_cycle(db)  # should not raise
+    mock_service = MagicMock()
+    mock_service.get_full_quote.return_value = {}
+
+    with patch("fin.services.price_updater.QuoteService", return_value=mock_service):
+        with patch(
+            "fin.services.price_updater.build_default_providers", return_value=[]
+        ):
+            with patch("fin.services.price_updater._alert_symbols", return_value=set()):
+                with patch(
+                    "fin.services.price_updater._portfolio_symbols", return_value=set()
+                ):
+                    run_update_cycle(db)  # should not raise
 
     assert StockSQLiteRepository(db).get_by_symbol("AAPL") is None
