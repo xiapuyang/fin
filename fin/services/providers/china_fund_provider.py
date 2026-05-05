@@ -1,0 +1,110 @@
+import json
+import logging
+import re
+import urllib.request
+
+import akshare as ak
+
+from fin.services.providers.base import QuoteProvider
+
+logger = logging.getLogger(__name__)
+
+# Matches 6-digit all-numeric codes (open-end funds and bare ETF codes like 510310).
+_CN_FUND_PATTERN = re.compile(r"^\d{6}$")
+
+# EastMoney JSONP endpoint returns intraday estimated NAV + last confirmed NAV.
+_EASTMONEY_URL = "http://fundgz.1234567.com.cn/js/{code}.js"
+
+
+class ChinaFundProvider(QuoteProvider):
+    """Data provider for 6-digit Chinese fund codes.
+
+    Handles open-end mutual funds (013308-style) that Yahoo Finance cannot serve.
+    Also matches bare ETF codes without exchange suffix (e.g. "510310") — the
+    YFinanceProvider handles the suffixed form "510310.SS".
+
+    fetch_live: EastMoney JSONP endpoint for real-time estimated NAV.
+    fetch_full: akshare fund_open_fund_info_em for historical NAV series.
+    """
+
+    def supports(self, symbol: str) -> bool:
+        return bool(_CN_FUND_PATTERN.match(symbol))
+
+    def fetch_live(self, symbol: str) -> dict:
+        """Fetch real-time estimated NAV from EastMoney.
+
+        Returns price (today's estimated NAV gsz), prev_close (last confirmed
+        NAV dwjz), currency "CNY", and market_state=None.
+        Returns {} on any failure.
+        """
+        url = _EASTMONEY_URL.format(code=symbol)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                text = resp.read().decode("utf-8")
+
+            match = re.search(r"jsonpgz\((.*)\)", text)
+            if not match:
+                logger.warning(
+                    "unexpected EastMoney response for %s: %s", symbol, text[:120]
+                )
+                return {}
+
+            data = json.loads(match.group(1))
+            gsz = data.get("gsz")
+            dwjz = data.get("dwjz")
+
+            if not gsz or not dwjz:
+                logger.warning("missing NAV fields for %s: %s", symbol, data)
+                return {}
+
+            price = float(gsz)
+            prev_close = float(dwjz)
+
+            if price <= 0 or prev_close <= 0:
+                return {}
+
+            return {
+                "price": price,
+                "prev_close": prev_close,
+                "currency": "CNY",
+                "market_state": None,
+                "name": data.get("name"),
+            }
+        except Exception as e:
+            logger.warning("EastMoney fetch failed for %s: %s", symbol, e)
+            return {}
+
+    def fetch_full(self, symbol: str) -> dict:
+        """Fetch historical NAV series via akshare and return the latest entry.
+
+        Returns {} on failure. Fields not available for open-end funds
+        (pe_ttm, market_cap, etc.) are omitted.
+        """
+        try:
+            df = ak.fund_open_fund_info_em(symbol=symbol, indicator="单位净值走势")
+            if df is None or df.empty:
+                logger.warning("no NAV data from akshare for %s", symbol)
+                return {}
+
+            # DataFrame columns: 净值日期, 单位净值, 累计净值, 日增长率
+            latest = df.iloc[-1]
+            prev_row = df.iloc[-2] if len(df) > 1 else latest
+
+            nav_col = "单位净值"
+            price = float(latest[nav_col])
+            prev_close = float(prev_row[nav_col])
+
+            if price <= 0:
+                return {}
+
+            return {
+                "price": price,
+                "prev_close": prev_close,
+                "currency": "CNY",
+                "asset_type": "mutualfund",
+                "market_state": None,
+            }
+        except Exception as e:
+            logger.warning("akshare fetch_full failed for %s: %s", symbol, e)
+            return {}

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from fin.config import MARKET_STATE_PATH
 from fin.models.stock import StockModel
 from fin.repositories.stock_sqlite import StockSQLiteRepository
+from fin.services.providers.base import QuoteProvider
 
 logger = logging.getLogger(__name__)
 
@@ -61,89 +62,6 @@ def _dot_to_dash(symbol: str) -> str | None:
     return symbol.replace(".", "-")
 
 
-def _fetch_live(symbol: str) -> dict:
-    try:
-        import yfinance as yf
-
-        fi = yf.Ticker(symbol).fast_info
-        price = fi.last_price
-        # regular_market_previous_close is always the most recent completed
-        # trading session's close; fi.previous_close can lag by one session
-        # during pre-market hours, producing a stale change_pct.
-        prev_close = (
-            getattr(fi, "regular_market_previous_close", None) or fi.previous_close
-        )
-        if not price or not prev_close or prev_close == 0:
-            return {}
-        return {
-            "price": price,
-            "prev_close": prev_close,
-            "open_price": getattr(fi, "open", None),
-            "high": getattr(fi, "day_high", None),
-            "low": getattr(fi, "day_low", None),
-            "currency": getattr(fi, "currency", "USD") or "USD",
-            "market_state": getattr(fi, "market_state", None),
-        }
-    except Exception as e:
-        logger.warning("live fetch failed for %s: %s", symbol, e)
-        return {}
-
-
-def fetch_full_quote(symbol: str) -> dict:
-    """Fetch comprehensive quote via yfinance .info (used by background updater)."""
-    try:
-        import yfinance as yf
-
-        info = yf.Ticker(symbol).info
-        price = info.get("regularMarketPrice") or info.get("currentPrice")
-        prev_close = info.get("regularMarketPreviousClose") or info.get("previousClose")
-        if not price or not prev_close or prev_close == 0:
-            return {}
-        volume = info.get("regularMarketVolume") or info.get("volume")
-        float_shares = info.get("floatShares")
-        dividend_yield = info.get("dividendYield")
-        _ASSET_TYPES = {"equity", "etf", "bond", "mutualfund", "index"}
-        category = info.get("category") or ""
-        quote_type = (info.get("quoteType") or "equity").lower()
-        if "bond" in category.lower():
-            asset_type = "bond"
-        elif quote_type in _ASSET_TYPES:
-            asset_type = quote_type
-        else:
-            asset_type = "equity"
-
-        return {
-            "name": info.get("shortName") or info.get("longName"),
-            "currency": info.get("currency", "USD"),
-            "asset_type": asset_type,
-            "price": price,
-            "prev_close": prev_close,
-            "open_price": info.get("regularMarketOpen") or info.get("open"),
-            "high": info.get("dayHigh") or info.get("regularMarketDayHigh"),
-            "low": info.get("dayLow") or info.get("regularMarketDayLow"),
-            "volume": volume,
-            "amount": (volume * price) if volume else None,
-            "turnover_rate": (volume / float_shares * 100)
-            if volume and float_shares
-            else None,
-            "pe_ttm": info.get("trailingPE"),
-            "pe_dynamic": info.get("forwardPE"),
-            "pb": info.get("priceToBook"),
-            "market_cap": info.get("marketCap"),
-            "total_shares": info.get("sharesOutstanding"),
-            "float_shares": float_shares,
-            "float_market_cap": (float_shares * price) if float_shares else None,
-            "week_52_high": info.get("fiftyTwoWeekHigh"),
-            "week_52_low": info.get("fiftyTwoWeekLow"),
-            "beta": info.get("beta"),
-            "dividend_ttm": info.get("dividendRate"),
-            "dividend_rate": (dividend_yield * 100) if dividend_yield else None,
-        }
-    except Exception as e:
-        logger.warning("full quote fetch failed for %s: %s", symbol, e)
-        return {}
-
-
 def _stock_to_dict(stock: StockModel) -> dict:
     change_pct = None
     if stock.price and stock.prev_close and stock.prev_close != 0:
@@ -179,8 +97,15 @@ def _stock_to_dict(stock: StockModel) -> dict:
 
 
 class QuoteService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, providers: list[QuoteProvider]) -> None:
         self._repo = StockSQLiteRepository(db)
+        self._providers = providers
+
+    def _select_provider(self, symbol: str) -> QuoteProvider:
+        for p in self._providers:
+            if p.supports(symbol):
+                return p
+        raise ValueError(f"no provider supports symbol: {symbol!r}")
 
     def get_quote(self, symbol: str) -> dict | None:
         symbol = normalize_symbol(symbol)
@@ -192,13 +117,8 @@ class QuoteService:
             result["market_state"] = states.get(_market_for_symbol(symbol))
             return result
 
-        data = _fetch_live(symbol)
-        if not data:
-            alt = _dot_to_dash(symbol)
-            if alt:
-                data = _fetch_live(alt)
-                if data:
-                    symbol = alt
+        provider = self._select_provider(symbol)
+        data = provider.fetch_live(symbol)
 
         if data:
             if data.get("market_state"):
@@ -216,6 +136,21 @@ class QuoteService:
             return _stock_to_dict(stock)
 
         return None
+
+    def get_full_quote(self, symbol: str) -> dict:
+        """Fetch comprehensive quote via the appropriate provider."""
+        symbol = normalize_symbol(symbol)
+        provider = self._select_provider(symbol)
+        return provider.fetch_full(symbol)
+
+    def get_fx(self, pairs: dict[str, str]) -> dict:
+        """Fetch FX rates, delegating to the first provider that supports it."""
+        for provider in self._providers:
+            try:
+                return provider.fetch_fx(pairs)
+            except NotImplementedError:
+                continue
+        raise RuntimeError("no provider supports FX fetching")
 
     @staticmethod
     def _is_fresh(updated_at: datetime) -> bool:
