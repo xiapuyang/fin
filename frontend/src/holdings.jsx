@@ -394,7 +394,7 @@ const Holdings = () => {
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>净转入</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-2)" }}>{acctDeposits > 0 ? "" : "−"}{ccySymbol(acctCcy)}{fmtNum(Math.abs(acctDeposits), 0)}</div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-2)" }}>{acctDeposits >= 0 ? "" : "−"}{ccySymbol(acctCcy)}{fmtNum(Math.abs(acctDeposits), 0)}</div>
             <div style={{ fontSize: 11, color: "var(--ink-4)" }}>转入 − 转出</div>
           </div>
           <div>

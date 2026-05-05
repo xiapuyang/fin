@@ -1,8 +1,11 @@
+import threading
+
 from fin.services.providers.base import QuoteProvider
 
 __all__ = ["QuoteProvider", "build_default_providers"]
 
 _default_providers: list[QuoteProvider] | None = None
+_providers_lock = threading.Lock()
 
 
 def build_default_providers() -> list[QuoteProvider]:
@@ -15,8 +18,10 @@ def build_default_providers() -> list[QuoteProvider]:
     """
     global _default_providers
     if _default_providers is None:
-        from fin.services.providers.china_fund_provider import ChinaFundProvider
-        from fin.services.providers.yfinance_provider import YFinanceProvider
+        with _providers_lock:
+            if _default_providers is None:
+                from fin.services.providers.china_fund_provider import ChinaFundProvider
+                from fin.services.providers.yfinance_provider import YFinanceProvider
 
-        _default_providers = [ChinaFundProvider(), YFinanceProvider()]
+                _default_providers = [ChinaFundProvider(), YFinanceProvider()]
     return _default_providers

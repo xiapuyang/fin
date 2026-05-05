@@ -53,6 +53,7 @@ def test_get_fx_falls_back_on_error(client):
             r = client.get("/api/fx")
     assert r.status_code == 200
     data = r.json()
-    # Fallback values should be returned
-    assert "USD" in data
+    assert data["USD"] == 7.24
+    assert data["HKD"] == 0.93
+    assert data["EUR"] == 7.84
     assert data["CNY"] == 1.0

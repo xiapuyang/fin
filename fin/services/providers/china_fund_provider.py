@@ -4,7 +4,7 @@ import math
 import re
 import urllib.request
 
-from fin.services.providers.base import QuoteProvider, _CN_FUND_PATTERN
+from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ChinaFundProvider(QuoteProvider):
 
     def supports(self, symbol: str) -> bool:
         """Return True if symbol is a 6-digit all-numeric CN fund code."""
-        return bool(_CN_FUND_PATTERN.match(symbol))
+        return bool(CN_FUND_PATTERN.match(symbol))
 
     def fetch_live(self, symbol: str) -> dict:
         """Fetch real-time estimated NAV from EastMoney.
@@ -41,7 +41,7 @@ class ChinaFundProvider(QuoteProvider):
                 # JSONP payload is always <500 bytes; cap read to avoid slow-drip stalls.
                 text = resp.read(4096).decode("utf-8")
 
-            match = re.search(r"jsonpgz\(({.*?})\)", text)
+            match = re.search(r"jsonpgz\((.+)\)", text, re.DOTALL)
             if not match:
                 logger.warning(
                     "unexpected EastMoney response for %s: %s", symbol, text[:120]
@@ -85,7 +85,13 @@ class ChinaFundProvider(QuoteProvider):
         Returns {} on failure. Fields not available for open-end funds
         (pe_ttm, market_cap, etc.) are omitted.
         """
-        import akshare as ak
+        try:
+            import akshare as ak
+        except ImportError:
+            logger.error(
+                "akshare is not installed; cannot fetch full quote for %s", symbol
+            )
+            return {}
 
         try:
             df = ak.fund_open_fund_info_em(symbol=symbol, indicator="单位净值走势")

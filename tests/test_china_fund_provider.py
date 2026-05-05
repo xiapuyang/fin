@@ -100,6 +100,32 @@ def test_fetch_live_returns_empty_on_missing_gsz(provider):
     assert result == {}
 
 
+def test_fetch_live_returns_empty_on_missing_dwjz(provider):
+    payload = json.dumps({"fundcode": "013308", "gsz": "1.2690"})
+    text = f"jsonpgz({payload});"
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = text.encode("utf-8")
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    with patch(
+        "fin.services.providers.china_fund_provider.urllib.request.urlopen",
+        return_value=mock_resp,
+    ):
+        result = provider.fetch_live("013308")
+    assert result == {}
+
+
+def test_fetch_live_returns_empty_on_non_finite_nav(provider):
+    mock_resp = _make_jsonp_response(gsz="NaN", dwjz="1.2327")
+    with patch(
+        "fin.services.providers.china_fund_provider.urllib.request.urlopen",
+        return_value=mock_resp,
+    ):
+        result = provider.fetch_live("013308")
+    assert result == {}
+
+
 def test_fetch_live_returns_empty_on_network_error(provider):
     with patch(
         "fin.services.providers.china_fund_provider.urllib.request.urlopen",
@@ -146,6 +172,26 @@ def test_fetch_full_returns_empty_on_empty_df(provider):
     with patch.dict("sys.modules", {"akshare": mock_ak}):
         result = provider.fetch_full("013308")
     assert result == {}
+
+
+def test_fetch_full_single_row_uses_same_price_for_prev_close(provider):
+    df = _make_nav_df(
+        rows=[
+            {
+                "净值日期": "2026-05-05",
+                "单位净值": "1.2456",
+                "累计净值": "2.5129",
+                "日增长率": "0.00",
+            }
+        ]
+    )
+    mock_ak = MagicMock()
+    mock_ak.fund_open_fund_info_em.return_value = df
+    with patch.dict("sys.modules", {"akshare": mock_ak}):
+        result = provider.fetch_full("013308")
+
+    assert result["price"] == pytest.approx(1.2456)
+    assert result["prev_close"] == pytest.approx(1.2456)
 
 
 def test_fetch_full_returns_empty_on_exception(provider):

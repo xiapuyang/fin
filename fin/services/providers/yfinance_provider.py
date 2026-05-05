@@ -3,7 +3,7 @@ import time
 
 import yfinance as yf
 
-from fin.services.providers.base import QuoteProvider, _CN_FUND_PATTERN
+from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class YFinanceProvider(QuoteProvider):
 
     def supports(self, symbol: str) -> bool:
         """Return True for any symbol that is not a 6-digit all-numeric CN fund code."""
-        return not _CN_FUND_PATTERN.match(symbol)
+        return not CN_FUND_PATTERN.match(symbol)
 
     def fetch_live(self, symbol: str) -> dict:
         """Fetch price snapshot via yfinance fast_info.

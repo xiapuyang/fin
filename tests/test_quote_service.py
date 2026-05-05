@@ -182,6 +182,12 @@ def test_get_full_quote_delegates_to_provider(db):
     provider.fetch_full.assert_called_once_with("AAPL")
 
 
+def test_get_full_quote_returns_empty_when_no_provider_supports(db):
+    provider = _mock_provider(supports=False)
+    result = QuoteService(db, [provider]).get_full_quote("AAPL")
+    assert result == {}
+
+
 # ── QuoteService.get_fx ───────────────────────────────────────────────────────
 
 
