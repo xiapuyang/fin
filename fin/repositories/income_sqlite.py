@@ -25,8 +25,8 @@ class IncomeSQLiteRepository:
             .first()
         )
 
-    def create(self, data: IncomeCreate, user_id: int) -> IncomeModel:
-        income = IncomeModel(
+    def _build_model(self, data: IncomeCreate, user_id: int) -> IncomeModel:
+        return IncomeModel(
             user_id=user_id,
             date=data.date,
             source=data.source,
@@ -37,6 +37,9 @@ class IncomeSQLiteRepository:
             code=data.code,
             note=data.note,
         )
+
+    def create(self, data: IncomeCreate, user_id: int) -> IncomeModel:
+        income = self._build_model(data, user_id)
         self._db.add(income)
         self._db.commit()
         self._db.refresh(income)
@@ -54,22 +57,22 @@ class IncomeSQLiteRepository:
         return income
 
     def bulk_create(self, items: list[IncomeCreate], user_id: int) -> list[IncomeModel]:
-        models = [
-            IncomeModel(
-                user_id=user_id,
-                date=d.date,
-                source=d.source,
-                category=d.category,
-                amount=d.amount,
-                currency=d.currency,
-                account=d.account,
-                code=d.code,
-                note=d.note,
-            )
-            for d in items
-        ]
-        self._db.add_all(models)
-        self._db.commit()
+        """Bulk-insert income records atomically.
+
+        Args:
+            items: List of income records to insert.
+            user_id: Owner user ID for all records.
+
+        Returns:
+            The persisted models with database-assigned IDs.
+        """
+        models = [self._build_model(d, user_id) for d in items]
+        try:
+            self._db.add_all(models)
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
         for m in models:
             self._db.refresh(m)
         return models

@@ -102,12 +102,15 @@ def fetch_full_quote(symbol: str) -> dict:
         volume = info.get("regularMarketVolume") or info.get("volume")
         float_shares = info.get("floatShares")
         dividend_yield = info.get("dividendYield")
+        _ASSET_TYPES = {"equity", "etf", "bond", "mutualfund", "index"}
         category = info.get("category") or ""
         quote_type = (info.get("quoteType") or "equity").lower()
         if "bond" in category.lower():
             asset_type = "bond"
-        else:
+        elif quote_type in _ASSET_TYPES:
             asset_type = quote_type
+        else:
+            asset_type = "equity"
 
         return {
             "name": info.get("shortName") or info.get("longName"),

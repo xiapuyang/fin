@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import math
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
@@ -304,7 +305,21 @@ async def import_income(
     account: str = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    """Import income records from an IBKR deposit CSV export.
+
+    Args:
+        file: CSV file (utf-8-sig or GBK). Expected columns: date=0, ref=1,
+            method=2, amount=12 (format: 'USD 1,234.56'), status=13.
+            Only rows where status == '可用' are imported.
+        account: Account name to tag all imported records.
+        db: Database session.
+
+    Returns:
+        Dict with imported count, skipped rows with reasons, and full income list.
+    """
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -319,12 +334,15 @@ async def import_income(
     for i, row in enumerate(reader):
         if not row or not row[0].strip():
             continue
+        if len(row) < 14:
+            skipped.append({"row": i, "reason": f"too few columns ({len(row)})"})
+            continue
         try:
             date = row[0].strip()
             ref = row[1].strip()
             method = row[2].strip()
             raw_amount = row[12].strip().strip('"')
-            status = row[13].strip() if len(row) > 13 else ""
+            status = row[13].strip()
 
             if status != "可用":
                 skipped.append({"row": i, "reason": f"status={status}"})
@@ -337,6 +355,9 @@ async def import_income(
                 continue
             currency = parts[0]
             amount = float(parts[1].replace(",", ""))
+            if not math.isfinite(amount):
+                skipped.append({"row": i, "reason": f"non-finite amount: {raw_amount}"})
+                continue
 
             valid.append(
                 IncomeCreate(
@@ -348,7 +369,7 @@ async def import_income(
                     account=account or None,
                 )
             )
-        except Exception as e:
+        except (IndexError, ValueError) as e:
             skipped.append({"row": i, "reason": str(e)})
 
     repo = IncomeSQLiteRepository(db)
