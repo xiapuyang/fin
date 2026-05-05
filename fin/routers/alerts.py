@@ -76,7 +76,12 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):
     for code in codes:
         q = svc.get_quote(code)
         if q:
-            result[code] = {"price": q["price"], "prev_close": q["prev_close"]}
+            result[code] = {
+                "price": q["price"],
+                "prev_close": q["prev_close"],
+                "market_state": q.get("market_state"),
+                "asset_type": q.get("asset_type"),
+            }
     return result
 
 

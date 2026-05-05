@@ -31,4 +31,5 @@ class StockModel(Base):
     beta = Column(Float)
     dividend_ttm = Column(Float)
     dividend_rate = Column(Float)
+    asset_type = Column(String)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)

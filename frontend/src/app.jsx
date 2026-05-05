@@ -15,6 +15,11 @@ const App = () => {
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
 
+  React.useEffect(() => {
+    fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
+    fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
+  }, []);
+
   const navigate = (target) => {
     if (typeof target === "object") {
       setRoute(target.route);
