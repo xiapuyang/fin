@@ -33,21 +33,18 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
 
   // Fetch yfinance market_state for each market index (handles holidays)
   React.useEffect(() => {
-    Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
-      fetch(`/api/quote/${sym}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
-        .catch(() => {});
-    });
-    const t = setInterval(() => {
+    const ctrl = new AbortController();
+    const fetchMarketState = () => {
       Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
-        fetch(`/api/quote/${sym}`)
+        fetch(`/api/quote/${sym}`, { signal: ctrl.signal })
           .then(r => r.ok ? r.json() : null)
           .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
           .catch(() => {});
       });
-    }, 5 * 60 * 1000);
-    return () => clearInterval(t);
+    };
+    fetchMarketState();
+    const t = setInterval(fetchMarketState, 5 * 60 * 1000);
+    return () => { clearInterval(t); ctrl.abort(); };
   }, []);
 
   // Merge: prefer live yfinance state, fall back to time-based for markets not yet loaded
@@ -87,7 +84,6 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
   React.useEffect(() => {
     const ctrl = new AbortController();
     alerts.filter(a => a.enabled).forEach(a => {
-      if (alertQuotes[a.code]) return;
       fetch(`/api/quote/${encodeURIComponent(a.code)}`, { signal: ctrl.signal })
         .then(r => r.ok ? r.json() : null)
         .then(q => q && setAlertQuotes(prev => ({ ...prev, [a.code]: q })))

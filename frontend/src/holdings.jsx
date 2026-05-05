@@ -697,7 +697,7 @@ const SymbolCombobox = ({ value, onChange, placeholder }) => {
   const upper = (value || "").toUpperCase();
 
   const presetMatches = upper.length === 0 ? [] : Object.values(SYMBOLS).flat().filter(
-    s => s.code.startsWith(upper) && s.code !== upper
+    s => s.code.startsWith(upper)
   ).slice(0, 8);
 
   // Backend lookup when no preset matches
@@ -713,7 +713,7 @@ const SymbolCombobox = ({ value, onChange, placeholder }) => {
           if (q) setBackendSym({ code: upper, name: q.name || upper, market: _guessMarket(upper), currency: q.currency || "USD" });
           setLoading(false);
         })
-        .catch(() => setLoading(false));
+        .catch(err => { if (err?.name !== 'AbortError') setLoading(false); });
     }, 400);
     return () => { clearTimeout(timer); ctrl.abort(); };
   }, [upper, presetMatches.length]);

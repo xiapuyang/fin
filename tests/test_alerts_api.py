@@ -81,7 +81,7 @@ def test_create_alert(client):
     assert data["code"] == "AAPL"
     assert data["name"] == "Apple"
     assert data["enabled"] is True
-    assert "id" in data
+    assert isinstance(data["id"], int)
 
 
 def test_create_alert_normalizes_symbol(client):

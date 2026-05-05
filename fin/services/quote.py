@@ -1,8 +1,10 @@
+import json
 import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from fin.config import MARKET_STATE_PATH
 from fin.models.stock import StockModel
 from fin.repositories.stock_sqlite import StockSQLiteRepository
 
@@ -13,6 +15,32 @@ STALE_SECONDS = 300
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
 _EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ")
+
+_SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
+
+
+def _market_for_symbol(symbol: str) -> str:
+    for suffix, market in _SUFFIX_TO_MARKET.items():
+        if symbol.endswith(suffix):
+            return market
+    return "US"
+
+
+def _read_market_states() -> dict:
+    try:
+        return json.loads(MARKET_STATE_PATH.read_text())
+    except Exception:
+        return {}
+
+
+def _write_market_state(symbol: str, state: str) -> None:
+    market = _market_for_symbol(symbol)
+    states = _read_market_states()
+    states[market] = state
+    try:
+        MARKET_STATE_PATH.write_text(json.dumps(states))
+    except Exception as e:
+        logger.warning("failed to write market state: %s", e)
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -147,7 +175,10 @@ class QuoteService:
         stock = self._repo.get_by_symbol(symbol)
 
         if stock and stock.price and self._is_fresh(stock.updated_at):
-            return _stock_to_dict(stock)
+            result = _stock_to_dict(stock)
+            states = _read_market_states()
+            result["market_state"] = states.get(_market_for_symbol(symbol))
+            return result
 
         data = _fetch_live(symbol)
         if not data:
@@ -158,6 +189,8 @@ class QuoteService:
                     symbol = alt
 
         if data:
+            if data.get("market_state"):
+                _write_market_state(symbol, data["market_state"])
             safe = {
                 k: v for k, v in data.items() if k not in ("market_state", "change_pct")
             }
