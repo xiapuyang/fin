@@ -1,12 +1,25 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, Float, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 
 from fin.database import Base
 
 
 class IncomeModel(Base):
     __tablename__ = "income"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "date", "source", "amount", "currency", name="uq_income_dedup"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)

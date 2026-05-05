@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from fin.models.account import AccountModel
-from fin.schemas.account import AccountCreate
+from fin.schemas.account import AccountCreate, AccountUpdate
 
 
 class AccountSQLiteRepository:
@@ -25,8 +27,20 @@ class AccountSQLiteRepository:
             name=data.name,
             currency=data.currency or "CNY",
             note=data.note,
+            cutoff_date=data.cutoff_date,
         )
         self._db.add(account)
+        self._db.commit()
+        self._db.refresh(account)
+        return account
+
+    def update(self, id: int, data: AccountUpdate) -> AccountModel | None:
+        account = self.get_by_id(id)
+        if account is None:
+            return None
+        for field, val in data.model_dump(exclude_unset=True).items():
+            setattr(account, field, val)
+        account.update_time = datetime.now(timezone.utc)
         self._db.commit()
         self._db.refresh(account)
         return account

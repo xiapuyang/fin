@@ -22,7 +22,7 @@ const MARKET_HOURS = (now = new Date()) => {
 // Representative index per market for live market_state
 const MARKET_SYMBOLS = { US: "%5EGSPC", HK: "%5EHSI", CN: "000001.SS" };
 
-const Dashboard = ({ onNavigate, alerts, history }) => {
+const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }) => {
   const [now, setNow] = React.useState(new Date());
   const [liveMarket, setLiveMarket] = React.useState({});
 
@@ -139,7 +139,14 @@ const Dashboard = ({ onNavigate, alerts, history }) => {
       {/* Welcome */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 24 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--ink-4)" }}>2026 · WEEK 18 · MAY 03</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--ink-4)" }}>{(() => {
+            const tzDate = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+            const y = tzDate.getFullYear();
+            const start = new Date(y, 0, 1);
+            const week = Math.ceil(((tzDate - start) / 86400000 + start.getDay() + 1) / 7);
+            const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+            return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
+          })()}</div>
           <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
           <div style={{ fontSize: 14, color: "var(--ink-3)" }}>Net worth tracking toward FIRE · 11.2y to 财务自由</div>
         </div>
