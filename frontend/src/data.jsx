@@ -118,9 +118,10 @@ async function apiImportIncome(file, account) {
   return _apiFetch(`/api/income/import${qs}`, { method: "POST", body: fd });
 }
 
-async function apiGetAccounts()        { return _apiFetch("/api/accounts"); }
-async function apiCreateAccount(data)  { return _apiFetch("/api/accounts", _JSON(data)); }
-async function apiDeleteAccount(id)    { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
+async function apiGetAccounts()           { return _apiFetch("/api/accounts"); }
+async function apiCreateAccount(data)     { return _apiFetch("/api/accounts", _JSON(data)); }
+async function apiUpdateAccount(id, data) { return _apiFetch(`/api/accounts/${id}`, _PUT(data)); }
+async function apiDeleteAccount(id)       { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
 
 // Module 4 — Balance Sheet snapshots
 // Each item is one row. `inSnapshot: ["s3","s4"]` says which historical snapshots include it.
@@ -202,5 +203,5 @@ Object.assign(window, {
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
-  apiGetAccounts, apiCreateAccount, apiDeleteAccount,
+  apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
 });
