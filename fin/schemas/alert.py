@@ -41,7 +41,7 @@ class TriggeredInfo(BaseModel):
 
 
 class AlertResponse(BaseModel):
-    id: str
+    id: int
     code: str
     name: str
     cond: str
@@ -52,7 +52,7 @@ class AlertResponse(BaseModel):
 
 
 class HistoryResponse(BaseModel):
-    id: str
+    id: int
     time: str
     code: str
     name: str

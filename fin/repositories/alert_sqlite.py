@@ -31,7 +31,7 @@ class AlertSQLiteRepository(AlertRepository):
             .all()
         )
 
-    def get_by_id(self, id: str) -> AlertModel | None:
+    def get_by_id(self, id: int) -> AlertModel | None:
         return (
             self._db.query(AlertModel)
             .options(self._load())
@@ -52,7 +52,7 @@ class AlertSQLiteRepository(AlertRepository):
         self._db.refresh(alert)
         return alert
 
-    def update(self, id: str, data: AlertUpdate) -> AlertModel:
+    def update(self, id: int, data: AlertUpdate) -> AlertModel:
         alert = self.get_by_id(id)
         if alert is None:
             raise ValueError(f"Alert {id} not found")
@@ -63,13 +63,13 @@ class AlertSQLiteRepository(AlertRepository):
         self._db.refresh(alert)
         return alert
 
-    def delete(self, id: str) -> None:
+    def delete(self, id: int) -> None:
         alert = self.get_by_id(id)
         if alert:
             self._db.delete(alert)
             self._db.commit()
 
-    def disable(self, id: str) -> AlertModel:
+    def disable(self, id: int) -> AlertModel:
         alert = self.get_by_id(id)
         if alert is None:
             raise ValueError(f"Alert {id} not found")
@@ -79,7 +79,7 @@ class AlertSQLiteRepository(AlertRepository):
         self._db.refresh(alert)
         return alert
 
-    def reset(self, id: str) -> AlertModel:
+    def reset(self, id: int) -> AlertModel:
         alert = self.get_by_id(id)
         if alert is None:
             raise ValueError(f"Alert {id} not found")
