@@ -19,13 +19,48 @@ const MARKET_HOURS = (now = new Date()) => {
   return { US: mk(usOpen), HK: mk(hkOpen), CN: mk(cnOpen) };
 };
 
+// Representative index per market for live market_state
+const MARKET_SYMBOLS = { US: "%5EGSPC", HK: "%5EHSI", CN: "000001.SS" };
+
 const Dashboard = ({ onNavigate, alerts, history }) => {
   const [now, setNow] = React.useState(new Date());
+  const [liveMarket, setLiveMarket] = React.useState({});
+
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(t);
   }, []);
-  const market = MARKET_HOURS(now);
+
+  // Fetch yfinance market_state for each market index (handles holidays)
+  React.useEffect(() => {
+    Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
+      fetch(`/api/quote/${sym}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
+        .catch(() => {});
+    });
+    const t = setInterval(() => {
+      Object.entries(MARKET_SYMBOLS).forEach(([mkt, sym]) => {
+        fetch(`/api/quote/${sym}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(q => q?.market_state && setLiveMarket(prev => ({ ...prev, [mkt]: q.market_state })))
+          .catch(() => {});
+      });
+    }, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Merge: prefer live yfinance state, fall back to time-based for markets not yet loaded
+  const timeBased = MARKET_HOURS(now);
+  const market = Object.fromEntries(
+    Object.entries(timeBased).map(([k, v]) => {
+      const live = liveMarket[k];
+      if (!live) return [k, v];
+      const open = live === "REGULAR";
+      return [k, { state: live, label: open ? "盘中 Open" : "休市 Closed" }];
+    })
+  );
+
   const all = Object.values(SYMBOLS).flat();
 
   const [watchlist, setWatchlist] = React.useState([]);
