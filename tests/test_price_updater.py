@@ -8,6 +8,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import fin.models.account  # noqa: F401
+import fin.models.holding  # noqa: F401
+import fin.models.income  # noqa: F401
+import fin.models.transaction  # noqa: F401
 from fin.database import Base
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
 from fin.repositories.stock_sqlite import StockSQLiteRepository
