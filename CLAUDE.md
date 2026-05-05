@@ -61,6 +61,10 @@ src/
 
 Routing is a simple `useState` string — no React Router.
 
+### Documented Solutions (`docs/solutions/`)
+
+Past bugs and fixes organized by category (`logic-errors/`, `ui-bugs/`, etc.) with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when debugging or refactoring in areas that may have prior history.
+
 ### Alert notifications (`check_alerts.py`)
 
 Standalone cron script. Reads enabled alerts from the DB, fetches live prices via yfinance, fires matching alerts (records `AlertFireModel`, disables the alert, sends Gmail email). Email is sent via AgentMail. Requires `AGENTMAIL_API_KEY` env var and `notify_email` in `data/settings.json`.
