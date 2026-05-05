@@ -18,6 +18,9 @@ def get_db():
     db: Session = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -63,6 +66,9 @@ def _migrate_alert_user_id(db: "Session") -> None:
         db.commit()
 
 
+_KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts"}
+
+
 def _migrate_columns(db: "Session") -> None:
     """Idempotently add new columns across all tables."""
     from sqlalchemy import text
@@ -84,6 +90,7 @@ def _migrate_columns(db: "Session") -> None:
         ),
     ]
     for table, col, stmt in pending:
+        assert table in _KNOWN_TABLES, f"unexpected table name: {table!r}"
         cols = [row[1] for row in db.execute(text(f"PRAGMA table_info({table})"))]
         if col not in cols:
             db.execute(text(stmt))
@@ -91,6 +98,15 @@ def _migrate_columns(db: "Session") -> None:
 
 
 def init_db() -> None:
+    import fin.models.alert  # noqa: F401
+    import fin.models.stock  # noqa: F401
+    import fin.models.user  # noqa: F401
+    import fin.models.watchlist  # noqa: F401
+    import fin.models.account  # noqa: F401
+    import fin.models.holding  # noqa: F401
+    import fin.models.income  # noqa: F401
+    import fin.models.transaction  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
     try:

@@ -109,7 +109,7 @@ def _parse_dollar(s: str) -> float:
         return 0.0
 
 
-def _parse_notion_row(row: dict, index: int) -> tuple[TransactionCreate | None, str]:
+def _parse_notion_row(row: dict) -> tuple[TransactionCreate | None, str]:
     """Parse one Notion CSV row into TransactionCreate. Returns (obj, error_reason)."""
     try:
         raw_name = row.get("Name", "").strip()
@@ -200,14 +200,14 @@ def create_holding(data: HoldingCreate, db: Session = Depends(get_db)):
 def update_holding(holding_id: int, data: HoldingUpdate, db: Session = Depends(get_db)):
     repo = HoldingSQLiteRepository(db)
     try:
-        return _holding_response(repo.update(holding_id, data))
+        return _holding_response(repo.update(holding_id, data, MOCK_USER_ID))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/holdings/{holding_id}", status_code=204)
 def delete_holding(holding_id: int, db: Session = Depends(get_db)):
-    HoldingSQLiteRepository(db).delete(holding_id)
+    HoldingSQLiteRepository(db).delete(holding_id, MOCK_USER_ID)
     return Response(status_code=204)
 
 
@@ -217,14 +217,17 @@ def delete_holding(holding_id: int, db: Session = Depends(get_db)):
 @router.post("/transactions/import")
 async def import_transactions(file: UploadFile, db: Session = Depends(get_db)):
     content = await file.read()
-    text = content.decode("utf-8-sig")  # handle BOM if present
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
     reader = csv.DictReader(io.StringIO(text))
 
     valid: list[TransactionCreate] = []
     skipped: list[dict] = []
 
     for i, row in enumerate(reader):
-        txn, reason = _parse_notion_row(row, i)
+        txn, reason = _parse_notion_row(row)
         if txn is None:
             skipped.append({"row": i, "reason": reason})
         else:
@@ -254,14 +257,14 @@ def update_transaction(
 ):
     repo = TransactionSQLiteRepository(db)
     try:
-        return _tx_response(repo.update(txn_id, data))
+        return _tx_response(repo.update(txn_id, data, MOCK_USER_ID))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/transactions/{txn_id}", status_code=204)
 def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
-    TransactionSQLiteRepository(db).delete(txn_id)
+    TransactionSQLiteRepository(db).delete(txn_id, MOCK_USER_ID)
     return Response(status_code=204)
 
 
@@ -284,12 +287,12 @@ def create_income(data: IncomeCreate, db: Session = Depends(get_db)):
 def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db)):
     repo = IncomeSQLiteRepository(db)
     try:
-        return _income_response(repo.update(income_id, data))
+        return _income_response(repo.update(income_id, data, MOCK_USER_ID))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/income/{income_id}", status_code=204)
 def delete_income(income_id: int, db: Session = Depends(get_db)):
-    IncomeSQLiteRepository(db).delete(income_id)
+    IncomeSQLiteRepository(db).delete(income_id, MOCK_USER_ID)
     return Response(status_code=204)

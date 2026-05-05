@@ -53,7 +53,8 @@ const computePositions = (holdings, transactions, prices = {}) => {
         dCost += t.shares * t.price;
         dShares += t.shares;
       } else {
-        const avg = dShares ? dCost / dShares : 0;
+        // When no post-snapshot buys exist yet, fall back to snapshot avg_cost as basis
+        const avg = dShares ? dCost / dShares : (h.avg_cost || 0);
         realized += (t.price - avg) * t.shares;
         dCost -= avg * t.shares;
         dShares -= t.shares;
@@ -154,14 +155,14 @@ const Holdings = () => {
     ? acctHoldings.filter(h => (h.snapshot_name || "未命名") === selectedSnapshot)
     : acctHoldings;
 
-  // All-accounts aggregate — use only the latest snapshot per account to avoid double-counting
+  // All-accounts aggregate — one row per (account, code), keeping the latest snapshot date
   const latestHoldings = React.useMemo(() => {
-    const latestDate = {};
+    const best = {};
     holdings.forEach(h => {
-      const acct = h.account || "__none__";
-      if (!latestDate[acct] || (h.as_of_date || "") > latestDate[acct]) latestDate[acct] = h.as_of_date || "";
+      const key = `${h.account || "__none__"}|${h.code}`;
+      if (!best[key] || (h.as_of_date || "") > (best[key].as_of_date || "")) best[key] = h;
     });
-    return holdings.filter(h => (h.as_of_date || "") === (latestDate[h.account || "__none__"] || ""));
+    return Object.values(best);
   }, [holdings]);
   const allPositions = React.useMemo(() => computePositions(latestHoldings, transactions, prices), [latestHoldings, transactions, prices]);
   const allTotal = allPositions.reduce((s, p) => s + p.value, 0);
@@ -350,18 +351,18 @@ const Holdings = () => {
           snapshots={snapshots} selectedSnapshot={selectedSnapshot} onSnapshotChange={setSelectedSnapshot}
           onAddHolding={() => { setEditingHolding(null); setShowHoldingModal(true); }}
           onEditHolding={h => { setEditingHolding(h); setShowHoldingModal(true); }}
-          onDeleteHolding={id => apiDeleteHolding(id).then(() => setHoldings(p => p.filter(h => h.id !== id)))}
+          onDeleteHolding={id => apiDeleteHolding(id).then(() => setHoldings(p => p.filter(h => h.id !== id))).catch(console.error)}
         />}
       {tab === "transactions" && <TransactionsTable txns={acctTxns}
           onAdd={() => { setEditingTxn(null); setShowTxnModal(true); }}
           onEdit={t => { setEditingTxn(t); setShowTxnModal(true); }}
-          onDelete={id => apiDeleteTransaction(id).then(() => setTransactions(p => p.filter(t => t.id !== id)))}
+          onDelete={id => apiDeleteTransaction(id).then(() => setTransactions(p => p.filter(t => t.id !== id))).catch(console.error)}
           onImportDone={txns => setTransactions(txns)}
         />}
       {tab === "income"       && <IncomeTable items={acctIncome} total={acctIncomeTotal} acctCcy={acctCcy} acctFx={acctFx}
           onAdd={() => { setEditingIncome(null); setShowIncomeModal(true); }}
           onEdit={i => { setEditingIncome(i); setShowIncomeModal(true); }}
-          onDelete={id => apiDeleteIncome(id).then(() => setIncome(p => p.filter(i => i.id !== id)))}
+          onDelete={id => apiDeleteIncome(id).then(() => setIncome(p => p.filter(i => i.id !== id))).catch(console.error)}
         />}
       {tab === "rebalance"    && <RebalancePanel positions={acctPositions} total={acctTotal}/>}
 

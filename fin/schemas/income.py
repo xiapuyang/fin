@@ -43,7 +43,7 @@ class IncomeResponse(BaseModel):
     id: int
     date: str
     source: str
-    category: str
+    category: Literal["dividend", "interest", "option", "deposit", "withdrawal"]
     amount: float
     currency: str
     account: Optional[str]
