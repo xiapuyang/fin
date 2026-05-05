@@ -129,7 +129,7 @@ def test_update_alert_condition(client):
 
 
 def test_update_alert_not_found(client):
-    r = client.put("/api/alerts/nonexistent-id", json={"name": "X"})
+    r = client.put("/api/alerts/999999", json={"name": "X"})
     assert r.status_code == 404
 
 
@@ -164,7 +164,7 @@ def test_reset_alert(client):
 
 
 def test_reset_alert_not_found(client):
-    r = client.post("/api/alerts/nonexistent-id/reset")
+    r = client.post("/api/alerts/999999/reset")
     assert r.status_code == 404
 
 
