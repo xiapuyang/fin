@@ -158,6 +158,21 @@ def test_market_state_none_fires_alert(db):
     assert len(fired) == 1
 
 
+def test_market_state_none_fires_even_when_us_market_is_closed(db):
+    """CN fund alert fires even if US market is simultaneously CLOSED.
+
+    Regression guard: _market_for_symbol('013308') used to return 'US',
+    causing stale-cache quotes to inherit the US market state and get skipped.
+    """
+    # Simulate a quote where the live provider correctly returns market_state=None
+    # (ChinaFundProvider.fetch_live always returns market_state=None).
+    quote = _make_quote(price=100.0, change_pct=2.0, market_state=None)
+    fired = _run_main_with_quote(
+        db, quote, alert_condition="price_lte", alert_value=150.0
+    )
+    assert len(fired) == 1
+
+
 def test_market_state_regular_fires_alert(db):
     """market_state=REGULAR (US open) should evaluate the alert."""
     quote = _make_quote(price=100.0, change_pct=2.0, market_state="REGULAR")
