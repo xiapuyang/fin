@@ -108,6 +108,7 @@ def _migrate_columns(db: "Session") -> None:
             "ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'CNY'",
         ),
         ("stocks", "asset_type", "ALTER TABLE stocks ADD COLUMN asset_type TEXT"),
+        ("stocks", "regular_close", "ALTER TABLE stocks ADD COLUMN regular_close REAL"),
         ("accounts", "cutoff_date", "ALTER TABLE accounts ADD COLUMN cutoff_date TEXT"),
         ("watchlist", "user_id", "ALTER TABLE watchlist ADD COLUMN user_id BIGINT"),
     ]
