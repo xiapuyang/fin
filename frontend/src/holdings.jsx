@@ -40,6 +40,7 @@ const computePositions = (holdings, transactions, prices = {}) => {
     const sym = {
       price: dbPrice.price ?? symFallback.price ?? 0,
       prevClose: dbPrice.prev_close ?? symFallback.prevClose ?? 0,
+      afterHoursChangePct: (dbPrice.market_state === "POST" || dbPrice.market_state === "PRE") ? (dbPrice.after_hours_change_pct ?? null) : null,
       name: symFallback.name || h.name || h.code,
       asset_type: dbPrice.asset_type ?? null,
     };
@@ -85,8 +86,9 @@ const computePositions = (holdings, transactions, prices = {}) => {
     const pnl = value - cost;
     const pnlPct = cost ? (pnl / cost) * 100 : 0;
     const dayChange = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+    const afterHoursChangePct = sym.afterHoursChangePct ?? null;
     const realizedCNY = realized * fx;
-    return { ...h, sym, currency, fx, shares: totalShares, avgCost, value, cost, pnl, pnlPct, dayChange, realizedCNY, txnCount: relevantTxns.length };
+    return { ...h, sym, currency, fx, shares: totalShares, avgCost, value, cost, pnl, pnlPct, dayChange, afterHoursChangePct, realizedCNY, txnCount: relevantTxns.length };
   });
 };
 
@@ -223,7 +225,9 @@ const Holdings = () => {
   const acctTotal = acctPositions.reduce((s, p) => s + p.value / acctFx, 0);
   const acctCost = acctPositions.reduce((s, p) => s + p.cost / acctFx, 0);
   const acctUnrealized = acctTotal - acctCost;
-  const acctRealized = acctPositions.reduce((s, p) => s + p.realizedCNY / acctFx, 0);
+  const acctRealized = acctTxnsForCalc
+    .filter(t => t.realized != null)
+    .reduce((s, t) => s + (t.realized || 0) * ((FX[t.currency] || 1) / acctFx), 0);
   const acctIncomeTotal = acctIncome
     .filter(i => !["deposit","withdrawal"].includes(i.category))
     .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx), 0);
@@ -245,6 +249,19 @@ const Holdings = () => {
     { label: "美债", value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
     { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
     { label: "现金", value: allCashValue, color: "#888" },
+  ].filter(b => b.value > 0);
+
+  const acctCashValue = acctPositions.filter(p => p.code === "CASH").reduce((s, p) => s + p.value / acctFx, 0);
+  const acctMarketValue = acctTotal - acctCashValue;
+  const acctDayPnl = acctPositions.reduce((s, p) => s + p.value / acctFx * p.dayChange / 100, 0);
+  const acctByMarket = [
+    ...knownMarkets.map(m => {
+      const v = acctPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0);
+      return { label: m === "US" ? "美股" : m === "HK" ? "港股" : "A股", value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A" }[m] };
+    }),
+    { label: "美债", value: acctPositions.filter(isBond).reduce((s, p) => s + p.value / acctFx, 0), color: "#7C3AED" },
+    { label: "其他", value: acctPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
+    { label: "现金", value: acctCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
   const deleteAccount = async (id, name) => {
@@ -384,54 +401,73 @@ const Holdings = () => {
         )}
       </div>
 
-      {/* ── Per-account stats strip ───────────────────────────────────────── */}
-      {selectedAccount && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16, padding: "14px 18px", background: "var(--paper-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>{selectedAccount.name} · 市值</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3 }}>{pricesReady ? `${ccySymbol(acctCcy)}${fmtNum(acctTotal, 0)}` : "—"}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{acctCcy}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>净转入</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-2)" }}>{acctDeposits >= 0 ? "" : "−"}{ccySymbol(acctCcy)}{fmtNum(Math.abs(acctDeposits), 0)}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>转入 − 转出</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>未实现 P&L</div>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: !pricesReady ? "var(--ink-4)" : acctUnrealized >= 0 ? "var(--up)" : "var(--down)" }}>
-              {pricesReady ? `${acctUnrealized >= 0 ? "+" : "−"}${ccySymbol(acctCcy)}${fmtNum(Math.abs(acctUnrealized), 0)}` : "—"}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>持有收益率</div>
-            {(() => {
-              const hpr = pricesReady && acctDeposits > 0 ? acctUnrealized / acctDeposits * 100 : null;
-              return hpr != null
-                ? <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: hpr >= 0 ? "var(--up)" : "var(--down)" }}>{hpr >= 0 ? "+" : ""}{hpr.toFixed(2)}%</div>
-                : <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-4)" }}>—</div>;
-            })()}
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>未实现 P&L / 净转入</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em" }}>
-              年化回报率 {pricesReady && acctXIRR != null ? "(MWRR)" : "(CAGR 估算)"}
-            </div>
-            {!pricesReady ? (
-              <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-4)" }}>—</div>
-            ) : acctXIRR != null ? (
-              <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: acctXIRR >= 0 ? "var(--up)" : "var(--down)" }}>
-                {acctXIRR >= 0 ? "+" : ""}{acctXIRR.toFixed(1)}%
+      {/* ── Per-account stats ─────────────────────────────────────────────── */}
+      {selectedAccount && (() => {
+        const hpr = pricesReady && acctDeposits > 0 ? acctUnrealized / acctDeposits * 100 : null;
+        const sym = ccySymbol(acctCcy);
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
+            <Card padding={20}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>
+                ACCOUNT · {selectedAccount.name}
               </div>
-            ) : (
-              <div>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 3, color: "var(--ink-4)" }}>—</div>
-                <div style={{ fontSize: 11, color: "var(--ink-4)" }}>添加转入记录后可计算</div>
+              <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
+                {pricesReady ? `${sym}${fmtNum(acctTotal, 0)}` : "—"}
               </div>
-            )}
+              <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${sym}${fmtNum(acctMarketValue, 2)}` : "—"}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${sym}${fmtNum(acctCashValue, 2)}` : "—"}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
+                  {pricesReady
+                    ? <><ChangeNum value={acctTotal ? acctDayPnl / acctTotal * 100 : 0} size="sm"/>
+                        {acctDayPnl !== 0 && (
+                          <span className="mono" style={{ fontSize: 11, color: acctDayPnl >= 0 ? "var(--up)" : "var(--down)" }}>
+                            {acctDayPnl >= 0 ? "+" : "−"}{sym}{fmtNum(Math.abs(acctDayPnl), 0)}
+                          </span>
+                        )}</>
+                    : <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>—</span>
+                  }
+                </div>
+              </div>
+              {pricesReady && acctTotal > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden" }}>
+                    {acctByMarket.map(b => <div key={b.label} style={{ flex: b.value || 0.001, background: b.color }}/>)}
+                  </div>
+                  <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 11, color: "var(--ink-3)", flexWrap: "wrap" }}>
+                    {acctByMarket.map(b => (
+                      <span key={b.label} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2 }}/>{b.label} {acctTotal ? (b.value / acctTotal * 100).toFixed(0) : 0}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+            <StatTile
+              label="UNREALIZED P&L · 持有收益"
+              value={pricesReady ? `${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}` : "—"}
+              tone={!pricesReady ? "neutral" : acctUnrealized >= 0 ? "up" : "down"}
+              pct={hpr}
+              sub={pricesReady ? `持有收益率 ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · 净转入 ${sym}${fmtNum(acctDeposits, 0)}` : "加载价格中…"}
+            />
+            <StatTile label="REALIZED + 收入 · 已实现" value={`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`} tone="up" sub={`已实现 ${sym}${fmtNum(acctRealized, 0)} · 收入 ${sym}${fmtNum(acctIncomeTotal, 0)}`}/>
+            {!pricesReady
+              ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
+              : acctXIRR != null
+                ? <StatTile label="年化回报率 (MWRR)" value={`${acctXIRR >= 0 ? "+" : ""}${acctXIRR.toFixed(1)}%`} tone={acctXIRR >= 0 ? "up" : "down"} sub={`${selectedAccount.name} · 基于转入记录计算`}/>
+                : <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="添加转入记录后可计算"/>
+            }
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Inner tabs ────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 14 }}>
@@ -537,7 +573,14 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
               <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
-              <span style={{textAlign:"right"}}>{cash ? "—" : <ChangeNum value={p.dayChange} size="sm"/>}</span>
+              <div style={{textAlign:"right"}}>
+                {cash ? "—" : <ChangeNum value={p.dayChange} size="sm"/>}
+                {!cash && p.afterHoursChangePct != null && (
+                  <div style={{fontSize:10,color:"var(--ink-4)",marginTop:1}}>
+                    盘后 <ChangeNum value={p.afterHoursChangePct} size="sm"/>
+                  </div>
+                )}
+              </div>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{sym}{fmtNum(p.value / acctFx, 0)}</span>
               <div style={{textAlign:"right"}}>
                 {cash ? <span style={{fontSize:12,color:"var(--ink-4)"}}>现金</span> : (

@@ -17,7 +17,7 @@ SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
 # Fields from provider responses that are not DB columns and must be stripped
 # before persisting (market_state and change_pct are computed/transient).
-_NON_DB_FIELDS = frozenset({"market_state", "change_pct"})
+_NON_DB_FIELDS = frozenset({"market_state", "change_pct", "after_hours_change_pct"})
 
 _SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
 
@@ -40,16 +40,6 @@ def _read_market_states() -> dict:
         return {}
 
 
-def _write_market_state(symbol: str, state: str) -> None:
-    market = _market_for_symbol(symbol)
-    states = _read_market_states()
-    states[market] = state
-    try:
-        MARKET_STATE_PATH.write_text(json.dumps(states))
-    except Exception as e:
-        logger.warning("failed to write market state: %s", e)
-
-
 def normalize_symbol(symbol: str) -> str:
     s = symbol.upper()
     return SYMBOL_ALIASES.get(s, s)
@@ -63,8 +53,14 @@ def _stock_to_dict(stock: StockModel) -> dict:
         "symbol": stock.symbol,
         "name": stock.name,
         "price": stock.price,
+        "regular_close": stock.regular_close,
         "prev_close": stock.prev_close,
         "change_pct": change_pct,
+        "after_hours_change_pct": (
+            (stock.price - stock.regular_close) / stock.regular_close * 100
+            if stock.price and stock.regular_close and stock.regular_close != 0
+            else None
+        ),
         "open_price": stock.open_price,
         "high": stock.high,
         "low": stock.low,
@@ -104,11 +100,11 @@ class QuoteService:
     def get_quote(self, symbol: str) -> dict | None:
         symbol = normalize_symbol(symbol)
         stock = self._repo.get_by_symbol(symbol)
+        market_key = _market_for_symbol(symbol)
 
         if stock and stock.price and self._is_fresh(stock.updated_at):
             result = _stock_to_dict(stock)
-            states = _read_market_states()
-            result["market_state"] = states.get(_market_for_symbol(symbol))
+            result["market_state"] = _read_market_states().get(market_key)
             return result
 
         try:
@@ -117,20 +113,20 @@ class QuoteService:
             return None
         data = provider.fetch_live(symbol)
 
+        states = _read_market_states()
         if data:
-            if data.get("market_state"):
-                _write_market_state(symbol, data["market_state"])
             safe = {k: v for k, v in data.items() if k not in _NON_DB_FIELDS}
+            if safe.get("regular_close") is None:
+                safe.pop("regular_close", None)
             self._repo.upsert(symbol, safe)
             stock = self._repo.get_by_symbol(symbol)
             result = _stock_to_dict(stock)
-            result["market_state"] = data.get("market_state")
+            result["market_state"] = data.get("market_state") or states.get(market_key)
             return result
 
         if stock and stock.price:
             result = _stock_to_dict(stock)
-            states = _read_market_states()
-            result["market_state"] = states.get(_market_for_symbol(symbol))
+            result["market_state"] = states.get(market_key)
             return result
 
         return None

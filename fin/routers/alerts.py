@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from fin.config import SYMBOLS_PATH
+from fin.config import MARKET_STATE_PATH, SYMBOLS_PATH
 from fin.database import get_db
 from fin.models.alert import AlertFireModel, AlertModel
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
@@ -60,6 +60,19 @@ def health():
     return {"status": "ok"}
 
 
+@router.get("/market-states")
+def get_market_states():
+    """Return current market open/close states from market_state.json.
+
+    Written by the market_state_updater background thread (every 5 minutes).
+    Falls back to an empty dict if the file is missing or unreadable.
+    """
+    try:
+        return json.loads(MARKET_STATE_PATH.read_text())
+    except Exception:
+        return {}
+
+
 @router.get("/quote/{symbol}")
 def get_quote(symbol: str, db: Session = Depends(get_db)):
     result = QuoteService(db, build_default_providers()).get_quote(symbol)
@@ -80,6 +93,8 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):
             result[code] = {
                 "price": q["price"],
                 "prev_close": q["prev_close"],
+                "regular_close": q.get("regular_close"),
+                "after_hours_change_pct": q.get("after_hours_change_pct"),
                 "market_state": q.get("market_state"),
                 "asset_type": q.get("asset_type"),
             }
