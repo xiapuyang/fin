@@ -52,7 +52,7 @@ const App = () => {
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings currency={currency}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
-    balance:   <BalanceSheet/>,
+    balance:   <BalanceSheet currency={currency}/>,
     fire:      <Fire/>,
   }[route];
 

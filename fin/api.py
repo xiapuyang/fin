@@ -12,6 +12,7 @@ from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
+from fin.routers.balance import router as balance_router
 from fin.routers.categories import router as categories_router
 from fin.routers.holdings import router as holdings_router
 from fin.routers.ledger import router as ledger_router
@@ -56,6 +57,7 @@ async def no_cache(request: Request, call_next):
 
 
 app.include_router(alerts_router)
+app.include_router(balance_router)
 app.include_router(categories_router)
 app.include_router(holdings_router)
 app.include_router(ledger_router)
