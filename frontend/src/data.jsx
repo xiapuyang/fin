@@ -201,6 +201,30 @@ const GOALS = [
   { name: "FIRE 储蓄 Annual",    target: 240000, current: 96400, deadline: "2026-12-31", color: "#1F8A4C" },
 ];
 
+// ── Balance Sheet API helpers ────────────────────────────────────────────────
+
+async function apiGetBalanceAccounts()               { return _apiFetch("/api/balance/accounts"); }
+async function apiCreateBalanceAccount(data)         { return _apiFetch("/api/balance/accounts", _JSON(data)); }
+async function apiUpdateBalanceAccount(id, data)     { return _apiFetch(`/api/balance/accounts/${id}`, _PUT(data)); }
+async function apiDeleteBalanceAccount(id)           { return _apiFetch(`/api/balance/accounts/${id}`, _DEL()); }
+
+async function apiGetBalanceSnapshots()              { return _apiFetch("/api/balance/snapshots"); }
+async function apiCreateBalanceSnapshot(data)        { return _apiFetch("/api/balance/snapshots", _JSON(data)); }
+async function apiUpdateBalanceSnapshot(id, data)    { return _apiFetch(`/api/balance/snapshots/${id}`, _PUT(data)); }
+async function apiDeleteBalanceSnapshot(id)          { return _apiFetch(`/api/balance/snapshots/${id}`, _DEL()); }
+async function apiCopyBalanceSnapshot(id, opts = {}) { return _apiFetch(`/api/balance/snapshots/${id}/copy`, _JSON(opts)); }
+
+async function apiGetBalanceItems(snapshotId)        { return _apiFetch(`/api/balance/snapshots/${snapshotId}/items`); }
+async function apiGetAllBalanceItems()               { return _apiFetch("/api/balance/items"); }
+async function apiCreateBalanceItem(data)            { return _apiFetch("/api/balance/items", _JSON(data)); }
+async function apiUpdateBalanceItem(id, data)        { return _apiFetch(`/api/balance/items/${id}`, _PUT(data)); }
+async function apiDeleteBalanceItem(id)              { return _apiFetch(`/api/balance/items/${id}`, _DEL()); }
+async function apiImportBalance(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return _apiFetch("/api/balance/import", { method: "POST", body: fd });
+}
+
 Object.assign(window, {
   SYMBOLS, SYMBOL_INDEX, FX, INITIAL_ALERTS, TRIGGER_HISTORY,
   BS_CATEGORIES, BS_CAT_COLORS, BS_SNAPSHOTS, BS_ITEMS,
@@ -210,4 +234,7 @@ Object.assign(window, {
   apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
+  apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,
+  apiGetBalanceSnapshots, apiCreateBalanceSnapshot, apiUpdateBalanceSnapshot, apiDeleteBalanceSnapshot, apiCopyBalanceSnapshot,
+  apiGetBalanceItems, apiGetAllBalanceItems, apiCreateBalanceItem, apiUpdateBalanceItem, apiDeleteBalanceItem, apiImportBalance,
 });

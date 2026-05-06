@@ -85,7 +85,17 @@ def _migrate_alerts_to_int_id(db: "Session") -> None:
         db.commit()
 
 
-_KNOWN_TABLES = {"income", "holdings", "transactions", "accounts", "alerts", "stocks"}
+_KNOWN_TABLES = {
+    "income",
+    "holdings",
+    "transactions",
+    "accounts",
+    "alerts",
+    "stocks",
+    "balance_accounts",
+    "balance_snapshots",
+    "balance_items",
+}
 
 
 def _migrate_columns(db: "Session") -> None:
@@ -293,6 +303,9 @@ def init_db() -> None:
     import fin.models.income  # noqa: F401
     import fin.models.transaction  # noqa: F401
     import fin.models.ledger  # noqa: F401
+    import fin.models.balance_account  # noqa: F401
+    import fin.models.balance_snapshot  # noqa: F401
+    import fin.models.balance_item  # noqa: F401
 
     db: Session = SessionLocal()
     try:
