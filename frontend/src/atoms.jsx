@@ -5,7 +5,7 @@ const fmtNum = (n, dp = 2) => {
   return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: dp });
 };
 const fmtMoney = (n, ccy = "USD", dp = 2) => {
-  const sym = { USD: "$", HKD: "HK$", CNY: "¥", EUR: "€" }[ccy] || "";
+  const sym = { USD: "$", HKD: "HK$", CNY: "¥", EUR: "€", CAD: "CA$" }[ccy] || "";
   if (n == null || isNaN(n)) return "—";
   const abs = Math.abs(n);
   return (n < 0 ? "−" : "") + sym + abs.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });

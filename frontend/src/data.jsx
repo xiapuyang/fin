@@ -49,7 +49,7 @@ const SYMBOLS = {
   ],
 };
 
-const FX = { USD: 7.24, HKD: 0.93, CNY: 1, EUR: 7.84 };
+const FX = { USD: 7.24, HKD: 0.93, CNY: 1, EUR: 7.84, CAD: 5.3 };
 
 const SYMBOL_INDEX = (() => {
   const out = {};
