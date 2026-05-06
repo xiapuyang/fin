@@ -35,7 +35,7 @@ def test_put_settings_persists(client, tmp_path, monkeypatch):
 
 
 def test_get_fx_returns_rates_via_quote_service(client):
-    fake_rates = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CNY": 1.0}
+    fake_rates = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
     with patch("fin.routers.settings.QuoteService") as mock_qs:
         mock_qs.return_value.get_fx.return_value = fake_rates
         with patch("fin.routers.settings.build_default_providers", return_value=[]):
@@ -55,5 +55,6 @@ def test_get_fx_falls_back_on_error(client):
     data = r.json()
     assert data["USD"] == 7.24
     assert data["HKD"] == 0.93
-    assert data["EUR"] == 7.84
+    assert data["CAD"] == 5.30
     assert data["CNY"] == 1.0
+    assert "EUR" not in data

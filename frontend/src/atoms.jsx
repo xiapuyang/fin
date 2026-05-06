@@ -2,10 +2,10 @@
 
 const fmtNum = (n, dp = 2) => {
   if (n == null || isNaN(n)) return "—";
-  return n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: dp });
 };
 const fmtMoney = (n, ccy = "USD", dp = 2) => {
-  const sym = { USD: "$", HKD: "HK$", CNY: "¥", EUR: "€" }[ccy] || "";
+  const sym = { USD: "$", HKD: "HK$", CNY: "¥", CAD: "CA$" }[ccy] || "";
   if (n == null || isNaN(n)) return "—";
   const abs = Math.abs(n);
   return (n < 0 ? "−" : "") + sym + abs.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });

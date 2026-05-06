@@ -1,5 +1,11 @@
 /* Sample data for fin. All in-memory. */
 
+// Single source of truth for supported currencies — mirrors fin/config.py SUPPORTED_CURRENCIES.
+const CURRENCIES = ["CNY", "USD", "HKD", "CAD"];
+const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", HKD: "HK$", CAD: "CA$" };
+const CURRENCY_LABEL  = { CNY: "人民币 CNY", USD: "美元 USD", HKD: "港元 HKD", CAD: "加元 CAD" };
+const CURRENCY_OPTIONS = CURRENCIES.map(c => ({ value: c, label: CURRENCY_LABEL[c] || c }));
+
 const SYMBOLS = {
   "美股指数 US Index": [
     { code: "^GSPC", name: "S&P 500",    market: "US", currency: "USD" },
@@ -43,7 +49,7 @@ const SYMBOLS = {
   ],
 };
 
-const FX = { USD: 7.24, HKD: 0.93, CNY: 1, EUR: 7.84 };
+const FX = { USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 };
 
 const SYMBOL_INDEX = (() => {
   const out = {};

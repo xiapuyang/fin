@@ -1,6 +1,6 @@
 /* Module 02 — Holdings: positions + transactions + income, per-account */
 
-const ccySymbol = (ccy) => ccy === "USD" ? "$" : ccy === "HKD" ? "HK$" : "¥";
+const ccySymbol = (ccy) => CURRENCY_SYMBOL[ccy] || "¥";
 
 // ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
 // cashFlows: [{date:"YYYY-MM-DD", amount:float}]
@@ -109,7 +109,7 @@ const computeAccountXIRR = (incomeItems, positions) => {
 };
 
 // ── Holdings root component ───────────────────────────────────────────────────
-const Holdings = () => {
+const Holdings = ({ currency = "CNY" }) => {
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
   const [tab, setTab] = React.useState("positions");
@@ -129,8 +129,6 @@ const Holdings = () => {
   const [showAccountModal, setShowAccountModal] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState(null);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
-  const [summaryCcy, setSummaryCcy] = React.useState("USD");
-
   React.useEffect(() => {
     Promise.all([apiGetAccounts(), apiGetHoldings(), apiGetTransactions(), apiGetIncome()])
       .then(([accts, h, t, i]) => {
@@ -236,8 +234,8 @@ const Holdings = () => {
     .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx) * (i.category === "withdrawal" ? -1 : 1), 0);
   const acctXIRR = React.useMemo(() => computeAccountXIRR(acctIncome, acctPositions), [acctIncome, acctPositions]);
 
-  const summaryFx = FX[summaryCcy] || 1;
-  const summarySym = ccySymbol(summaryCcy);
+  const summaryFx = FX[currency] || 1;
+  const summarySym = ccySymbol(currency);
 
   const isBond = (p) => p.sym?.asset_type === "bond";
   const knownMarkets = ["US", "HK", "CN"];
@@ -315,14 +313,7 @@ const Holdings = () => {
       {/* ── All-accounts aggregate ─────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
         <Card padding={20}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
-            <div style={{ display: "flex", gap: 3 }}>
-              {["CNY","USD"].map(c => (
-                <button key={c} onClick={() => setSummaryCcy(c)} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4, border: `1px solid ${summaryCcy===c?"var(--ink)":"var(--line)"}`, background: summaryCcy===c?"var(--ink)":"transparent", color: summaryCcy===c?"var(--paper)":"var(--ink-4)", cursor: "pointer" }}>{c}</button>
-              ))}
-            </div>
-          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
             {pricesReady ? `${summarySym}${fmtNum(allTotal/summaryFx, 0)}` : "—"}
           </div>
@@ -970,7 +961,7 @@ const AccountModal = ({ onClose, onSaved }) => {
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / 招商证券 / 支付宝基金"/></FormRow>
         <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
         </FormRow>
         <FormRow label="截止日期">
           <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD（忽略此日期前的交易）"/>
@@ -1017,7 +1008,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
         <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
         </FormRow>
         <FormRow label="截止日期">
           <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD"/>
@@ -1123,7 +1114,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
           <>
             <FormRow label="货币">
               <Select value={form.currency} onChange={setCashCurrency}
-                options={["USD","HKD","CNY"].map(c => ({value:c,label:c}))}/>
+                options={CURRENCY_OPTIONS}/>
             </FormRow>
             <FormRow label="金额 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="10000" suffix={form.currency}/></FormRow>
           </>
@@ -1229,7 +1220,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
     return sym ? (MARKET_CCY[sym.market] || "USD") : "USD";
   };
   const catLabels = { dividend: "分红 Dividend", interest: "利息 Interest", deposit: "转入 Deposit", withdrawal: "转出 Withdrawal" };
-  const ccyOptions = ["USD", "HKD", "CNY"].map(c => ({ value: c, label: c }));
+  const ccyOptions = CURRENCY_OPTIONS;
   const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
 
   const [form, set] = useForm({

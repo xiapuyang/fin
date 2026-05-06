@@ -135,6 +135,93 @@ def _backfill_watchlist_user_id(db: "Session") -> None:
         db.commit()
 
 
+def _migrate_ledger_schema(db: "Session") -> None:
+    """Rename subcategory → orig_category and add new user-defined subcategory column."""
+    from sqlalchemy import text
+
+    def cols():
+        return [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+
+    current = cols()
+    if not current:
+        return  # table not yet created; create_all will use the new model
+    if "subcategory" in current and "orig_category" not in current:
+        db.execute(
+            text("ALTER TABLE ledger RENAME COLUMN subcategory TO orig_category")
+        )
+        db.commit()
+        current = cols()
+    if "subcategory" not in current:
+        db.execute(text("ALTER TABLE ledger ADD COLUMN subcategory VARCHAR"))
+        db.commit()
+        current = cols()
+    if "amounts_json" not in current:
+        db.execute(text("ALTER TABLE ledger ADD COLUMN amounts_json TEXT"))
+        db.commit()
+
+
+def _migrate_category_ids(db: "Session") -> None:
+    """Backfill ledger.category from name strings to sequential IDs.
+
+    Rows whose category is already a 4-digit ID are skipped (idempotent).
+    Unrecognised names are left unchanged.
+    """
+    from sqlalchemy import text
+    from fin.ledger_categories import BUILTIN_CATEGORY_IDS
+    from fin.categories_store import _load_custom
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+    if "category" not in cols:
+        return
+
+    # Build (direction, name) → id mapping
+    name_to_id: dict[tuple[str, str], str] = {}
+    for direction, names in BUILTIN_CATEGORY_IDS.items():
+        for name, cat_id in names.items():
+            name_to_id[(direction, name)] = cat_id
+    for c in _load_custom():
+        d, n, cid = c.get("direction"), c.get("name"), c.get("id")
+        if d and n and cid:
+            name_to_id[(d, n)] = cid
+
+    import re
+
+    rows = db.execute(text("SELECT id, direction, category FROM ledger")).fetchall()
+    updated = 0
+    for row_id, direction, category in rows:
+        if category and re.fullmatch(r"0\d{3}", category):
+            continue  # already an ID
+        cat_id = name_to_id.get((direction, category))
+        if cat_id:
+            db.execute(
+                text("UPDATE ledger SET category = :cid WHERE id = :rid"),
+                {"cid": cat_id, "rid": row_id},
+            )
+            updated += 1
+    if updated:
+        db.commit()
+
+
+def _backfill_recurring_subcategory(db: "Session") -> None:
+    """Initialize subcategory = name for recurring items missing a subcategory.
+
+    Recurring items use (recurring_type, category, subcategory, amount) as the
+    dedup key — name is a sensible default identity when subcategory is unset.
+    """
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+    if "subcategory" not in cols:
+        return
+    db.execute(
+        text(
+            "UPDATE ledger SET subcategory = name "
+            "WHERE recurring_type IS NOT NULL AND subcategory IS NULL"
+        )
+    )
+    db.commit()
+
+
 def _migrate_indexes(db: "Session") -> None:
     """Idempotently create unique indexes for deduplication."""
     from sqlalchemy import text
@@ -169,6 +256,15 @@ def _migrate_indexes(db: "Session") -> None:
             "ix_users_email",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email)",
         ),
+        (
+            "uq_ledger_dedup",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_dedup "
+            "ON ledger(user_id, direction, name, date, amount)",
+        ),
+        (
+            "ix_ledger_user_date",
+            "CREATE INDEX IF NOT EXISTS ix_ledger_user_date ON ledger(user_id, date)",
+        ),
     ]
     existing = {
         row[1]
@@ -196,6 +292,7 @@ def init_db() -> None:
     import fin.models.holding  # noqa: F401
     import fin.models.income  # noqa: F401
     import fin.models.transaction  # noqa: F401
+    import fin.models.ledger  # noqa: F401
 
     db: Session = SessionLocal()
     try:
@@ -210,6 +307,9 @@ def init_db() -> None:
         _seed_mock_user(db)
         _migrate_alert_user_id(db)
         _migrate_columns(db)
+        _migrate_ledger_schema(db)
+        _migrate_category_ids(db)
+        _backfill_recurring_subcategory(db)
         _backfill_watchlist_user_id(db)
         _migrate_indexes(db)
     finally:

@@ -60,6 +60,8 @@ const Icon = ({ name, size = 16, className = "", style = {} }) => {
       <svg {...common}><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.8 6.8 0 0 0 9.8 9.8Z"/></svg>);
     case "send": return (
       <svg {...common}><path d="M21 3 11 14"/><path d="M21 3 14.5 21l-3.5-7-7-3.5Z"/></svg>);
+    case "copy": return (
+      <svg {...common}><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>);
     case "import": return (
       <svg {...common}><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>);
     case "filter": return (
