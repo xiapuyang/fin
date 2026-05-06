@@ -1,0 +1,18 @@
+[
+  {
+    "id": "0025",
+    "direction": "expense",
+    "name": "通讯带宽",
+    "bg_color": "#ECF1D2",
+    "text_color": "#8DA82A",
+    "status": "Y"
+  },
+  {
+    "id": "0026",
+    "direction": "expense",
+    "name": "电视电影音乐",
+    "bg_color": "#FBE3D6",
+    "text_color": "#E85D2C",
+    "status": "Y"
+  }
+]

@@ -50,15 +50,16 @@ const CategoryContext = React.createContext({
   list: [], byName: {}, expense: [], income: [],
 });
 
-const CategoryPill = ({ category }) => {
-  const { byName } = React.useContext(CategoryContext);
-  const c = byName[category] || CATEGORY_FALLBACK;
+const CategoryPill = ({ category, categoryName }) => {
+  const { byName, byId } = React.useContext(CategoryContext);
+  const rec = byId[category] || byName[category] || CATEGORY_FALLBACK;
+  const label = categoryName || rec.name || category;
   return (
     <span style={{
-      background: c.bg, color: c.text,
+      background: rec.bg, color: rec.text,
       padding: "2px 8px", fontSize: 11, fontWeight: 600, borderRadius: 999,
       lineHeight: 1.5, whiteSpace: "nowrap",
-    }}>{category}</span>
+    }}>{label}</span>
   );
 };
 
@@ -786,7 +787,7 @@ const RecurringCard = ({ item, nextDate, last, fmt, ended, onEdit, onDelete, onD
       </div>
       <div style={{ marginTop: 5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <CategoryPill category={item.category} />
+          <CategoryPill category={item.category} categoryName={item.category_name} />
           {dateLabel && <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{dateLabel}</span>}
         </div>
         <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: ended ? "var(--ink-4)" : "var(--up)" }}>
