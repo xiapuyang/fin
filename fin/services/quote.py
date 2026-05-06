@@ -121,7 +121,7 @@ class QuoteService:
             self._repo.upsert(symbol, safe)
             stock = self._repo.get_by_symbol(symbol)
             result = _stock_to_dict(stock)
-            result["market_state"] = states.get(market_key)
+            result["market_state"] = data.get("market_state") or states.get(market_key)
             return result
 
         if stock and stock.price:
