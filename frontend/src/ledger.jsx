@@ -432,9 +432,9 @@ const Ledger = ({ fxRates = {} }) => {
           : summary.expense / 12;
         return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
-            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={dispStat(summary.income, 0, "+")}                                       tone="down" />
+            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={dispStat(summary.income, 0, "+")}                                       tone="up" />
             <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={dispStat(summary.expense, 0, "−")}                                      tone="up" />
-            <LedgerTile label="净结余 NET"                                        value={dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone={summary.net >= 0 ? "down" : "up"} />
+            <LedgerTile label="净结余 NET"                                        value={dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone="up" />
             <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={dispStat(avgVal)}                                                     tone="neutral" />
             <LedgerTile label="最大单笔 MAX TXN"                                  value={dispStat(summary.max_expense)}                                        tone="neutral"
               sub={summary.max_expense_date ? `${summary.max_expense_date} · ${summary.max_expense_name || ""}` : undefined}
@@ -518,9 +518,9 @@ const Ledger = ({ fxRates = {} }) => {
             </form>
             <div style={{ fontSize: 12, color: "var(--ink-4)", flexShrink: 0 }}>共 {listData.total} 条</div>
           </div>
-          {direction === "expense" && (
+          {(direction === "expense" || direction === "income") && (
             <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {categoryCtx.expense.map(({ name }) => {
+              {(direction === "income" ? categoryCtx.income : categoryCtx.expense).map(({ name }) => {
                 const col = colorOf(name);
                 const active = category === name;
                 return (
@@ -790,7 +790,7 @@ const RecurringCard = ({ item, nextDate, last, fmt, ended, onEdit, onDelete, onD
           {item.currency && item.currency !== "CNY" && (
             <span style={{ fontSize: 9.5, fontWeight: 500, color: "var(--ink-4)", marginRight: 3 }}>{item.currency}</span>
           )}
-          {fmt(item.amount, item.currency, 0)}
+          {fmt(item.amount, item.currency, 2)}
         </span>
       </div>
     </div>
@@ -826,6 +826,14 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
               {RECURRING_LABEL[item.recurring_type]}
             </span>
           )}
+          {item.is_expired && item.recurring_type && (
+            <span style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 999,
+              background: "var(--line-2)", color: "var(--ink-4)",
+            }}>
+              已结束
+            </span>
+          )}
         </div>
         {item.note && (
           <div style={{ fontSize: 11, color: "var(--ink-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -833,7 +841,7 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
           </div>
         )}
       </div>
-      <span className="mono" style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: isIncome ? "var(--down)" : "var(--ink)" }}>
+      <span className="mono" style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "var(--up)" }}>
         {item.currency && item.currency !== "CNY" && (
           <span style={{ fontSize: 10, fontWeight: 500, color: "var(--ink-4)", marginRight: 4 }}>{item.currency}</span>
         )}
