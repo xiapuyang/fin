@@ -7,9 +7,14 @@ Deleting a custom category sets status D (soft delete) so IDs are never reused.
 """
 
 import json
+import logging
+import os
+import tempfile
 
 from fin.config import LEDGER_CATEGORIES_PATH
 from fin.ledger_categories import BUILTIN_ID_MAP, BUILTIN_MAX_ID
+
+logger = logging.getLogger(__name__)
 
 
 def _load_custom() -> list[dict]:
@@ -18,12 +23,24 @@ def _load_custom() -> list[dict]:
     try:
         data = json.loads(LEDGER_CATEGORIES_PATH.read_text())
         return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError:
+        logger.error(
+            "Failed to parse %s — returning empty list", LEDGER_CATEGORIES_PATH
+        )
+        return []
+    except OSError:
         return []
 
 
 def _save_custom(rows: list[dict]) -> None:
-    LEDGER_CATEGORIES_PATH.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
+    text = json.dumps(rows, indent=2, ensure_ascii=False)
+    parent = LEDGER_CATEGORIES_PATH.parent
+    with tempfile.NamedTemporaryFile(
+        "w", dir=parent, suffix=".tmp", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(text)
+        tmp = f.name
+    os.replace(tmp, LEDGER_CATEGORIES_PATH)
 
 
 def _next_id() -> str:

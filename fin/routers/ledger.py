@@ -17,6 +17,7 @@ from fin.models.user import MOCK_USER_ID
 from fin.repositories.ledger_sqlite import LedgerSQLiteRepository
 from fin.schemas.ledger import (
     LedgerCreate,
+    LedgerImportResponse,
     LedgerListResponse,
     LedgerResponse,
     LedgerStatsResponse,
@@ -266,7 +267,7 @@ def ledger_stats(
 # ── Import ───────────────────────────────────────────────────────────────────
 
 
-@router.post("/ledger/import")
+@router.post("/ledger/import", response_model=LedgerImportResponse)
 async def import_ledger(file: UploadFile, db: Session = Depends(get_db)):
     """Import expense records from a Notion CSV export."""
     content = await file.read()

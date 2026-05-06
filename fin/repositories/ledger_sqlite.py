@@ -6,6 +6,7 @@ from datetime import timezone
 
 from sqlalchemy.orm import Session
 
+from fin import categories_store
 from fin.models.ledger import LedgerModel
 from fin.schemas.ledger import LedgerCreate, LedgerUpdate
 
@@ -21,7 +22,10 @@ def _value_in_currency(
     3. row.amount converted via fx_rates — best-effort for old entries.
     """
     if row.amounts_json:
-        data = json.loads(row.amounts_json)
+        try:
+            data = json.loads(row.amounts_json)
+        except json.JSONDecodeError:
+            data = {}
         if display_currency in data:
             return data[display_currency]
         cny = data.get("CNY")
@@ -29,16 +33,18 @@ def _value_in_currency(
             if display_currency == "CNY":
                 return cny
             if fx_rates:
-                return cny / fx_rates.get(display_currency, 1.0)
+                rate = fx_rates.get(display_currency, 1.0) or 1.0
+                return cny / rate
+            return cny  # fx_rates unavailable — CNY is best effort
     # No amounts_json — raw conversion
     if row.currency == display_currency:
         return row.amount
     if not fx_rates:
         return row.amount
-    to_cny = row.amount * fx_rates.get(row.currency or "CNY", 1.0)
+    to_cny = row.amount * (fx_rates.get(row.currency or "CNY", 1.0) or 1.0)
     if display_currency == "CNY":
         return to_cny
-    return to_cny / fx_rates.get(display_currency, 1.0)
+    return to_cny / (fx_rates.get(display_currency, 1.0) or 1.0)
 
 
 class LedgerSQLiteRepository:
@@ -156,19 +162,24 @@ class LedgerSQLiteRepository:
         user_id: int,
         recurring_type: str,
         category: str,
-        subcategory: str,
+        subcategory: str | None,
     ) -> list[LedgerModel]:
         """Return all records belonging to a recurring series, newest first.
 
         Series identity matches get_recurring's dedup key.
         """
+        sub_filter = (
+            LedgerModel.subcategory.is_(None)
+            if subcategory is None
+            else LedgerModel.subcategory == subcategory
+        )
         return (
             self._db.query(LedgerModel)
             .filter(
                 LedgerModel.user_id == user_id,
                 LedgerModel.recurring_type == recurring_type,
                 LedgerModel.category == category,
-                LedgerModel.subcategory == subcategory,
+                sub_filter,
             )
             .order_by(LedgerModel.date.desc())
             .all()
@@ -217,23 +228,23 @@ class LedgerSQLiteRepository:
 
         rows = q.all()
 
-        # Summary — all amounts converted to CNY via amounts_json or fx_rates fallback
+        # Summary — all amounts converted to display_currency
         income_rows = [r for r in rows if r.direction == "income"]
         expense_rows = [r for r in rows if r.direction == "expense"]
+        expense_values: dict[int, float] = {
+            r.id: _value_in_currency(r, display_currency, fx_rates)
+            for r in expense_rows
+        }
         income_total = sum(
             _value_in_currency(r, display_currency, fx_rates) for r in income_rows
         )
-        expense_total = sum(
-            _value_in_currency(r, display_currency, fx_rates) for r in expense_rows
+        expense_total = sum(expense_values.values())
+        max_row = (
+            max(expense_rows, key=lambda r: expense_values[r.id])
+            if expense_rows
+            else None
         )
-        max_row = max(
-            expense_rows,
-            key=lambda r: _value_in_currency(r, display_currency, fx_rates),
-            default=None,
-        )
-        max_expense = (
-            _value_in_currency(max_row, display_currency, fx_rates) if max_row else 0.0
-        )
+        max_expense = expense_values[max_row.id] if max_row else 0.0
 
         # Bar granularity: yearly for "all", monthly when window > 60 days
         if time_range == "all":
@@ -257,17 +268,15 @@ class LedgerSQLiteRepository:
                 bucket = r.date[:7]
             else:
                 bucket = r.date
-            by_bucket[bucket] += _value_in_currency(r, display_currency, fx_rates)
+            by_bucket[bucket] += expense_values[r.id]
         bars = [
             {"date": k, "amount": round(v, 2)} for k, v in sorted(by_bucket.items())
         ]
 
         # Pie — expense by category, grouped by ID, label resolved to name
-        from fin import categories_store
-
         by_cat: dict[str, float] = defaultdict(float)
         for r in expense_rows:
-            by_cat[r.category] += _value_in_currency(r, display_currency, fx_rates)
+            by_cat[r.category] += expense_values[r.id]
         pie = [
             {
                 "category": (categories_store.find(k) or {}).get("name", k),
@@ -332,23 +341,6 @@ class LedgerSQLiteRepository:
             self._db.delete(entry)
             self._db.commit()
 
-    def rename_category(self, user_id: int, old_name: str, new_name: str) -> int:
-        """Bulk-update category column when a custom category is renamed.
-
-        Returns the number of rows updated. Built-in renames don't reach this
-        path because built-ins are immutable from the API.
-        """
-        from sqlalchemy import update as sql_update
-
-        result = self._db.execute(
-            sql_update(LedgerModel)
-            .where(LedgerModel.user_id == user_id)
-            .where(LedgerModel.category == old_name)
-            .values(category=new_name)
-        )
-        self._db.commit()
-        return result.rowcount
-
     def bulk_create(self, items: list[LedgerCreate], user_id: int) -> list[LedgerModel]:
         """Bulk-insert records, skipping exact duplicates."""
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -356,6 +348,9 @@ class LedgerSQLiteRepository:
         now = dt.now(timezone.utc)
         inserted_ids: list[int] = []
         for d in items:
+            subcategory = d.subcategory
+            if d.recurring_type and not subcategory:
+                subcategory = d.name
             stmt = (
                 sqlite_insert(LedgerModel)
                 .values(
@@ -367,7 +362,7 @@ class LedgerSQLiteRepository:
                     currency=d.currency,
                     category=d.category,
                     orig_category=d.orig_category,
-                    subcategory=d.subcategory,
+                    subcategory=subcategory,
                     recurring_type=d.recurring_type,
                     is_expired=d.is_expired,
                     expiry_date=d.expiry_date,
@@ -401,7 +396,10 @@ class LedgerSQLiteRepository:
         for row in rows:
             existing: dict = {}
             if row.amounts_json:
-                existing = json.loads(row.amounts_json)
+                try:
+                    existing = json.loads(row.amounts_json)
+                except json.JSONDecodeError:
+                    existing = {}
             if all(c in existing for c in currencies):
                 continue  # nothing to add
 
