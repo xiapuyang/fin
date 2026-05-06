@@ -217,17 +217,20 @@ const Ledger = ({ fxRates = {} }) => {
 
   const categoryCtx = React.useMemo(() => {
     const byName = {};
+    const byId = {};
     const expense = [];
     const income = [];
     for (const c of categories) {
-      byName[c.name] = { bg: c.bg_color, text: c.text_color };
+      byName[c.name] = { bg: c.bg_color, text: c.text_color, id: c.id };
+      byId[c.id] = { name: c.name, bg: c.bg_color, text: c.text_color };
       if (c.direction === "expense") expense.push(c);
       else if (c.direction === "income") income.push(c);
     }
-    return { list: categories, byName, expense, income };
+    return { list: categories, byName, byId, expense, income };
   }, [categories]);
 
   const colorOf = (name) => categoryCtx.byName[name] || CATEGORY_FALLBACK;
+  const colorOfId = (id) => categoryCtx.byId[id] || CATEGORY_FALLBACK;
 
   // Convert any amount from its source currency to the display currency
   const convertAmount = (amount, fromCurrency) => {
@@ -520,13 +523,13 @@ const Ledger = ({ fxRates = {} }) => {
           </div>
           {(direction === "expense" || direction === "income") && (
             <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {(direction === "income" ? categoryCtx.income : categoryCtx.expense).map(({ name }) => {
+              {(direction === "income" ? categoryCtx.income : categoryCtx.expense).map(({ id, name }) => {
                 const col = colorOf(name);
-                const active = category === name;
+                const active = category === id;
                 return (
                   <button
-                    key={name}
-                    onClick={() => handleCategoryClick(name)}
+                    key={id}
+                    onClick={() => handleCategoryClick(id)}
                     style={{
                       padding: "3px 10px", fontSize: 12, fontWeight: 600, borderRadius: 999, border: "none",
                       background: active ? col.text : col.bg,
@@ -811,7 +814,7 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
     }}>
       <span className="mono" style={{ color: "var(--ink-4)", fontSize: 12 }}>{item.date}</span>
       <Badge tone="neutral" size="sm" style={{ overflow: "hidden", textOverflow: "ellipsis", maxWidth: 80 }}>
-        {item.category}
+        {item.category_name || item.category}
       </Badge>
       <div style={{ overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
@@ -932,7 +935,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
     date:      item?.date || todayStr(),
     amount:    item?.amount ? String(item.amount) : "",
     currency:  item?.currency || "CNY",
-    category:  item?.category || "其他",
+    category:  item?.category || "0019",  // default: 其他 (expense)
     subcategory: item?.subcategory || "",
     note:      item?.note || "",
     recurring_type: item?.recurring_type || "",
@@ -943,7 +946,8 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const { expense: expenseCats, income: incomeCats } = React.useContext(CategoryContext);
-  const cats = (form.direction === "income" ? incomeCats : expenseCats).map(c => c.name);
+  // options: {value: id, label: name}
+  const cats = (form.direction === "income" ? incomeCats : expenseCats).map(c => ({ value: c.id, label: c.name }));
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.amount || !form.date) {
@@ -996,7 +1000,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", gap: 8 }}>
           {["expense", "income"].map(d => (
-            <button key={d} onClick={() => { set("direction", d); set("category", d === "income" ? "工资" : "其他"); }}
+            <button key={d} onClick={() => { set("direction", d); set("category", d === "income" ? "0020" : "0019"); }}
               style={{
                 flex: 1, height: 32, borderRadius: 8, border: "1px solid var(--line-2)",
                 background: form.direction === d ? "var(--ink)" : "transparent",
@@ -1026,7 +1030,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
         </FieldRow>
         <FieldRow label="分类">
           <Select value={form.category} onChange={v => set("category", v)}
-            options={cats.map(c => ({ value: c, label: c }))} />
+            options={cats} />
         </FieldRow>
         <FieldRow label="定期">
           <Select

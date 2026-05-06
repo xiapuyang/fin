@@ -54,7 +54,8 @@ class LedgerResponse(BaseModel):
     date: str
     amount: float
     currency: str
-    category: str
+    category: str  # stable ID e.g. "0001"
+    category_name: str  # resolved display name e.g. "餐饮"
     orig_category: Optional[str]
     subcategory: Optional[str]
     recurring_type: Optional[str]

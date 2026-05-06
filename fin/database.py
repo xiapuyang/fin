@@ -160,6 +160,46 @@ def _migrate_ledger_schema(db: "Session") -> None:
         db.commit()
 
 
+def _migrate_category_ids(db: "Session") -> None:
+    """Backfill ledger.category from name strings to sequential IDs.
+
+    Rows whose category is already a 4-digit ID are skipped (idempotent).
+    Unrecognised names are left unchanged.
+    """
+    from sqlalchemy import text
+    from fin.ledger_categories import BUILTIN_CATEGORY_IDS
+    from fin.categories_store import _load_custom
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+    if "category" not in cols:
+        return
+
+    # Build (direction, name) → id mapping
+    name_to_id: dict[tuple[str, str], str] = {}
+    for direction, names in BUILTIN_CATEGORY_IDS.items():
+        for name, cat_id in names.items():
+            name_to_id[(direction, name)] = cat_id
+    for c in _load_custom():
+        d, n, cid = c.get("direction"), c.get("name"), c.get("id")
+        if d and n and cid:
+            name_to_id[(d, n)] = cid
+
+    rows = db.execute(text("SELECT id, direction, category FROM ledger")).fetchall()
+    updated = 0
+    for row_id, direction, category in rows:
+        if category and len(category) == 4 and category.isdigit():
+            continue  # already an ID
+        cat_id = name_to_id.get((direction, category))
+        if cat_id:
+            db.execute(
+                text("UPDATE ledger SET category = :cid WHERE id = :rid"),
+                {"cid": cat_id, "rid": row_id},
+            )
+            updated += 1
+    if updated:
+        db.commit()
+
+
 def _backfill_recurring_subcategory(db: "Session") -> None:
     """Initialize subcategory = name for recurring items missing a subcategory.
 
@@ -257,6 +297,7 @@ def init_db() -> None:
         _migrate_alert_user_id(db)
         _migrate_columns(db)
         _migrate_ledger_schema(db)
+        _migrate_category_ids(db)
         _backfill_recurring_subcategory(db)
         _backfill_watchlist_user_id(db)
         _migrate_indexes(db)

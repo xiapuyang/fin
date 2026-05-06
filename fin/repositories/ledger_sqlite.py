@@ -76,7 +76,6 @@ class LedgerSQLiteRepository:
                 or_(
                     LedgerModel.name.ilike(like),
                     LedgerModel.note.ilike(like),
-                    LedgerModel.category.ilike(like),
                     LedgerModel.subcategory.ilike(like),
                     LedgerModel.orig_category.ilike(like),
                 )
@@ -263,12 +262,17 @@ class LedgerSQLiteRepository:
             {"date": k, "amount": round(v, 2)} for k, v in sorted(by_bucket.items())
         ]
 
-        # Pie — expense by category, in CNY
+        # Pie — expense by category, grouped by ID, label resolved to name
+        from fin import categories_store
+
         by_cat: dict[str, float] = defaultdict(float)
         for r in expense_rows:
             by_cat[r.category] += _value_in_currency(r, display_currency, fx_rates)
         pie = [
-            {"category": k, "amount": round(v, 2)}
+            {
+                "category": (categories_store.find(k) or {}).get("name", k),
+                "amount": round(v, 2),
+            }
             for k, v in sorted(by_cat.items(), key=lambda x: -x[1])
         ]
 

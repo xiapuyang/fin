@@ -1,32 +1,18 @@
-"""Persistent ledger categories.
+"""Ledger category store.
 
-Built-in categories are sourced from `fin.ledger_categories.BUILTIN_CATEGORY_COLORS`
-and are immutable from the UI — they are never written to the JSON file.
-User-added (custom) categories live in `data/ledger_categories.json`.
-
-The merged view returned by `list_all()` interleaves both, marking each row
-with an `is_builtin` flag so callers can enforce edit/delete permissions.
+Built-in categories (IDs 0001–0024) are defined in ledger_categories.py and
+are always active (status Y). Custom categories live in
+data/ledger_categories.json with sequential IDs continuing from 0025.
+Deleting a custom category sets status D (soft delete) so IDs are never reused.
 """
 
 import json
-import uuid
 
 from fin.config import LEDGER_CATEGORIES_PATH
-from fin.ledger_categories import (
-    BUILTIN_CATEGORY_COLORS,
-    EXPENSE_CATEGORIES,
-    INCOME_CATEGORIES,
-)
-
-_FALLBACK_COLOR = {"bg": "#ECEDEF", "text": "#6B7280"}
-_BUILTIN_NAMES = {
-    "expense": set(EXPENSE_CATEGORIES),
-    "income": set(INCOME_CATEGORIES),
-}
+from fin.ledger_categories import BUILTIN_ID_MAP, BUILTIN_MAX_ID
 
 
 def _load_custom() -> list[dict]:
-    """Read the custom-category JSON file. Returns [] if missing or corrupt."""
     if not LEDGER_CATEGORIES_PATH.exists():
         return []
     try:
@@ -37,94 +23,59 @@ def _load_custom() -> list[dict]:
 
 
 def _save_custom(rows: list[dict]) -> None:
-    """Atomically persist custom categories to disk."""
     LEDGER_CATEGORIES_PATH.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
 
 
-def _builtins() -> list[dict]:
-    """Synthesize built-in category rows from in-code defaults."""
-    out: list[dict] = []
-    for direction, names in (
-        ("expense", EXPENSE_CATEGORIES),
-        ("income", INCOME_CATEGORIES),
-    ):
-        for i, name in enumerate(names):
-            colors = BUILTIN_CATEGORY_COLORS.get(name, _FALLBACK_COLOR)
-            out.append(
-                {
-                    "id": f"builtin:{direction}:{name}",
-                    "direction": direction,
-                    "name": name,
-                    "bg_color": colors["bg"],
-                    "text_color": colors["text"],
-                    "is_builtin": True,
-                    "sort_order": i,
-                }
-            )
-    return out
-
-
-def list_all() -> list[dict]:
-    """Return built-ins followed by custom categories, all annotated with is_builtin."""
-    base_count = {
-        "expense": len(EXPENSE_CATEGORIES),
-        "income": len(INCOME_CATEGORIES),
-    }
-    seen_keys: dict[str, int] = {}  # key = direction:name
-    customs: list[dict] = []
-    for i, raw in enumerate(_load_custom()):
-        if not isinstance(raw, dict):
-            continue
-        direction = raw.get("direction")
-        name = raw.get("name")
-        if direction not in ("expense", "income") or not isinstance(name, str):
-            continue
-        key = f"{direction}:{name}"
-        if key in seen_keys:
-            continue  # silently dedupe corrupt JSON
-        seen_keys[key] = i
-        customs.append(
-            {
-                "id": raw.get("id") or str(uuid.uuid4()),
-                "direction": direction,
-                "name": name,
-                "bg_color": raw.get("bg_color", _FALLBACK_COLOR["bg"]),
-                "text_color": raw.get("text_color", _FALLBACK_COLOR["text"]),
-                "is_builtin": False,
-                "sort_order": base_count.get(direction, 0) + i,
-            }
-        )
-    return _builtins() + customs
-
-
-def find(id: str) -> dict | None:
-    """Look up a custom category by id. Returns None for built-ins or unknown ids."""
-    if id.startswith("builtin:"):
-        return None
-    for c in _load_custom():
-        if c.get("id") == id:
-            return dict(c)
-    return None
+def _next_id() -> str:
+    rows = _load_custom()
+    existing = [int(c["id"]) for c in rows if str(c.get("id", "")).isdigit()]
+    next_num = max(existing, default=BUILTIN_MAX_ID) + 1
+    return f"{next_num:04d}"
 
 
 def _name_taken(direction: str, name: str, ignore_id: str | None = None) -> bool:
-    """Check both built-in and custom rows for a name collision in the given direction."""
-    if name in _BUILTIN_NAMES.get(direction, set()):
-        return True
+    """Return True if name is already used in direction (built-in or active custom)."""
+    for cat in BUILTIN_ID_MAP.values():
+        if cat["direction"] == direction and cat["name"] == name:
+            return True
     return any(
         c.get("direction") == direction
         and c.get("name") == name
+        and c.get("status", "Y") == "Y"
         and c.get("id") != ignore_id
         for c in _load_custom()
     )
 
 
+def find(cat_id: str) -> dict | None:
+    """Return category record by ID, or None if not found / soft-deleted."""
+    if cat_id in BUILTIN_ID_MAP:
+        return BUILTIN_ID_MAP[cat_id]
+    for c in _load_custom():
+        if c.get("id") == cat_id and c.get("status", "Y") != "D":
+            return {**c, "is_builtin": False}
+    return None
+
+
+def list_all() -> list[dict]:
+    """Return all active categories: built-ins first, then active customs."""
+    builtins = list(BUILTIN_ID_MAP.values())
+    customs = [
+        {**c, "is_builtin": False}
+        for c in _load_custom()
+        if c.get("status", "Y") == "Y"
+    ]
+    return builtins + customs
+
+
 def add(direction: str, name: str, bg_color: str, text_color: str) -> dict:
-    """Append a new custom category. Raises ValueError on duplicate name."""
+    """Append a new custom category with the next sequential ID."""
+    if direction not in ("expense", "income"):
+        raise ValueError(f"invalid direction: {direction!r}")
     if _name_taken(direction, name):
         raise ValueError(f"category {name!r} already exists for {direction}")
     rows = _load_custom()
-    new_id = str(uuid.uuid4())
+    new_id = _next_id()
     rows.append(
         {
             "id": new_id,
@@ -132,10 +83,10 @@ def add(direction: str, name: str, bg_color: str, text_color: str) -> dict:
             "name": name,
             "bg_color": bg_color,
             "text_color": text_color,
+            "status": "Y",
         }
     )
     _save_custom(rows)
-    base_count = len(_BUILTIN_NAMES.get(direction, set()))
     return {
         "id": new_id,
         "direction": direction,
@@ -143,25 +94,28 @@ def add(direction: str, name: str, bg_color: str, text_color: str) -> dict:
         "bg_color": bg_color,
         "text_color": text_color,
         "is_builtin": False,
-        "sort_order": base_count + len(rows) - 1,
+        "status": "Y",
+        "sort_order": BUILTIN_MAX_ID + len(rows),
     }
 
 
 def update(
-    id: str,
+    cat_id: str,
     name: str | None = None,
     bg_color: str | None = None,
     text_color: str | None = None,
 ) -> dict:
-    """Update an existing custom category. Built-ins raise PermissionError."""
-    if id.startswith("builtin:"):
+    """Update a custom category. Built-ins raise PermissionError."""
+    if cat_id in BUILTIN_ID_MAP:
         raise PermissionError("built-in categories are read-only")
     rows = _load_custom()
     for row in rows:
-        if row.get("id") != id:
+        if row.get("id") != cat_id:
             continue
+        if row.get("status") == "D":
+            raise KeyError(cat_id)
         if name is not None and name != row["name"]:
-            if _name_taken(row["direction"], name, ignore_id=id):
+            if _name_taken(row["direction"], name, ignore_id=cat_id):
                 raise ValueError(
                     f"category {name!r} already exists for {row['direction']}"
                 )
@@ -172,15 +126,19 @@ def update(
             row["text_color"] = text_color
         _save_custom(rows)
         return {**row, "is_builtin": False, "sort_order": 0}
-    raise KeyError(id)
+    raise KeyError(cat_id)
 
 
-def delete(id: str) -> None:
-    """Remove a custom category. Built-ins raise PermissionError."""
-    if id.startswith("builtin:"):
+def delete(cat_id: str) -> None:
+    """Soft-delete a custom category (sets status D). Built-ins raise PermissionError."""
+    if cat_id in BUILTIN_ID_MAP:
         raise PermissionError("built-in categories cannot be deleted")
     rows = _load_custom()
-    remaining = [c for c in rows if c.get("id") != id]
-    if len(remaining) == len(rows):
-        raise KeyError(id)
-    _save_custom(remaining)
+    for row in rows:
+        if row.get("id") == cat_id:
+            if row.get("status") == "D":
+                raise KeyError(cat_id)
+            row["status"] = "D"
+            _save_custom(rows)
+            return
+    raise KeyError(cat_id)
