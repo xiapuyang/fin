@@ -73,13 +73,13 @@ async function fetchLedgerList({ direction, startDate, endDate, category, search
   return res.json();
 }
 
-async function fetchLedgerStats({ timeRange, startDate, endDate, fxRates, displayCurrency } = {}) {
+async function fetchLedgerStats({ timeRange, startDate, endDate, fxRates, currency } = {}) {
   const p = new URLSearchParams();
   if (timeRange) p.set("time_range", timeRange);
   if (startDate) p.set("start_date", startDate);
   if (endDate) p.set("end_date", endDate);
   if (fxRates) p.set("fx_rates", JSON.stringify(fxRates));
-  if (displayCurrency) p.set("display_currency", displayCurrency);
+  if (currency) p.set("display_currency", currency);
   const res = await fetch(`/api/ledger/stats?${p}`);
   if (!res.ok) throw new Error("fetch failed");
   return res.json();
@@ -175,7 +175,7 @@ function nextPaymentDate(dateStr, recurringType) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-const Ledger = ({ fxRates = {} }) => {
+const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
   const currentYear = new Date().getFullYear();
 
   const [years, setYears] = React.useState([]);
@@ -184,7 +184,6 @@ const Ledger = ({ fxRates = {} }) => {
   const [category, setCategory] = React.useState(null);
   const [search, setSearch] = React.useState("");
   const [searchInput, setSearchInput] = React.useState("");
-  const [displayCurrency, setDisplayCurrency] = React.useState("CNY");
   const [page, setPage] = React.useState(1);
 
   const [listData, setListData] = React.useState({ items: [], total: 0, pages: 1 });
@@ -232,24 +231,24 @@ const Ledger = ({ fxRates = {} }) => {
   // Convert any amount from its source currency to the display currency
   const convertAmount = (amount, fromCurrency) => {
     const from = fromCurrency || "CNY";
-    if (from === displayCurrency) return amount;
+    if (from === currency) return amount;
     const fromRate = fxRates[from] || 1;
-    const toRate = fxRates[displayCurrency] || 1;
+    const toRate = fxRates[currency] || 1;
     return amount * fromRate / toRate;
   };
-  const sym = CURRENCY_SYMBOL[displayCurrency] || "¥";
-  // disp(amount, decimals, sign): converts from CNY to displayCurrency. For aggregated/summary values.
+  const sym = CURRENCY_SYMBOL[currency] || "¥";
+  // disp(amount, decimals, sign): converts from CNY to currency. For aggregated/summary values.
   // Prefixes currency code for non-CNY so $-amounts disambiguate (CAD vs USD).
   // Sign goes between the code and the symbol — e.g. "USD −$1,234".
   const disp = (amount, decimals = 0, sign = "") => {
     const body = `${sign}${sym}${fmtNum(convertAmount(amount, "CNY"), decimals)}`;
-    return displayCurrency === "CNY" ? body : `${displayCurrency} ${body}`;
+    return currency === "CNY" ? body : `${currency} ${body}`;
   };
-  // dispStat(amount, decimals, sign): formats an amount already in displayCurrency
+  // dispStat(amount, decimals, sign): formats an amount already in currency
   // (returned directly from the stats API). No conversion applied.
   const dispStat = (amount, decimals = 0, sign = "") => {
     const body = `${sign}${sym}${fmtNum(amount, decimals)}`;
-    return displayCurrency === "CNY" ? body : `${displayCurrency} ${body}`;
+    return currency === "CNY" ? body : `${currency} ${body}`;
   };
   // nativeFmt(amount, currency): renders an amount in its stored currency. For per-row display.
   const nativeFmt = (amount, currency = "CNY", decimals = 0) =>
@@ -283,7 +282,7 @@ const Ledger = ({ fxRates = {} }) => {
     setLoading(true);
     Promise.all([
       fetchLedgerList({ direction, startDate, endDate, category, search, page }),
-      fetchLedgerStats({ startDate, endDate, fxRates, displayCurrency }),
+      fetchLedgerStats({ startDate, endDate, fxRates, currency }),
       fetchLedgerRecurring(false),
       fetchLedgerRecurring(true),
     ]).then(([list, stats, rec, recExpired]) => {
@@ -292,15 +291,15 @@ const Ledger = ({ fxRates = {} }) => {
       setRecurring(rec);
       setRecurringExpired(recExpired);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [activeYear, direction, category, search, page, fxRates, displayCurrency]);
+  }, [activeYear, direction, category, search, page, fxRates, currency]);
 
   // Chart: yearly bars for 全部年, monthly bars for specific year
   React.useEffect(() => {
     const opts = (activeYear && activeYear !== 0)
-      ? { ...yearRange(activeYear), fxRates, displayCurrency }
-      : { timeRange: "all", fxRates, displayCurrency };
+      ? { ...yearRange(activeYear), fxRates, currency }
+      : { timeRange: "all", fxRates, currency };
     fetchLedgerStats(opts).then(d => setChartData(d)).catch(() => {});
-  }, [activeYear, fxRates, displayCurrency]);
+  }, [activeYear, fxRates, currency]);
 
   const handleYearChange = (y) => { setActiveYear(Number(y)); setPage(1); };
   const handleDirectionChange = (d) => { setDirection(d); setCategory(null); setPage(1); };
@@ -311,7 +310,7 @@ const Ledger = ({ fxRates = {} }) => {
     const { startDate, endDate } = yearRange(activeYear === 0 ? null : activeYear);
     return Promise.all([
       fetchLedgerList({ direction, startDate, endDate, category, search, page }),
-      fetchLedgerStats({ startDate, endDate, fxRates, displayCurrency }),
+      fetchLedgerStats({ startDate, endDate, fxRates, currency }),
       fetchLedgerRecurring(false),
       fetchLedgerRecurring(true),
     ]).then(([list, stats, rec, recExpired]) => {
@@ -370,20 +369,20 @@ const Ledger = ({ fxRates = {} }) => {
   const recurringByType = groupRecurring(recurring, true);
   const recurringExpiredByType = groupRecurring(recurringExpired, false);
 
-  // Compute monthly equivalent in displayCurrency:
-  // prefer amounts_json[displayCurrency] (historically accurate), fall back to FX conversion
+  // Compute monthly equivalent in currency:
+  // prefer amounts_json[currency] (historically accurate), fall back to FX conversion
   const toDisplayAmt = (r) => {
     if (r.amounts_json) {
       try {
         const aj = JSON.parse(r.amounts_json);
-        if (displayCurrency in aj) return aj[displayCurrency];
+        if (currency in aj) return aj[currency];
         // partial amounts_json — go through CNY
         const cny = aj.CNY ?? r.amount * (fxRates[r.currency || "CNY"] || 1);
-        return cny / (fxRates[displayCurrency] || 1);
+        return cny / (fxRates[currency] || 1);
       } catch (_) {}
     }
     const cny = r.amount * (fxRates[r.currency || "CNY"] || 1);
-    return cny / (fxRates[displayCurrency] || 1);
+    return cny / (fxRates[currency] || 1);
   };
 
   const monthlyEquiv = recurring.reduce((s, r) => {
@@ -405,12 +404,6 @@ const Ledger = ({ fxRates = {} }) => {
         subtitle="Personal Cashflow · 自动分类 · 年度报表"
         right={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Select
-              value={displayCurrency}
-              onChange={setDisplayCurrency}
-              options={CURRENCIES.map(c => ({ value: c, label: c }))}
-              style={{ width: 84 }}
-            />
             <Select
               value={String(activeYear || 0)}
               onChange={handleYearChange}
