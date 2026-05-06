@@ -19,20 +19,29 @@ from fin.config import MARKET_STATE_PATH
 
 logger = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = 300  # 5 minutes
+UPDATE_INTERVAL: int = 300  # 5 minutes
 
-_CALENDARS = {
-    "US": xcals.get_calendar("XNYS"),
-    "HK": xcals.get_calendar("XHKG"),
-    "CN": xcals.get_calendar("XSHG"),
-}
+_CALENDARS: dict | None = None
 
 _US_PRE_OFFSET = pd.Timedelta(hours=5, minutes=30)  # open − 5h30m = 4:00 AM EDT
 _US_POST_OFFSET = pd.Timedelta(hours=4)  # close + 4h = 8:00 PM EDT
 
 
+def _get_calendars() -> dict:
+    """Return exchange calendar instances, initializing lazily on first call."""
+    global _CALENDARS
+    if _CALENDARS is None:
+        _CALENDARS = {
+            "US": xcals.get_calendar("XNYS"),
+            "HK": xcals.get_calendar("XHKG"),
+            "CN": xcals.get_calendar("XSHG"),
+        }
+    return _CALENDARS
+
+
 def _us_state(now: pd.Timestamp) -> str:
-    cal = _CALENDARS["US"]
+    """Return US market state (CLOSED/PRE/REGULAR/POST) for the given UTC timestamp."""
+    cal = _get_calendars()["US"]
     try:
         if not cal.is_session(now.date()):
             return "CLOSED"
@@ -51,13 +60,17 @@ def _us_state(now: pd.Timestamp) -> str:
 
 
 def _simple_state(market: str, now: pd.Timestamp) -> str:
+    """Return REGULAR if the given market is open at now, else CLOSED."""
     try:
-        return "REGULAR" if _CALENDARS[market].is_open_on_minute(now) else "CLOSED"
+        return (
+            "REGULAR" if _get_calendars()[market].is_open_on_minute(now) else "CLOSED"
+        )
     except Exception:
         return "CLOSED"
 
 
 def compute_and_write() -> None:
+    """Compute current market states and write them atomically to MARKET_STATE_PATH."""
     now = pd.Timestamp.now(tz="UTC")
     states = {
         "US": _us_state(now),
@@ -65,13 +78,16 @@ def compute_and_write() -> None:
         "CN": _simple_state("CN", now),
         "updated_at": now.isoformat(),
     }
-    MARKET_STATE_PATH.write_text(json.dumps(states))
+    tmp = MARKET_STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(states))
+    tmp.replace(MARKET_STATE_PATH)
     logger.info(
         "market states: US=%s HK=%s CN=%s", states["US"], states["HK"], states["CN"]
     )
 
 
 def _loop() -> None:
+    """Run compute_and_write in an infinite loop, sleeping UPDATE_INTERVAL seconds between iterations."""
     while True:
         try:
             compute_and_write()
@@ -81,6 +97,7 @@ def _loop() -> None:
 
 
 def start_market_state_updater() -> threading.Thread:
+    """Start the background market state updater thread and return it."""
     t = threading.Thread(target=_loop, daemon=True, name="market-state-updater")
     t.start()
     logger.info("Market state updater started (interval=%ds)", UPDATE_INTERVAL)

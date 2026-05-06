@@ -64,8 +64,8 @@ def health():
 def get_market_states():
     """Return current market open/close states from market_state.json.
 
-    Written by check_market_state.py (runs every minute via cron).
-    Falls back to an empty dict if the file is missing.
+    Written by the market_state_updater background thread (every 5 minutes).
+    Falls back to an empty dict if the file is missing or unreadable.
     """
     try:
         return json.loads(MARKET_STATE_PATH.read_text())
