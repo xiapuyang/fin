@@ -40,7 +40,7 @@ const computePositions = (holdings, transactions, prices = {}) => {
     const sym = {
       price: dbPrice.price ?? symFallback.price ?? 0,
       prevClose: dbPrice.prev_close ?? symFallback.prevClose ?? 0,
-      afterHoursChangePct: dbPrice.market_state === "POST" ? (dbPrice.after_hours_change_pct ?? null) : null,
+      afterHoursChangePct: (dbPrice.market_state === "POST" || dbPrice.market_state === "PRE") ? (dbPrice.after_hours_change_pct ?? null) : null,
       name: symFallback.name || h.name || h.code,
       asset_type: dbPrice.asset_type ?? null,
     };

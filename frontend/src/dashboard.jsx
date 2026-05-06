@@ -76,29 +76,31 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
   }, []);
 
+  // Batch-fetch prices for watchlist + enabled alerts in one request
   React.useEffect(() => {
     const ctrl = new AbortController();
-    watchlist.forEach(w => {
-      if (watchQuotes[w.symbol]) return;
-      fetch(`/api/quote/${encodeURIComponent(w.symbol)}`, { signal: ctrl.signal })
-        .then(r => r.ok ? r.json() : null)
-        .then(q => q && setWatchQuotes(prev => ({ ...prev, [w.symbol]: q })))
-        .catch(() => {});
-    });
+    const watchSyms = watchlist.map(w => w.symbol);
+    const alertSyms = alerts.filter(a => a.enabled).map(a => a.code);
+    const all = [...new Set([...watchSyms, ...alertSyms])];
+    if (!all.length) return () => ctrl.abort();
+    fetch(`/api/prices?symbols=${all.map(encodeURIComponent).join(",")}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        setWatchQuotes(prev => {
+          const next = { ...prev };
+          watchSyms.forEach(s => { if (data[s]) next[s] = data[s]; });
+          return next;
+        });
+        setAlertQuotes(prev => {
+          const next = { ...prev };
+          alertSyms.forEach(s => { if (data[s]) next[s] = data[s]; });
+          return next;
+        });
+      })
+      .catch(() => {});
     return () => ctrl.abort();
-  }, [watchlist.map(w => w.symbol).join(",")]);
-
-  // Fetch live quotes for enabled alert symbols
-  React.useEffect(() => {
-    const ctrl = new AbortController();
-    alerts.filter(a => a.enabled).forEach(a => {
-      fetch(`/api/quote/${encodeURIComponent(a.code)}`, { signal: ctrl.signal })
-        .then(r => r.ok ? r.json() : null)
-        .then(q => q && setAlertQuotes(prev => ({ ...prev, [a.code]: q })))
-        .catch(() => {});
-    });
-    return () => ctrl.abort();
-  }, [alerts.filter(a => a.enabled).map(a => a.code).join(",")]);
+  }, [watchlist.map(w => w.symbol).join(","), alerts.filter(a => a.enabled).map(a => a.code).join(",")]);
 
   const watch = watchlist.map(w => {
     const q = watchQuotes[w.symbol];

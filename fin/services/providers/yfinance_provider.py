@@ -54,32 +54,17 @@ class YFinanceProvider(QuoteProvider):
             market_state = getattr(fi, "market_state", None)
             regular_close = None
 
-            # Some symbols (e.g. GOOG) don't expose market_state via fast_info.
-            # Call .info to get marketState and extended-hours price when needed.
-            if not market_state:
+            # fast_info lacks extended-hours price and sometimes market_state.
+            # Call .info to fill both when needed.
+            if not market_state or market_state in ("PRE", "POST"):
                 try:
-                    info = ticker.info
-                    market_state = info.get("marketState")
-                    regular_close = info.get("regularMarketPrice")
-                    if market_state == "PRE":
-                        price = info.get("preMarketPrice") or price
-                    elif market_state == "POST":
-                        price = info.get("postMarketPrice") or price
-                except Exception:
-                    pass
-
-            # fast_info.last_price is regular-session only; use extended price
-            # from .info when market_state is already known from fast_info.
-            elif market_state in ("PRE", "POST"):
-                try:
-                    info = ticker.info
-                    regular_close = info.get("regularMarketPrice")
-                    field = (
-                        "preMarketPrice" if market_state == "PRE" else "postMarketPrice"
+                    market_state, regular_close, price = self._enrich_extended_hours(
+                        ticker, market_state, price
                     )
-                    price = info.get(field) or price
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(
+                        "extended-hours info fetch failed for %s: %s", symbol, e
+                    )
 
             return {
                 "price": price,
@@ -94,6 +79,25 @@ class YFinanceProvider(QuoteProvider):
         except Exception as e:
             logger.warning("live fetch failed for %s: %s", symbol, e)
             return {}
+
+    def _enrich_extended_hours(
+        self, ticker: "yf.Ticker", market_state: str | None, price: float
+    ) -> tuple[str | None, float | None, float]:
+        """Fetch extended-hours price data from ticker.info.
+
+        Returns (market_state, regular_close, extended_price).
+        market_state is updated from .info when initially None.
+        price is replaced with pre/post market price when available.
+        """
+        info = ticker.info
+        if market_state is None:
+            market_state = info.get("marketState")
+        regular_close = info.get("regularMarketPrice")
+        if market_state == "PRE":
+            price = info.get("preMarketPrice") or price
+        elif market_state == "POST":
+            price = info.get("postMarketPrice") or price
+        return market_state, regular_close, price
 
     def fetch_full(self, symbol: str) -> dict:
         """Fetch comprehensive quote via yfinance .info."""
