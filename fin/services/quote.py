@@ -100,11 +100,11 @@ class QuoteService:
     def get_quote(self, symbol: str) -> dict | None:
         symbol = normalize_symbol(symbol)
         stock = self._repo.get_by_symbol(symbol)
+        market_key = _market_for_symbol(symbol)
 
         if stock and stock.price and self._is_fresh(stock.updated_at):
             result = _stock_to_dict(stock)
-            states = _read_market_states()
-            result["market_state"] = states.get(_market_for_symbol(symbol))
+            result["market_state"] = _read_market_states().get(market_key)
             return result
 
         try:
@@ -113,19 +113,20 @@ class QuoteService:
             return None
         data = provider.fetch_live(symbol)
 
+        states = _read_market_states()
         if data:
             safe = {k: v for k, v in data.items() if k not in _NON_DB_FIELDS}
+            if safe.get("regular_close") is None:
+                safe.pop("regular_close", None)
             self._repo.upsert(symbol, safe)
             stock = self._repo.get_by_symbol(symbol)
             result = _stock_to_dict(stock)
-            states = _read_market_states()
-            result["market_state"] = states.get(_market_for_symbol(symbol))
+            result["market_state"] = states.get(market_key)
             return result
 
         if stock and stock.price:
             result = _stock_to_dict(stock)
-            states = _read_market_states()
-            result["market_state"] = states.get(_market_for_symbol(symbol))
+            result["market_state"] = states.get(market_key)
             return result
 
         return None
