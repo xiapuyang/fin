@@ -109,7 +109,7 @@ const computeAccountXIRR = (incomeItems, positions) => {
 };
 
 // ── Holdings root component ───────────────────────────────────────────────────
-const Holdings = () => {
+const Holdings = ({ currency = "CNY" }) => {
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
   const [tab, setTab] = React.useState("positions");
@@ -129,8 +129,6 @@ const Holdings = () => {
   const [showAccountModal, setShowAccountModal] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState(null);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
-  const [summaryCcy, setSummaryCcy] = React.useState("USD");
-
   React.useEffect(() => {
     Promise.all([apiGetAccounts(), apiGetHoldings(), apiGetTransactions(), apiGetIncome()])
       .then(([accts, h, t, i]) => {
@@ -236,8 +234,8 @@ const Holdings = () => {
     .reduce((s, i) => s + i.amount * ((FX[i.currency] || 1) / acctFx) * (i.category === "withdrawal" ? -1 : 1), 0);
   const acctXIRR = React.useMemo(() => computeAccountXIRR(acctIncome, acctPositions), [acctIncome, acctPositions]);
 
-  const summaryFx = FX[summaryCcy] || 1;
-  const summarySym = ccySymbol(summaryCcy);
+  const summaryFx = FX[currency] || 1;
+  const summarySym = ccySymbol(currency);
 
   const isBond = (p) => p.sym?.asset_type === "bond";
   const knownMarkets = ["US", "HK", "CN"];
@@ -315,14 +313,7 @@ const Holdings = () => {
       {/* ── All-accounts aggregate ─────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
         <Card padding={20}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
-            <div style={{ display: "flex", gap: 3 }}>
-              {CURRENCIES.map(c => (
-                <button key={c} onClick={() => setSummaryCcy(c)} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4, border: `1px solid ${summaryCcy===c?"var(--ink)":"var(--line)"}`, background: summaryCcy===c?"var(--ink)":"transparent", color: summaryCcy===c?"var(--paper)":"var(--ink-4)", cursor: "pointer" }}>{c}</button>
-              ))}
-            </div>
-          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
             {pricesReady ? `${summarySym}${fmtNum(allTotal/summaryFx, 0)}` : "—"}
           </div>

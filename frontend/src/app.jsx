@@ -15,6 +15,7 @@ const App = () => {
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
   const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
+  const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
   const [showSettings, setShowSettings] = React.useState(false);
 
@@ -49,8 +50,8 @@ const App = () => {
   const Page = {
     dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
-    holdings:  <Holdings/>,
-    ledger:    <Ledger fxRates={fxRates}/>,
+    holdings:  <Holdings currency={currency}/>,
+    ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
     balance:   <BalanceSheet/>,
     fire:      <Fire/>,
   }[route];
@@ -59,7 +60,7 @@ const App = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} onOpenSettings={() => setShowSettings(true)}/>
+        <TopBar route={route} fxRates={fxRates} currency={currency} onCurrencyChange={setCurrency} onOpenSettings={() => setShowSettings(true)}/>
         <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
           {Page}
         </div>
@@ -134,11 +135,14 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, onOpenSettings }) => {
+const CURRENCY_PICKER_ROUTES = new Set(["holdings", "ledger", "balance"]);
+
+const TopBar = ({ route, fxRates = {}, currency = "CNY", onCurrencyChange, onOpenSettings }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
   const cad = fxRates.CAD ?? 5.3;
+  const showCurrencyPicker = CURRENCY_PICKER_ROUTES.has(route);
   return (
     <div style={{
       height: 52, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -151,6 +155,22 @@ const TopBar = ({ route, fxRates = {}, onOpenSettings }) => {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)} · CAD ¥{cad.toFixed(2)}</span>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
+        {showCurrencyPicker && (
+          <>
+            <div style={{ display: "flex", gap: 2 }}>
+              {CURRENCIES.map(c => (
+                <button key={c} onClick={() => onCurrencyChange(c)} style={{
+                  fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4, lineHeight: 1.6,
+                  border: `1px solid ${currency === c ? "var(--ink)" : "var(--line)"}`,
+                  background: currency === c ? "var(--ink)" : "transparent",
+                  color: currency === c ? "var(--paper)" : "var(--ink-4)",
+                  cursor: "pointer",
+                }}>{c}</button>
+              ))}
+            </div>
+            <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
+          </>
+        )}
         <Button variant="ghost" size="sm" icon="search">Search…</Button>
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
         <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>S</div>
