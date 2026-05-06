@@ -9,6 +9,7 @@ from datetime import datetime
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
+from fin import categories_store
 from fin.database import get_db
 from fin.ledger_categories import RECURRING_TYPE_MAP, SUBCATEGORY_MAP
 from fin.models.ledger import LedgerModel
@@ -32,6 +33,11 @@ _TS_FMT = "%Y-%m-%d %H:%M:%S"
 _DATETIME_RE = re.compile(r"^(\w+ \d+, \d{4} \d+:\d+ [AP]M)")
 
 
+def _resolve_category_name(cat_id: str) -> str:
+    cat = categories_store.find(cat_id)
+    return cat["name"] if cat else cat_id
+
+
 def _ledger_response(e: LedgerModel, count: int | None = None) -> LedgerResponse:
     return LedgerResponse(
         id=e.id,
@@ -41,6 +47,7 @@ def _ledger_response(e: LedgerModel, count: int | None = None) -> LedgerResponse
         amount=e.amount,
         currency=e.currency,
         category=e.category,
+        category_name=_resolve_category_name(e.category),
         orig_category=e.orig_category,
         subcategory=e.subcategory,
         recurring_type=e.recurring_type,
@@ -109,7 +116,7 @@ def _parse_notion_row(row: dict) -> tuple[LedgerCreate | None, str]:
         return None, f"unparseable date: {row.get('消费日期', '')!r}"
 
     raw_sub = row.get("分类", "").strip()
-    category = SUBCATEGORY_MAP.get(raw_sub, "其他")
+    category = SUBCATEGORY_MAP.get(raw_sub, "0019")
 
     raw_type = row.get("消费类型", "").strip()
     recurring_type = RECURRING_TYPE_MAP.get(raw_type)

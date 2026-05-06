@@ -23,4 +23,5 @@ class CategoryResponse(BaseModel):
     bg_color: str
     text_color: str
     is_builtin: bool
-    sort_order: int
+    status: str = "Y"
+    sort_order: int = 0
