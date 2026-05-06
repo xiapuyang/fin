@@ -1,9 +1,5 @@
 /* Module 03 — 收入支出 */
 
-const CURRENCIES = ["CNY", "CAD", "USD", "HKD"];
-
-const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", CAD: "$", HKD: "$" };
-
 const RECURRING_LABEL = {
   monthly:       "每月",
   annual:        "每年",

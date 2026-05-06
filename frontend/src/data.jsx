@@ -1,5 +1,9 @@
 /* Sample data for fin. All in-memory. */
 
+// Single source of truth for supported currencies — mirrors fin/config.py SUPPORTED_CURRENCIES.
+const CURRENCIES = ["CNY", "USD", "HKD", "CAD"];
+const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", HKD: "HK$", CAD: "CA$" };
+
 const SYMBOLS = {
   "美股指数 US Index": [
     { code: "^GSPC", name: "S&P 500",    market: "US", currency: "USD" },

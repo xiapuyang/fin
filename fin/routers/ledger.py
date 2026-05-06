@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, Up
 from sqlalchemy.orm import Session
 
 from fin import categories_store
+from fin.config import SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.ledger_categories import RECURRING_TYPE_MAP, SUBCATEGORY_MAP
 from fin.models.ledger import LedgerModel
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 _TS_FMT = "%Y-%m-%d %H:%M:%S"
+_CCY_PATTERN = "^(" + "|".join(SUPPORTED_CURRENCIES) + ")$"
 
 # Matches "May 25, 2025 9:22 PM (EDT)" — capture up to AM/PM, discard timezone
 _DATETIME_RE = re.compile(r"^(\w+ \d+, \d{4} \d+:\d+ [AP]M)")
@@ -225,7 +227,7 @@ def list_recurring(
 def list_recurring_series(
     recurring_type: str = Query(...),
     category: str = Query(...),
-    subcategory: str = Query(...),
+    subcategory: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     repo = LedgerSQLiteRepository(db)
@@ -243,10 +245,16 @@ def ledger_stats(
     end_date: str | None = Query(default=None),
     category: str | None = Query(default=None),
     fx_rates: str | None = Query(default=None),
-    display_currency: str = Query(default="CNY"),
+    display_currency: str = Query(default="CNY", pattern=_CCY_PATTERN),
     db: Session = Depends(get_db),
 ):
-    parsed_fx = json.loads(fx_rates) if fx_rates else None
+    if fx_rates:
+        try:
+            parsed_fx = json.loads(fx_rates)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="invalid fx_rates JSON")
+    else:
+        parsed_fx = None
     repo = LedgerSQLiteRepository(db)
     data = repo.get_stats(
         MOCK_USER_ID,
@@ -306,7 +314,7 @@ def backfill_amounts(
     db: Session = Depends(get_db),
 ):
     """Compute amounts_json for rows where it is NULL or missing currencies."""
-    currencies = ["CNY", "USD", "CAD", "HKD"]
+    currencies = SUPPORTED_CURRENCIES
     repo = LedgerSQLiteRepository(db)
     updated = repo.backfill_amounts_json(MOCK_USER_ID, fx_rates, currencies)
     logger.info("Backfilled amounts_json for %d ledger rows", updated)
