@@ -184,10 +184,12 @@ def _migrate_category_ids(db: "Session") -> None:
         if d and n and cid:
             name_to_id[(d, n)] = cid
 
+    import re
+
     rows = db.execute(text("SELECT id, direction, category FROM ledger")).fetchall()
     updated = 0
     for row_id, direction, category in rows:
-        if category and len(category) == 4 and category.isdigit():
+        if category and re.fullmatch(r"0\d{3}", category):
             continue  # already an ID
         cat_id = name_to_id.get((direction, category))
         if cat_id:
@@ -253,6 +255,15 @@ def _migrate_indexes(db: "Session") -> None:
         (
             "ix_users_email",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email)",
+        ),
+        (
+            "uq_ledger_dedup",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_dedup "
+            "ON ledger(user_id, direction, name, date, amount)",
+        ),
+        (
+            "ix_ledger_user_date",
+            "CREATE INDEX IF NOT EXISTS ix_ledger_user_date ON ledger(user_id, date)",
         ),
     ]
     existing = {

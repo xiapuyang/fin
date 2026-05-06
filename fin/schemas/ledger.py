@@ -1,22 +1,20 @@
-from typing import Optional
-
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class LedgerCreate(BaseModel):
-    direction: str  # "income" | "expense"
+    direction: str = Field(pattern="^(income|expense)$")
     name: str
     date: str
     amount: float
     currency: str = "CNY"
     category: str
-    orig_category: Optional[str] = None
-    subcategory: Optional[str] = None
-    recurring_type: Optional[str] = None
+    orig_category: str | None = None
+    subcategory: str | None = None
+    recurring_type: str | None = None
     is_expired: bool = False
-    expiry_date: Optional[str] = None
-    note: Optional[str] = None
-    amounts_json: Optional[str] = None  # JSON: {CNY, USD, CAD, HKD} at entry time
+    expiry_date: str | None = None
+    note: str | None = None
+    amounts_json: str | None = None  # JSON: {CNY, USD, CAD, HKD} at entry time
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerCreate":
@@ -26,19 +24,19 @@ class LedgerCreate(BaseModel):
 
 
 class LedgerUpdate(BaseModel):
-    direction: Optional[str] = None
-    name: Optional[str] = None
-    date: Optional[str] = None
-    amount: Optional[float] = None
-    currency: Optional[str] = None
-    category: Optional[str] = None
-    orig_category: Optional[str] = None
-    subcategory: Optional[str] = None
-    recurring_type: Optional[str] = None
-    is_expired: Optional[bool] = None
-    expiry_date: Optional[str] = None
-    note: Optional[str] = None
-    amounts_json: Optional[str] = None
+    direction: str | None = None
+    name: str | None = None
+    date: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    category: str | None = None
+    orig_category: str | None = None
+    subcategory: str | None = None
+    recurring_type: str | None = None
+    is_expired: bool | None = None
+    expiry_date: str | None = None
+    note: str | None = None
+    amounts_json: str | None = None
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerUpdate":
@@ -56,17 +54,17 @@ class LedgerResponse(BaseModel):
     currency: str
     category: str  # stable ID e.g. "0001"
     category_name: str  # resolved display name e.g. "餐饮"
-    orig_category: Optional[str]
-    subcategory: Optional[str]
-    recurring_type: Optional[str]
+    orig_category: str | None
+    subcategory: str | None
+    recurring_type: str | None
     is_expired: bool
-    expiry_date: Optional[str]
-    note: Optional[str]
-    amounts_json: Optional[str] = None
+    expiry_date: str | None
+    note: str | None
+    amounts_json: str | None = None
     create_time: str
     update_time: str
     # Populated only by /api/ledger/recurring — number of records in the dedup'd series
-    count: Optional[int] = None
+    count: int | None = None
 
 
 class LedgerListResponse(BaseModel):
@@ -100,3 +98,14 @@ class LedgerStatsResponse(BaseModel):
     bars: list[LedgerStatBar]
     pie: list[LedgerStatPie]
     summary: LedgerSummary
+
+
+class LedgerImportSkipped(BaseModel):
+    row: int
+    name: str
+    reason: str
+
+
+class LedgerImportResponse(BaseModel):
+    imported: int
+    skipped: list[LedgerImportSkipped]
