@@ -4,7 +4,7 @@ const NAV = [
   { id: "dashboard", icon: "dashboard", label: "Dashboard",  cn: "总览"    },
   { id: "alerts",    icon: "bell",      label: "Alerts",     cn: "提醒",       tag: "01" },
   { id: "holdings",  icon: "wallet",    label: "Portfolio",  cn: "投资组合",    tag: "02" },
-  { id: "ledger",    icon: "book",      label: "Ledger",     cn: "记账",       tag: "03" },
+  { id: "ledger",    icon: "book",      label: "Ledger",     cn: "收入支出",    tag: "03" },
   { id: "balance",   icon: "target",    label: "Balance",    cn: "资产负债",    tag: "04" },
   { id: "fire",      icon: "spark",     label: "FIRE",       cn: "退休计划",    tag: "05" },
 ];
@@ -14,7 +14,7 @@ const App = () => {
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
-  const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, EUR: 7.84, CNY: 1 });
+  const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, EUR: 7.84, CNY: 1, CAD: 5.3 });
   const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
   const [showSettings, setShowSettings] = React.useState(false);
 
@@ -50,7 +50,7 @@ const App = () => {
     dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings/>,
-    ledger:    <Ledger/>,
+    ledger:    <Ledger fxRates={fxRates}/>,
     balance:   <BalanceSheet/>,
     fire:      <Fire/>,
   }[route];
@@ -138,6 +138,7 @@ const TopBar = ({ route, fxRates = {}, onOpenSettings }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
+  const cad = fxRates.CAD ?? 5.3;
   return (
     <div style={{
       height: 52, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -148,7 +149,7 @@ const TopBar = ({ route, fxRates = {}, onOpenSettings }) => {
         <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{cur?.cn} {cur?.label}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)}</span>
+        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)} · CAD ¥{cad.toFixed(2)}</span>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <Button variant="ghost" size="sm" icon="search">Search…</Button>
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>

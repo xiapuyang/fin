@@ -78,8 +78,8 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
   const padL = showAxis ? 44 : 4, padR = 8, padT = 8, padB = 22;
   const w = width - padL - padR, h = height - padT - padB;
   const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
-  const bw = w / data.length * 0.7;
-  const gap = w / data.length * 0.3;
+  const bw = Math.min(w / data.length * 0.7, 48);
+  const gap = w / data.length - bw;
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       {showAxis && [0, .25, .5, .75, 1].map((p, i) => (

@@ -135,6 +135,47 @@ def _backfill_watchlist_user_id(db: "Session") -> None:
         db.commit()
 
 
+def _migrate_ledger_schema(db: "Session") -> None:
+    """Rename subcategory → orig_category and add new user-defined subcategory column."""
+    from sqlalchemy import text
+
+    def cols():
+        return [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+
+    current = cols()
+    if not current:
+        return  # table not yet created; create_all will use the new model
+    if "subcategory" in current and "orig_category" not in current:
+        db.execute(
+            text("ALTER TABLE ledger RENAME COLUMN subcategory TO orig_category")
+        )
+        db.commit()
+        current = cols()
+    if "subcategory" not in current:
+        db.execute(text("ALTER TABLE ledger ADD COLUMN subcategory VARCHAR"))
+        db.commit()
+
+
+def _backfill_recurring_subcategory(db: "Session") -> None:
+    """Initialize subcategory = name for recurring items missing a subcategory.
+
+    Recurring items use (recurring_type, category, subcategory, amount) as the
+    dedup key — name is a sensible default identity when subcategory is unset.
+    """
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(ledger)"))]
+    if "subcategory" not in cols:
+        return
+    db.execute(
+        text(
+            "UPDATE ledger SET subcategory = name "
+            "WHERE recurring_type IS NOT NULL AND subcategory IS NULL"
+        )
+    )
+    db.commit()
+
+
 def _migrate_indexes(db: "Session") -> None:
     """Idempotently create unique indexes for deduplication."""
     from sqlalchemy import text
@@ -196,6 +237,7 @@ def init_db() -> None:
     import fin.models.holding  # noqa: F401
     import fin.models.income  # noqa: F401
     import fin.models.transaction  # noqa: F401
+    import fin.models.ledger  # noqa: F401
 
     db: Session = SessionLocal()
     try:
@@ -210,6 +252,8 @@ def init_db() -> None:
         _seed_mock_user(db)
         _migrate_alert_user_id(db)
         _migrate_columns(db)
+        _migrate_ledger_schema(db)
+        _backfill_recurring_subcategory(db)
         _backfill_watchlist_user_id(db)
         _migrate_indexes(db)
     finally:
