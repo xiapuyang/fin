@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import LAST_CHECK_PATH
+from fin.config import LAST_CHECK_PATH, SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -22,6 +22,12 @@ class SettingsPayload(BaseModel):
     notify_email: str | None = None
     notify_enabled: bool | None = None
     timezone: str | None = None
+
+
+@router.get("/config")
+def get_config():
+    """Return static app configuration consumed by the frontend."""
+    return {"currencies": SUPPORTED_CURRENCIES}
 
 
 @router.get("/settings")

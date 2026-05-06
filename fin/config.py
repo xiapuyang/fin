@@ -14,6 +14,8 @@ MARKET_STATE_PATH = DATA_DIR / "market_state.json"
 API_HOST = "0.0.0.0"
 API_PORT = 8899
 
+SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
+
 # Ensure directories exist at import time
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)

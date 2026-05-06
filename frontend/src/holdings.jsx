@@ -1,6 +1,6 @@
 /* Module 02 — Holdings: positions + transactions + income, per-account */
 
-const ccySymbol = (ccy) => ccy === "USD" ? "$" : ccy === "HKD" ? "HK$" : "¥";
+const ccySymbol = (ccy) => CURRENCY_SYMBOL[ccy] || "¥";
 
 // ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
 // cashFlows: [{date:"YYYY-MM-DD", amount:float}]
@@ -318,7 +318,7 @@ const Holdings = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
             <div style={{ display: "flex", gap: 3 }}>
-              {["CNY","USD"].map(c => (
+              {CURRENCIES.map(c => (
                 <button key={c} onClick={() => setSummaryCcy(c)} style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4, border: `1px solid ${summaryCcy===c?"var(--ink)":"var(--line)"}`, background: summaryCcy===c?"var(--ink)":"transparent", color: summaryCcy===c?"var(--paper)":"var(--ink-4)", cursor: "pointer" }}>{c}</button>
               ))}
             </div>
