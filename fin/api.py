@@ -12,7 +12,9 @@ from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
+from fin.routers.categories import router as categories_router
 from fin.routers.holdings import router as holdings_router
+from fin.routers.ledger import router as ledger_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
 from fin.services.market_state_updater import start_market_state_updater
@@ -54,7 +56,9 @@ async def no_cache(request: Request, call_next):
 
 
 app.include_router(alerts_router)
+app.include_router(categories_router)
 app.include_router(holdings_router)
+app.include_router(ledger_router)
 app.include_router(settings_router)
 app.include_router(watchlist_router)
 

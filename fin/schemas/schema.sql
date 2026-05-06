@@ -147,3 +147,25 @@ CREATE TABLE IF NOT EXISTS watchlist (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_watchlist_user_symbol ON watchlist (user_id, symbol);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email);
+
+-- ── ledger (income & expense records) ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ledger (
+    id              INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    user_id         BIGINT,
+    direction       VARCHAR  NOT NULL,   -- 'income' | 'expense'
+    name            VARCHAR  NOT NULL,
+    date            VARCHAR  NOT NULL,   -- YYYY-MM-DD
+    amount          FLOAT    NOT NULL,   -- original amount in original currency
+    currency        VARCHAR  NOT NULL DEFAULT 'CNY',
+    category        VARCHAR  NOT NULL,
+    orig_category   VARCHAR,             -- original import label (e.g. Notion 分类)
+    subcategory     VARCHAR,             -- user-defined grouping / series key for recurring
+    recurring_type  VARCHAR,             -- 'monthly' | 'annual' | 'semi_annual' | 'every_4months'
+    is_expired      BOOLEAN  NOT NULL DEFAULT 0,
+    expiry_date     VARCHAR,             -- YYYY-MM-DD when a recurring item was ended
+    note            VARCHAR,
+    amounts_json    TEXT,                -- JSON snapshot: {CNY, USD, CAD, HKD} at entry time
+    create_time     DATETIME NOT NULL,
+    update_time     DATETIME NOT NULL,
+    UNIQUE (user_id, direction, name, date, amount)   -- uq_ledger_dedup
+);
