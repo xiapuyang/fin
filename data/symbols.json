@@ -10,7 +10,9 @@
     { "code": "QQQ",  "name": "Nasdaq ETF" },
     { "code": "IWM",  "name": "Russell 2000" },
     { "code": "GLD",  "name": "Gold" },
-    { "code": "TLT",  "name": "20Y Treasury" }
+    { "code": "TLT",  "name": "20Y Treasury" },
+    { "code": "BNDW", "name": "Global Bond" },
+    { "code": "BSV",  "name": "Short-Term Bond" }
   ],
   "Mag7": [
     { "code": "NVDA",  "name": "Nvidia" },
@@ -33,6 +35,7 @@
     { "code": "000001.SS", "name": "上证指数" },
     { "code": "399006.SZ", "name": "创业板指" },
     { "code": "600519.SS", "name": "贵州茅台" },
-    { "code": "300750.SZ", "name": "宁德时代" }
+    { "code": "300750.SZ", "name": "宁德时代" },
+    { "code": "002594.SZ", "name": "比亚迪" }
   ]
 }
