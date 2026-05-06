@@ -20,7 +20,6 @@ data/fin.db
 data/.credentials.json
 data/settings.json
 data/last_check.json
-data/ledger_categories.json
 data/import/
 fin.pid
 data/market_state.json
