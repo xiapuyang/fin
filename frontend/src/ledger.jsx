@@ -955,12 +955,9 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
       const rawAmount = parseFloat(form.amount);
       const toCNY = (amt, cur) => amt * (fxRates[cur] || 1);
       const cny = toCNY(rawAmount, form.currency);
-      const amounts_json = JSON.stringify({
-        CNY: parseFloat(cny.toFixed(2)),
-        USD: parseFloat((cny / (fxRates.USD || 7.24)).toFixed(2)),
-        CAD: parseFloat((cny / (fxRates.CAD || 5.3)).toFixed(2)),
-        HKD: parseFloat((cny / (fxRates.HKD || 0.93)).toFixed(2)),
-      });
+      const amounts_json = JSON.stringify(
+        Object.fromEntries(CURRENCIES.map(c => [c, parseFloat((cny / (fxRates[c] || FX[c] || 1)).toFixed(2))]))
+      );
       const body = {
         direction: form.direction,
         name: form.name.trim(),
@@ -1140,12 +1137,9 @@ const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
       const rawAmount = item.amount;
       const currency = item.currency || "CNY";
       const cny = rawAmount * (fxRates[currency] || 1);
-      const amounts_json = JSON.stringify({
-        CNY: parseFloat(cny.toFixed(2)),
-        USD: parseFloat((cny / (fxRates.USD || 7.24)).toFixed(2)),
-        CAD: parseFloat((cny / (fxRates.CAD || 5.3)).toFixed(2)),
-        HKD: parseFloat((cny / (fxRates.HKD || 0.93)).toFixed(2)),
-      });
+      const amounts_json = JSON.stringify(
+        Object.fromEntries(CURRENCIES.map(c => [c, parseFloat((cny / (fxRates[c] || FX[c] || 1)).toFixed(2))]))
+      );
       const body = {
         direction: item.direction,
         name: item.name,
