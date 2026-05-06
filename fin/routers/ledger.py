@@ -1,11 +1,12 @@
 import csv
 import io
+import json
 import logging
 import math
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from fin.database import get_db
@@ -233,8 +234,11 @@ def ledger_stats(
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
     category: str | None = Query(default=None),
+    fx_rates: str | None = Query(default=None),
+    display_currency: str = Query(default="CNY"),
     db: Session = Depends(get_db),
 ):
+    parsed_fx = json.loads(fx_rates) if fx_rates else None
     repo = LedgerSQLiteRepository(db)
     data = repo.get_stats(
         MOCK_USER_ID,
@@ -242,6 +246,8 @@ def ledger_stats(
         start_date=start_date,
         end_date=end_date,
         category=category,
+        fx_rates=parsed_fx,
+        display_currency=display_currency,
     )
     return LedgerStatsResponse(
         bars=data["bars"],
@@ -281,3 +287,19 @@ async def import_ledger(file: UploadFile, db: Session = Depends(get_db)):
         "Ledger CSV import: %d imported, %d skipped", len(imported), len(skipped)
     )
     return {"imported": len(imported), "skipped": skipped}
+
+
+# ── Backfill ─────────────────────────────────────────────────────────────────
+
+
+@router.post("/ledger/backfill-amounts")
+def backfill_amounts(
+    fx_rates: dict = Body(..., embed=True),
+    db: Session = Depends(get_db),
+):
+    """Compute amounts_json for rows where it is NULL or missing currencies."""
+    currencies = ["CNY", "USD", "CAD", "HKD"]
+    repo = LedgerSQLiteRepository(db)
+    updated = repo.backfill_amounts_json(MOCK_USER_ID, fx_rates, currencies)
+    logger.info("Backfilled amounts_json for %d ledger rows", updated)
+    return {"updated": updated}

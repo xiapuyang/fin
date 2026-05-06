@@ -16,6 +16,7 @@ class LedgerCreate(BaseModel):
     is_expired: bool = False
     expiry_date: Optional[str] = None
     note: Optional[str] = None
+    amounts_json: Optional[str] = None  # JSON: {CNY, USD, CAD, HKD} at entry time
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerCreate":
@@ -37,6 +38,7 @@ class LedgerUpdate(BaseModel):
     is_expired: Optional[bool] = None
     expiry_date: Optional[str] = None
     note: Optional[str] = None
+    amounts_json: Optional[str] = None
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerUpdate":
@@ -59,6 +61,7 @@ class LedgerResponse(BaseModel):
     is_expired: bool
     expiry_date: Optional[str]
     note: Optional[str]
+    amounts_json: Optional[str] = None
     create_time: str
     update_time: str
     # Populated only by /api/ledger/recurring — number of records in the dedup'd series
@@ -87,6 +90,9 @@ class LedgerSummary(BaseModel):
     expense: float
     net: float
     max_expense: float
+    max_expense_name: str | None = None
+    max_expense_date: str | None = None
+    max_expense_currency: str | None = None
 
 
 class LedgerStatsResponse(BaseModel):

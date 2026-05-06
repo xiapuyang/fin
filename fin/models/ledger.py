@@ -40,6 +40,9 @@ class LedgerModel(Base):
     is_expired = Column(Boolean, nullable=False, default=False)
     expiry_date = Column(String, nullable=True)
     note = Column(String, nullable=True)
+    amounts_json = Column(
+        String, nullable=True
+    )  # JSON: {CNY, USD, CAD, HKD} at entry time
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from datetime import date, timedelta
 from datetime import datetime as dt
@@ -7,6 +8,37 @@ from sqlalchemy.orm import Session
 
 from fin.models.ledger import LedgerModel
 from fin.schemas.ledger import LedgerCreate, LedgerUpdate
+
+
+def _value_in_currency(
+    row: LedgerModel, display_currency: str, fx_rates: dict | None
+) -> float:
+    """Return the row amount in display_currency.
+
+    Priority:
+    1. amounts_json[display_currency] — historically accurate, stored at entry time.
+    2. amounts_json["CNY"] converted via fx_rates — correct CNY, approximate onwards.
+    3. row.amount converted via fx_rates — best-effort for old entries.
+    """
+    if row.amounts_json:
+        data = json.loads(row.amounts_json)
+        if display_currency in data:
+            return data[display_currency]
+        cny = data.get("CNY")
+        if cny is not None:
+            if display_currency == "CNY":
+                return cny
+            if fx_rates:
+                return cny / fx_rates.get(display_currency, 1.0)
+    # No amounts_json — raw conversion
+    if row.currency == display_currency:
+        return row.amount
+    if not fx_rates:
+        return row.amount
+    to_cny = row.amount * fx_rates.get(row.currency or "CNY", 1.0)
+    if display_currency == "CNY":
+        return to_cny
+    return to_cny / fx_rates.get(display_currency, 1.0)
 
 
 class LedgerSQLiteRepository:
@@ -150,6 +182,8 @@ class LedgerSQLiteRepository:
         start_date: str | None = None,
         end_date: str | None = None,
         category: str | None = None,
+        fx_rates: dict | None = None,
+        display_currency: str = "CNY",
     ) -> dict:
         """Aggregate stats for charts and summary tiles.
 
@@ -184,11 +218,23 @@ class LedgerSQLiteRepository:
 
         rows = q.all()
 
-        # Summary
-        income_total = sum(r.amount for r in rows if r.direction == "income")
+        # Summary — all amounts converted to CNY via amounts_json or fx_rates fallback
+        income_rows = [r for r in rows if r.direction == "income"]
         expense_rows = [r for r in rows if r.direction == "expense"]
-        expense_total = sum(r.amount for r in expense_rows)
-        max_expense = max((r.amount for r in expense_rows), default=0.0)
+        income_total = sum(
+            _value_in_currency(r, display_currency, fx_rates) for r in income_rows
+        )
+        expense_total = sum(
+            _value_in_currency(r, display_currency, fx_rates) for r in expense_rows
+        )
+        max_row = max(
+            expense_rows,
+            key=lambda r: _value_in_currency(r, display_currency, fx_rates),
+            default=None,
+        )
+        max_expense = (
+            _value_in_currency(max_row, display_currency, fx_rates) if max_row else 0.0
+        )
 
         # Bar granularity: yearly for "all", monthly when window > 60 days
         if time_range == "all":
@@ -212,15 +258,15 @@ class LedgerSQLiteRepository:
                 bucket = r.date[:7]
             else:
                 bucket = r.date
-            by_bucket[bucket] += r.amount
+            by_bucket[bucket] += _value_in_currency(r, display_currency, fx_rates)
         bars = [
             {"date": k, "amount": round(v, 2)} for k, v in sorted(by_bucket.items())
         ]
 
-        # Pie — expense by category
+        # Pie — expense by category, in CNY
         by_cat: dict[str, float] = defaultdict(float)
         for r in expense_rows:
-            by_cat[r.category] += r.amount
+            by_cat[r.category] += _value_in_currency(r, display_currency, fx_rates)
         pie = [
             {"category": k, "amount": round(v, 2)}
             for k, v in sorted(by_cat.items(), key=lambda x: -x[1])
@@ -234,6 +280,9 @@ class LedgerSQLiteRepository:
                 "expense": round(expense_total, 2),
                 "net": round(income_total - expense_total, 2),
                 "max_expense": round(max_expense, 2),
+                "max_expense_name": max_row.name if max_row else None,
+                "max_expense_date": max_row.date if max_row else None,
+                "max_expense_currency": max_row.currency if max_row else None,
             },
         }
 
@@ -333,3 +382,41 @@ class LedgerSQLiteRepository:
         return (
             self._db.query(LedgerModel).filter(LedgerModel.id.in_(inserted_ids)).all()
         )
+
+    def backfill_amounts_json(
+        self, user_id: int, fx_rates: dict, currencies: list[str]
+    ) -> int:
+        """Fill amounts_json for rows where it is NULL or missing currencies.
+
+        Uses fx_rates to compute missing currency values. Existing currency
+        amounts in amounts_json are preserved unchanged.
+        """
+        rows = self._db.query(LedgerModel).filter(LedgerModel.user_id == user_id).all()
+
+        updated = 0
+        for row in rows:
+            existing: dict = {}
+            if row.amounts_json:
+                existing = json.loads(row.amounts_json)
+            if all(c in existing for c in currencies):
+                continue  # nothing to add
+
+            # Derive CNY base: prefer stored value, fall back to fx conversion
+            cny = existing.get("CNY")
+            if cny is None:
+                cny = row.amount * fx_rates.get(row.currency or "CNY", 1.0)
+
+            merged = dict(existing)
+            for c in currencies:
+                if c not in merged:
+                    if c == "CNY":
+                        merged[c] = round(cny, 2)
+                    else:
+                        merged[c] = round(cny / fx_rates.get(c, 1.0), 2)
+
+            row.amounts_json = json.dumps(merged)
+            updated += 1
+
+        if updated:
+            self._db.commit()
+        return updated

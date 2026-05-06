@@ -23,7 +23,7 @@ const Donut = ({ data, size = 220, thickness = 28, centerLabel, centerValue, cen
         <foreignObject x="0" y="0" width={size} height={size}>
           <div style={{ width: size, height: size, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
             {centerLabel && <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{centerLabel}</div>}
-            <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: "var(--ink)", letterSpacing: "-.01em", marginTop: 2 }}>{centerValue}</div>
+            <div className="mono" style={{ fontSize: centerValue.length > 10 ? 13 : centerValue.length > 7 ? 16 : 22, fontWeight: 700, color: "var(--ink)", letterSpacing: "-.01em", marginTop: 2 }}>{centerValue}</div>
             {centerSub && <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{centerSub}</div>}
           </div>
         </foreignObject>
@@ -74,8 +74,15 @@ const AreaChart = ({ data, width = 560, height = 200, color = "var(--ink)", fill
 };
 
 // === Bar chart ============================================================
+const _fmtBarK = (v) => {
+  if (v >= 1000000) return (v / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (v >= 10000) return (v / 1000).toFixed(0) + "k";
+  if (v >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return v.toFixed(2);
+};
+
 const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true }) => {
-  const padL = showAxis ? 44 : 4, padR = 8, padT = 8, padB = 22;
+  const padL = showAxis ? 44 : 4, padR = 8, padT = 20, padB = 22;
   const w = width - padL - padR, h = height - padT - padB;
   const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   const bw = Math.min(w / data.length * 0.7, 48);
@@ -93,6 +100,11 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
         return (
           <g key={i}>
             <rect x={x} y={y} width={bw} height={bh} fill={c} rx="2"/>
+            {d.value > 0 && (
+              <text x={x + bw / 2} y={y - 3} fontSize="9.5" fill="var(--ink-3)" textAnchor="middle" className="mono">
+                {_fmtBarK(d.value)}
+              </text>
+            )}
             <text x={x + bw / 2} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="middle">{d.label}</text>
           </g>
         );
