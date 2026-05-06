@@ -14,7 +14,7 @@ const App = () => {
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
-  const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, EUR: 7.84, CNY: 1, CAD: 5.3 });
+  const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
   const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
   const [showSettings, setShowSettings] = React.useState(false);
 

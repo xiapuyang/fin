@@ -14,8 +14,8 @@ from fin.services.quote import QuoteService
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
-_FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "EUR": "EURCNY=X", "CAD": "CADCNY=X"}
-_FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "EUR": 7.84, "CAD": 5.30, "CNY": 1.0}
+_FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
+_FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
 
 
 class SettingsPayload(BaseModel):
