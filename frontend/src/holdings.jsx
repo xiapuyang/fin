@@ -970,7 +970,7 @@ const AccountModal = ({ onClose, onSaved }) => {
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / 招商证券 / 支付宝基金"/></FormRow>
         <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
         </FormRow>
         <FormRow label="截止日期">
           <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD（忽略此日期前的交易）"/>
@@ -1017,7 +1017,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
         <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
         <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={[{value:"CNY",label:"人民币 CNY"},{value:"USD",label:"美元 USD"},{value:"HKD",label:"港元 HKD"}]}/>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
         </FormRow>
         <FormRow label="截止日期">
           <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD"/>
@@ -1123,7 +1123,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
           <>
             <FormRow label="货币">
               <Select value={form.currency} onChange={setCashCurrency}
-                options={["USD","HKD","CNY"].map(c => ({value:c,label:c}))}/>
+                options={CURRENCY_OPTIONS}/>
             </FormRow>
             <FormRow label="金额 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="10000" suffix={form.currency}/></FormRow>
           </>
@@ -1229,7 +1229,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
     return sym ? (MARKET_CCY[sym.market] || "USD") : "USD";
   };
   const catLabels = { dividend: "分红 Dividend", interest: "利息 Interest", deposit: "转入 Deposit", withdrawal: "转出 Withdrawal" };
-  const ccyOptions = ["USD", "HKD", "CNY"].map(c => ({ value: c, label: c }));
+  const ccyOptions = CURRENCY_OPTIONS;
   const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
 
   const [form, set] = useForm({
