@@ -76,11 +76,13 @@ async function fetchLedgerList({ direction, startDate, endDate, category, search
   return res.json();
 }
 
-async function fetchLedgerStats({ timeRange, startDate, endDate } = {}) {
+async function fetchLedgerStats({ timeRange, startDate, endDate, fxRates, displayCurrency } = {}) {
   const p = new URLSearchParams();
   if (timeRange) p.set("time_range", timeRange);
   if (startDate) p.set("start_date", startDate);
   if (endDate) p.set("end_date", endDate);
+  if (fxRates) p.set("fx_rates", JSON.stringify(fxRates));
+  if (displayCurrency) p.set("display_currency", displayCurrency);
   const res = await fetch(`/api/ledger/stats?${p}`);
   if (!res.ok) throw new Error("fetch failed");
   return res.json();
@@ -243,9 +245,26 @@ const Ledger = ({ fxRates = {} }) => {
     const body = `${sign}${sym}${fmtNum(convertAmount(amount, "CNY"), decimals)}`;
     return displayCurrency === "CNY" ? body : `${displayCurrency} ${body}`;
   };
+  // dispStat(amount, decimals, sign): formats an amount already in displayCurrency
+  // (returned directly from the stats API). No conversion applied.
+  const dispStat = (amount, decimals = 0, sign = "") => {
+    const body = `${sign}${sym}${fmtNum(amount, decimals)}`;
+    return displayCurrency === "CNY" ? body : `${displayCurrency} ${body}`;
+  };
   // nativeFmt(amount, currency): renders an amount in its stored currency. For per-row display.
   const nativeFmt = (amount, currency = "CNY", decimals = 0) =>
     `${CURRENCY_SYMBOL[currency] || "¥"}${fmtNum(amount, decimals)}`;
+
+  // Backfill amounts_json for existing rows on mount (idempotent — only fills missing entries)
+  React.useEffect(() => {
+    if (Object.keys(fxRates).length > 0) {
+      fetch("/api/ledger/backfill-amounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fx_rates: fxRates }),
+      }).catch(() => {});
+    }
+  }, []);
 
   // Discover available years via dedicated endpoint
   React.useEffect(() => {
@@ -264,7 +283,7 @@ const Ledger = ({ fxRates = {} }) => {
     setLoading(true);
     Promise.all([
       fetchLedgerList({ direction, startDate, endDate, category, search, page }),
-      fetchLedgerStats({ startDate, endDate }),
+      fetchLedgerStats({ startDate, endDate, fxRates, displayCurrency }),
       fetchLedgerRecurring(false),
       fetchLedgerRecurring(true),
     ]).then(([list, stats, rec, recExpired]) => {
@@ -273,15 +292,15 @@ const Ledger = ({ fxRates = {} }) => {
       setRecurring(rec);
       setRecurringExpired(recExpired);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [activeYear, direction, category, search, page]);
+  }, [activeYear, direction, category, search, page, fxRates, displayCurrency]);
 
   // Chart: yearly bars for 全部年, monthly bars for specific year
   React.useEffect(() => {
     const opts = (activeYear && activeYear !== 0)
-      ? yearRange(activeYear)
-      : { timeRange: "all" };
+      ? { ...yearRange(activeYear), fxRates, displayCurrency }
+      : { timeRange: "all", fxRates, displayCurrency };
     fetchLedgerStats(opts).then(d => setChartData(d)).catch(() => {});
-  }, [activeYear]);
+  }, [activeYear, fxRates, displayCurrency]);
 
   const handleYearChange = (y) => { setActiveYear(Number(y)); setPage(1); };
   const handleDirectionChange = (d) => { setDirection(d); setCategory(null); setPage(1); };
@@ -292,7 +311,7 @@ const Ledger = ({ fxRates = {} }) => {
     const { startDate, endDate } = yearRange(activeYear === 0 ? null : activeYear);
     return Promise.all([
       fetchLedgerList({ direction, startDate, endDate, category, search, page }),
-      fetchLedgerStats({ startDate, endDate }),
+      fetchLedgerStats({ startDate, endDate, fxRates, displayCurrency }),
       fetchLedgerRecurring(false),
       fetchLedgerRecurring(true),
     ]).then(([list, stats, rec, recExpired]) => {
@@ -303,10 +322,10 @@ const Ledger = ({ fxRates = {} }) => {
     });
   };
 
-  const handleEndConfirm = async () => {
+  const handleEndConfirm = async (expiryDate) => {
     if (!endTarget) return;
     try {
-      await updateLedgerEntry(endTarget.id, { is_expired: true });
+      await updateLedgerEntry(endTarget.id, { is_expired: true, expiry_date: expiryDate });
       setEndTarget(null);
       await refresh();
     } catch (e) {}
@@ -351,11 +370,25 @@ const Ledger = ({ fxRates = {} }) => {
   const recurringByType = groupRecurring(recurring, true);
   const recurringExpiredByType = groupRecurring(recurringExpired, false);
 
+  // Compute monthly equivalent in displayCurrency:
+  // prefer amounts_json[displayCurrency] (historically accurate), fall back to FX conversion
+  const toDisplayAmt = (r) => {
+    if (r.amounts_json) {
+      try {
+        const aj = JSON.parse(r.amounts_json);
+        if (displayCurrency in aj) return aj[displayCurrency];
+        // partial amounts_json — go through CNY
+        const cny = aj.CNY ?? r.amount * (fxRates[r.currency || "CNY"] || 1);
+        return cny / (fxRates[displayCurrency] || 1);
+      } catch (_) {}
+    }
+    const cny = r.amount * (fxRates[r.currency || "CNY"] || 1);
+    return cny / (fxRates[displayCurrency] || 1);
+  };
+
   const monthlyEquiv = recurring.reduce((s, r) => {
     const f = { monthly: 1, annual: 1/12, semi_annual: 1/6, every_4months: 1/4 }[r.recurring_type] || 1;
-    // Normalize each item to CNY before summing
-    const cnyAmount = r.amount * (fxRates[r.currency || "CNY"] || 1);
-    return s + cnyAmount * f;
+    return s + toDisplayAmt(r) * f;
   }, 0);
 
   const yearOpts = [
@@ -399,11 +432,13 @@ const Ledger = ({ fxRates = {} }) => {
           : summary.expense / 12;
         return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
-            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={disp(summary.income, 0, "+")}                                       tone="down" />
-            <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={disp(summary.expense, 0, "−")}                                      tone="up" />
-            <LedgerTile label="净结余 NET"                                        value={disp(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone={summary.net >= 0 ? "down" : "up"} />
-            <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={disp(avgVal)}                                                     tone="neutral" />
-            <LedgerTile label="最大单笔 MAX TXN"                                  value={disp(summary.max_expense)}                                        tone="neutral" />
+            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={dispStat(summary.income, 0, "+")}                                       tone="down" />
+            <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={dispStat(summary.expense, 0, "−")}                                      tone="up" />
+            <LedgerTile label="净结余 NET"                                        value={dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone={summary.net >= 0 ? "down" : "up"} />
+            <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={dispStat(avgVal)}                                                     tone="neutral" />
+            <LedgerTile label="最大单笔 MAX TXN"                                  value={dispStat(summary.max_expense)}                                        tone="neutral"
+              sub={summary.max_expense_date ? `${summary.max_expense_date} · ${summary.max_expense_name || ""}` : undefined}
+            />
           </div>
         );
       })()}
@@ -439,7 +474,7 @@ const Ledger = ({ fxRates = {} }) => {
                   color: colorOf(p.category).text,
                 }))}
                 size={140} thickness={20}
-                centerValue={disp(chartData.pie.reduce((s, p) => s + p.amount, 0))}
+                centerValue={dispStat(chartData.pie.reduce((s, p) => s + p.amount, 0), 2)}
                 centerSub="total"
               />
               <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, flex: 1, overflow: "hidden" }}>
@@ -447,7 +482,7 @@ const Ledger = ({ fxRates = {} }) => {
                   <div key={p.category} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf(p.category).text, flexShrink: 0 }} />
                     <span style={{ flex: 1, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.category}</span>
-                    <span className="mono" style={{ color: "var(--ink-3)", flexShrink: 0 }}>{disp(p.amount)}</span>
+                    <span className="mono" style={{ color: "var(--ink-3)", flexShrink: 0 }}>{dispStat(p.amount, 2)}</span>
                   </div>
                 ))}
               </div>
@@ -541,19 +576,27 @@ const Ledger = ({ fxRates = {} }) => {
       {recurring.length > 0 && (
         <div style={{ marginTop: 28 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
-            定期消费 · {recurring.length} 项 · 月均 {disp(monthlyEquiv)}
+            定期消费 · {recurring.length} 项 · 月均 {dispStat(monthlyEquiv)} · 年均 {dispStat(monthlyEquiv * 12)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
             {RECURRING_ORDER.map(k => {
               const items = recurringByType[k] || [];
               const col = RECURRING_FREQ_COLORS[k];
+              const freqToMonths = { monthly: 1, every_4months: 4, semi_annual: 6, annual: 12 };
+              const groupMonthly = items.reduce((s, r) => s + toDisplayAmt(r) / (freqToMonths[k] || 1), 0);
+              const groupAnnual = groupMonthly * 12;
               return (
                 <div key={k} style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
                   <div style={{
                     background: col.bg, color: col.text,
                     padding: "8px 14px", fontSize: 12, fontWeight: 700,
                   }}>
-                    {RECURRING_LABEL[k]} · {items.length} 项
+                    <div>{RECURRING_LABEL[k]} · {items.length} 项</div>
+                    {items.length > 0 && (
+                      <div style={{ fontWeight: 500, fontSize: 11, marginTop: 2, opacity: 0.85 }}>
+                        月均 {dispStat(groupMonthly)} · 年 {dispStat(groupAnnual)}
+                      </div>
+                    )}
                   </div>
                   {items.length === 0
                     ? <div style={{ padding: "14px", fontSize: 12, color: "var(--ink-4)" }}>暂无</div>
@@ -627,6 +670,7 @@ const Ledger = ({ fxRates = {} }) => {
       {editItem !== null && (
         <EntryModal
           item={Object.keys(editItem).length === 0 ? null : editItem}
+          fxRates={fxRates}
           onClose={() => setEditItem(null)}
           onDone={handleEditDone}
         />
@@ -639,10 +683,8 @@ const Ledger = ({ fxRates = {} }) => {
         />
       )}
       {endTarget && (
-        <ConfirmModal
-          message={`确认结束定期任务「${endTarget.name}」？结束后可在「已结束」区域恢复。`}
-          confirmLabel="确认结束"
-          confirmVariant="primary"
+        <EndRecurringModal
+          name={endTarget.name}
           onClose={() => setEndTarget(null)}
           onConfirm={handleEndConfirm}
         />
@@ -651,6 +693,7 @@ const Ledger = ({ fxRates = {} }) => {
         <DuplicateModal
           item={duplicateItem}
           fmt={nativeFmt}
+          fxRates={fxRates}
           onClose={() => setDuplicateItem(null)}
           onDone={() => { setDuplicateItem(null); refresh(); }}
         />
@@ -677,12 +720,13 @@ const Ledger = ({ fxRates = {} }) => {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-const LedgerTile = ({ label, value, tone }) => {
+const LedgerTile = ({ label, value, tone, sub }) => {
   const c = { up: "var(--up)", down: "var(--down)", neutral: "var(--ink)" }[tone] || "var(--ink)";
   return (
     <Card padding={16}>
       <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", letterSpacing: ".12em" }}>{label}</div>
       <div className="mono" style={{ fontSize: 20, fontWeight: 700, marginTop: 6, color: c }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</div>}
     </Card>
   );
 };
@@ -755,6 +799,7 @@ const RecurringCard = ({ item, nextDate, last, fmt, ended, onEdit, onDelete, onD
 
 const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
   const isIncome = item.direction === "income";
+  const recCol = item.recurring_type ? RECURRING_FREQ_COLORS[item.recurring_type] : null;
   return (
     <div style={{
       padding: "10px 18px",
@@ -769,8 +814,18 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
         {item.category}
       </Badge>
       <div style={{ overflow: "hidden" }}>
-        <div style={{ fontSize: 13, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.name}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+          <span style={{ fontSize: 13, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {item.name}
+          </span>
+          {recCol && (
+            <span style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
+              background: recCol.bg, color: recCol.text,
+            }}>
+              {RECURRING_LABEL[item.recurring_type]}
+            </span>
+          )}
         </div>
         {item.note && (
           <div style={{ fontSize: 11, color: "var(--ink-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -821,6 +876,32 @@ function pagerRange(current, total) {
 
 // ── Confirm Modal ─────────────────────────────────────────────────────────────
 
+const EndRecurringModal = ({ name, onClose, onConfirm }) => {
+  const [expiryDate, setExpiryDate] = React.useState(todayStr());
+  const [loading, setLoading] = React.useState(false);
+  const handleConfirm = async () => {
+    setLoading(true);
+    await onConfirm(expiryDate);
+    setLoading(false);
+  };
+  return (
+    <Modal open title="结束定期任务" onClose={onClose} width={380}>
+      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>
+          结束「{name}」？结束后可在「已结束」区域恢复。
+        </div>
+        <FieldRow label="截止日">
+          <Input type="date" value={expiryDate} onChange={setExpiryDate} />
+        </FieldRow>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={loading}>确认结束</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 const ConfirmModal = ({ message, onClose, onConfirm, confirmLabel = "确认删除", confirmVariant = "danger" }) => (
   <Modal open title="确认操作" onClose={onClose} width={380}>
     <div style={{ padding: 20 }}>
@@ -835,7 +916,7 @@ const ConfirmModal = ({ message, onClose, onConfirm, confirmLabel = "确认删�
 
 // ── Entry Modal (add & edit) ──────────────────────────────────────────────────
 
-const EntryModal = ({ item, onClose, onDone }) => {
+const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
   const isEdit = !!item;
   const [form, setForm] = React.useState({
     direction: item?.direction || "expense",
@@ -862,17 +943,27 @@ const EntryModal = ({ item, onClose, onDone }) => {
     }
     setLoading(true); setError(null);
     try {
+      const rawAmount = parseFloat(form.amount);
+      const toCNY = (amt, cur) => amt * (fxRates[cur] || 1);
+      const cny = toCNY(rawAmount, form.currency);
+      const amounts_json = JSON.stringify({
+        CNY: parseFloat(cny.toFixed(2)),
+        USD: parseFloat((cny / (fxRates.USD || 7.24)).toFixed(2)),
+        CAD: parseFloat((cny / (fxRates.CAD || 5.3)).toFixed(2)),
+        HKD: parseFloat((cny / (fxRates.HKD || 0.93)).toFixed(2)),
+      });
       const body = {
         direction: form.direction,
         name: form.name.trim(),
         date: form.date,
-        amount: parseFloat(form.amount),
+        amount: rawAmount,
         currency: form.currency,
         category: form.category,
         subcategory: form.subcategory.trim() || null,
         note: form.note.trim() || null,
         recurring_type: form.recurring_type || null,
         is_expired: form.is_expired,
+        amounts_json,
       };
       if (isEdit) {
         await updateLedgerEntry(item.id, body);
@@ -1029,7 +1120,7 @@ const ImportModal = ({ onClose, onDone }) => {
 
 // ── Duplicate Modal (quick record from recurring template) ────────────────────
 
-const DuplicateModal = ({ item, fmt, onClose, onDone }) => {
+const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
   const [date, setDate] = React.useState(todayStr());
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -1037,18 +1128,28 @@ const DuplicateModal = ({ item, fmt, onClose, onDone }) => {
   const handleSave = async () => {
     setLoading(true); setError(null);
     try {
+      const rawAmount = item.amount;
+      const currency = item.currency || "CNY";
+      const cny = rawAmount * (fxRates[currency] || 1);
+      const amounts_json = JSON.stringify({
+        CNY: parseFloat(cny.toFixed(2)),
+        USD: parseFloat((cny / (fxRates.USD || 7.24)).toFixed(2)),
+        CAD: parseFloat((cny / (fxRates.CAD || 5.3)).toFixed(2)),
+        HKD: parseFloat((cny / (fxRates.HKD || 0.93)).toFixed(2)),
+      });
       const body = {
         direction: item.direction,
         name: item.name,
         date,
-        amount: item.amount,
-        currency: item.currency,
+        amount: rawAmount,
+        currency,
         category: item.category,
         orig_category: item.orig_category,
         subcategory: item.subcategory,
         note: item.note,
         recurring_type: item.recurring_type,
         is_expired: false,
+        amounts_json,
       };
       const res = await fetch("/api/ledger", {
         method: "POST",

@@ -154,6 +154,10 @@ def _migrate_ledger_schema(db: "Session") -> None:
     if "subcategory" not in current:
         db.execute(text("ALTER TABLE ledger ADD COLUMN subcategory VARCHAR"))
         db.commit()
+        current = cols()
+    if "amounts_json" not in current:
+        db.execute(text("ALTER TABLE ledger ADD COLUMN amounts_json TEXT"))
+        db.commit()
 
 
 def _backfill_recurring_subcategory(db: "Session") -> None:
