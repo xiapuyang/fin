@@ -14,7 +14,9 @@ class AccountModel(Base):
     name = Column(String, nullable=False)
     currency = Column(String, nullable=True, default="CNY")
     note = Column(String, nullable=True)
-    cutoff_date = Column(String, nullable=True)  # exclude transactions before this date
+    cutoff_date = Column(String, nullable=True)
+    balance_account_id = Column(Integer, nullable=True)
+    balance_sub_account_id = Column(Integer, nullable=True)
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -18,12 +18,12 @@ const toCNY = (amount, ccy) => amount * (FX[ccy] || 1);
 
 // === Market dot ============================================================
 const MarketDot = ({ market, size = 8 }) => {
-  const c = { US: "var(--us)", HK: "var(--hk)", CN: "var(--cn)" }[market] || "#999";
+  const c = { US: "var(--us)", HK: "var(--hk)", CN: "var(--cn)", CA: "#C8531C" }[market] || "#999";
   return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: c, flexShrink: 0 }} />;
 };
 
 const MarketLabel = ({ market }) => {
-  const t = { US: "美股 US", HK: "港股 HK", CN: "A股 CN" }[market] || market;
+  const t = { US: "美股 US", HK: "港股 HK", CN: "A股 CN", CA: "加股 CA" }[market] || market;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}><MarketDot market={market} /> {t}</span>;
 };
 
