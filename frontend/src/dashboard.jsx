@@ -29,8 +29,14 @@ const MARKET_HOURS = (now = new Date()) => {
   // CN: SSE/SZSE Mon-Fri 09:30-11:30 and 13:00-15:00 CST = 01:30-03:30 and 05:00-07:00 UTC
   const cnState = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60)) ? "REGULAR" : "CLOSED";
 
+  // CA: TSX Mon-Fri 09:30-16:00 ET — same UTC window as US regular session
+  const caState = !weekday ? "CLOSED"
+    : inRange(13 * 60 + 30, 20 * 60) ? "REGULAR"
+    : inRange(8 * 60, 13 * 60 + 30)  ? "PRE"
+    : "CLOSED";
+
   const mk = (state) => ({ state, label: STATE_LABEL[state] });
-  return { US: mk(usState), HK: mk(hkState), CN: mk(cnState) };
+  return { US: mk(usState), HK: mk(hkState), CN: mk(cnState), CA: mk(caState) };
 };
 
 const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }) => {
@@ -166,7 +172,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <MarketDot market={k} size={6}/>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".05em" }}>
-                  {{ US: "US", HK: "HK", CN: "CN" }[k]}
+                  {k}
                 </span>
                 <span className={"pulse-dot"} style={{
                   display: "inline-block", width: 6, height: 6, borderRadius: 3,

@@ -87,7 +87,10 @@ async function _apiFetch(url, opts = {}) {
   const r = await fetch(url, opts);
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || r.statusText);
+    const detail = Array.isArray(err.detail)
+      ? err.detail.map(e => e.msg || JSON.stringify(e)).join("; ")
+      : (err.detail || r.statusText);
+    throw new Error(detail);
   }
   return r.status === 204 ? null : r.json();
 }

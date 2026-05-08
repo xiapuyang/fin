@@ -415,9 +415,15 @@ async def import_balance(file: UploadFile, db: Session = Depends(get_db)):
             snap_id_map[date] = snap.id
             snapshots_created += 1
 
-    # Existing items for dedup: {(snapshot_id, name, side)}
+    # Existing items for dedup: matches uq_balance_item index
     existing_items = {
-        (item.snapshot_id, item.name.strip(), item.side)
+        (
+            item.snapshot_id,
+            item.side,
+            item.account_id or -1,
+            item.sub_account_id or -1,
+            item.category,
+        )
         for item, _, _ in item_repo.get_all(MOCK_USER_ID)
     }
 
@@ -475,7 +481,7 @@ async def import_balance(file: UploadFile, db: Session = Depends(get_db)):
             snap_id = snap_id_map.get(date)
             if not snap_id:
                 continue
-            key = (snap_id, name, side)
+            key = (snap_id, side, account_id or -1, sub_account_id or -1, category)
             if key in existing_items:
                 continue
             item_repo.create(
@@ -491,7 +497,9 @@ async def import_balance(file: UploadFile, db: Session = Depends(get_db)):
                 ),
                 MOCK_USER_ID,
             )
-            existing_items.add(key)
+            existing_items.add(
+                (snap_id, side, account_id or -1, sub_account_id or -1, category)
+            )
             items_imported += 1
 
     return {

@@ -6,7 +6,7 @@ from pydantic import BaseModel, model_validator
 class HoldingCreate(BaseModel):
     code: str
     name: Optional[str] = None
-    market: Literal["US", "HK", "CN"]
+    market: Literal["US", "HK", "CN", "CA"]
     currency: str = "USD"
     account: Optional[str] = None
     snapshot_name: Optional[str] = None
@@ -27,7 +27,7 @@ class HoldingCreate(BaseModel):
 class HoldingUpdate(BaseModel):
     code: Optional[str] = None
     name: Optional[str] = None
-    market: Optional[Literal["US", "HK", "CN"]] = None
+    market: Optional[Literal["US", "HK", "CN", "CA"]] = None
     currency: Optional[str] = None
     account: Optional[str] = None
     snapshot_name: Optional[str] = None

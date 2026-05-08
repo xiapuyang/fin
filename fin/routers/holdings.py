@@ -41,6 +41,8 @@ def _account_response(a: AccountModel) -> AccountResponse:
         currency=a.currency or "CNY",
         note=a.note,
         cutoff_date=a.cutoff_date,
+        balance_account_id=a.balance_account_id,
+        balance_sub_account_id=a.balance_sub_account_id,
         create_time=a.create_time.strftime(_TS_FMT),
         update_time=a.update_time.strftime(_TS_FMT),
     )

@@ -4,6 +4,7 @@
 */
 
 const BALANCE_CATEGORIES = ["现金","理财","投资","期权","固定资产","房产","社保","外债","信用卡","贷款","其他贷款"];
+
 const BALANCE_CAT_COLORS = {
   "现金":     "#1F8A4C",
   "理财":     "#2D9E6E",
@@ -39,14 +40,14 @@ const BalanceSheet = ({ currency = "CNY" }) => {
   const [snapId, setSnapId]       = React.useState(null);
   const [sideFilter, setSideFilter] = React.useState("all");
 
-  const [showSnapMenu, setShowSnapMenu]     = React.useState(false);
-  const [editItem, setEditItem]             = React.useState(null);    // null = closed, {} = new, {id,...} = edit
-  const [historyItem, setHistoryItem]       = React.useState(null);    // item for cross-snapshot history
-  const [showNewSnap, setShowNewSnap]       = React.useState(false);
-  const [showCopySnap, setShowCopySnap]     = React.useState(false);
-  const [showEditSnap, setShowEditSnap]     = React.useState(false);
-  const [showImport, setShowImport]         = React.useState(false);
-  const [deleteTarget, setDeleteTarget]     = React.useState(null);    // {type:"item"|"snapshot", id}
+  const [showSnapMenu, setShowSnapMenu]       = React.useState(false);
+  const [editItem, setEditItem]               = React.useState(null);
+  const [historyItem, setHistoryItem]         = React.useState(null);
+  const [showCopySnap, setShowCopySnap]       = React.useState(false);
+  const [showEditSnap, setShowEditSnap]       = React.useState(false);
+  const [showImport, setShowImport]           = React.useState(false);
+  const [showInjectHoldings, setShowInjectHoldings] = React.useState(false);
+  const [deleteTarget, setDeleteTarget]       = React.useState(null);
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
@@ -156,38 +157,14 @@ const BalanceSheet = ({ currency = "CNY" }) => {
     setSnapshots(snaps);
   };
 
-  const doInvestmentAutofill = async (newSnapId) => {
-    try {
-      const [hlds, txns] = await Promise.all([apiGetHoldings(), apiGetTransactions()]);
-      if (!hlds || hlds.length === 0) return;
-      const codes = [...new Set(hlds.map(h => h.code).filter(c => c && c !== "CASH"))];
-      const prices = codes.length > 0 ? await apiGetPrices(codes) : {};
-      const positions = computePositions(hlds, txns, prices);
-      const byAccount = {};
-      positions.forEach(p => {
-        if (!byAccount[p.account]) byAccount[p.account] = 0;
-        byAccount[p.account] += p.value; // value is already in CNY
-      });
-      const snapItems = await apiGetBalanceItems(newSnapId);
-      const targets = snapItems.filter(i => i.category === "投资" && i.account_name && byAccount[i.account_name] != null);
-      await Promise.all(targets.map(i =>
-        apiUpdateBalanceItem(i.id, { amount: byAccount[i.account_name], currency: "CNY" })
-      ));
-    } catch (e) {
-      console.warn("Investment auto-fill skipped:", e.message);
-    }
-  };
-
   const handleSnapUpdated = async () => {
     setShowEditSnap(false);
     const snaps = await apiGetBalanceSnapshots();
     setSnapshots(snaps);
   };
 
-  const handleSnapCreated = async (newId, opts = {}) => {
-    setShowNewSnap(false);
+  const handleSnapCreated = async (newId) => {
     setShowCopySnap(false);
-    if (opts.fromCopy) await doInvestmentAutofill(newId);
     const snaps = await apiGetBalanceSnapshots();
     setSnapshots(snaps);
     const ai = await apiGetAllBalanceItems();
@@ -228,7 +205,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         showSnapMenu={showSnapMenu}
         setShowSnapMenu={setShowSnapMenu}
         snapSeries={snapSeries}
-        onNewSnap={() => setShowNewSnap(true)}
+        onInjectHoldings={() => setShowInjectHoldings(true)}
         onEditSnap={() => setShowEditSnap(true)}
         onDeleteSnap={(id) => setDeleteTarget({ type: "snapshot", id })}
       />
@@ -345,8 +322,13 @@ const BalanceSheet = ({ currency = "CNY" }) => {
           onClose={() => setHistoryItem(null)}
         />
       )}
-      {showNewSnap && (
-        <NewSnapModal onClose={() => setShowNewSnap(false)} onDone={handleSnapCreated}/>
+      {showInjectHoldings && snap && (
+        <InjectHoldingsModal
+          snapId={snapId}
+          currentItems={items}
+          onClose={() => setShowInjectHoldings(false)}
+          onDone={async () => { setShowInjectHoldings(false); await loadItems(snapId); const ai = await apiGetAllBalanceItems(); setAllItems(ai); }}
+        />
       )}
       {showCopySnap && snap && (
         <CopySnapModal snap={snap} onClose={() => setShowCopySnap(false)} onDone={handleSnapCreated}/>
@@ -376,7 +358,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
 
 // ── Snapshot selector bar ─────────────────────────────────────────────────────
 
-const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, setShowSnapMenu, snapSeries, onNewSnap, onEditSnap, onDeleteSnap }) => {
+const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, setShowSnapMenu, snapSeries, onInjectHoldings, onEditSnap, onDeleteSnap }) => {
   const menuRef = React.useRef(null);
   React.useEffect(() => {
     if (!showSnapMenu) return;
@@ -406,7 +388,7 @@ const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, s
       )}
     </div>
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <Button variant="secondary" icon="plus" onClick={onNewSnap} title="新建快照"/>
+      {snap && <Button variant="secondary" icon="wallet" onClick={onInjectHoldings}>插入投资组合</Button>}
       {snap && <Button variant="ghost" icon="edit" onClick={onEditSnap} title="编辑快照信息"/>}
       {snap && <Button variant="ghost" icon="trash" onClick={() => onDeleteSnap(snapId)} title="删除当前快照"/>}
       <div ref={menuRef} style={{ position: "relative" }}>
@@ -702,24 +684,34 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
     <Modal open title={isEdit ? "编辑条目" : "新增条目"} onClose={onClose} width={480}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <BalField label="资产 / 负债" span2>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ value: "asset", label: "资产" }, { value: "liability", label: "负债" }].map(opt => (
+                <button key={opt.value} onClick={() => set("side", opt.value)} style={{
+                  flex: 1, padding: "7px 0", border: "1px solid " + (form.side === opt.value ? "var(--ink)" : "var(--line)"),
+                  borderRadius: 7, background: form.side === opt.value ? "var(--ink)" : "transparent",
+                  color: form.side === opt.value ? "var(--paper)" : "var(--ink-2)",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </BalField>
           <BalField label="名称" span2>
             <Input value={form.name} onChange={v => set("name", v)} placeholder="例：招商银行存款" style={{ width: "100%" }}/>
           </BalField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <BalField label="分类">
+            <BalField label="分类" span2>
               <BalSelect value={form.category} onChange={v => set("category", v)}
                 options={BALANCE_CATEGORIES.map(c => ({ value: c, label: c }))}/>
             </BalField>
-            <BalField label="资产 / 负债">
-              <BalSelect value={form.side} onChange={v => set("side", v)}
-                options={[{ value: "asset", label: "资产" }, { value: "liability", label: "负债" }]}/>
-            </BalField>
-            <BalField label="金额">
-              <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0" style={{ width: "100%" }}/>
-            </BalField>
-            <BalField label="货币">
-              <BalSelect value={form.currency} onChange={v => set("currency", v)}
-                options={CURRENCIES.map(c => ({ value: c, label: c }))}/>
+            <BalField label="金额 / 货币" span2>
+              <div style={{ display: "flex", gap: 0 }}>
+                <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
+                  style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
+                <Select value={form.currency} onChange={v => set("currency", v)}
+                  options={CURRENCIES.map(c => ({ value: c, label: c }))}
+                  style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
+              </div>
             </BalField>
             {parentAccounts.length > 0 && (
               <>
@@ -777,37 +769,131 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
 
 // ── New snapshot modal ────────────────────────────────────────────────────────
 
-const NewSnapModal = ({ onClose, onDone }) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate]   = React.useState(today);
-  const [label, setLabel] = React.useState("");
-  const [note, setNote]   = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError]     = React.useState(null);
+// ── Inject holdings modal ─────────────────────────────────────────────────────
+
+const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
+  const [holdAccounts, setHoldAccounts] = React.useState([]);
+  const [totals, setTotals]             = React.useState({});
+  const [checked, setChecked]           = React.useState({});
+  const [loading, setLoading]           = React.useState(true);
+  const [saving, setSaving]             = React.useState(false);
+  const [error, setError]               = React.useState(null);
+
+  const existingKeys = new Set(
+    currentItems.map(i => `${i.snapshot_id}|asset|${i.account_id ?? -1}|${i.sub_account_id ?? -1}|投资`)
+  );
+
+  const isDupe = (acct) => {
+    if (!acct.balance_account_id) return false;
+    const key = `${snapId}|asset|${acct.balance_account_id}|${acct.balance_sub_account_id ?? -1}|投资`;
+    return existingKeys.has(key);
+  };
+
+  React.useEffect(() => {
+    const load = async () => {
+      try {
+        const [hlds, accts] = await Promise.all([apiGetHoldings(), apiGetAccounts()]);
+        const codes = [...new Set(hlds.map(h => h.code).filter(c => c && c !== "CASH"))];
+        const prices = codes.length > 0 ? await apiGetPrices(codes) : {};
+        const result = {};
+        accts.forEach(acct => {
+          const acctFx = FX[acct.currency] || 1;
+          let total = 0;
+          hlds.filter(h => h.account === acct.name).forEach(h => {
+            const price = h.code === "CASH" ? (h.avg_cost || 1) : (prices[h.code]?.price || 0);
+            total += (h.shares || 0) * price * (FX[h.currency] || 1) / acctFx;
+          });
+          result[acct.name] = { amount: total, currency: acct.currency };
+        });
+        setHoldAccounts(accts);
+        setTotals(result);
+        const initChecked = {};
+        accts.forEach(a => {
+          initChecked[a.name] = !!a.balance_account_id && !isDupe(a);
+        });
+        setChecked(initChecked);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleSave = async () => {
-    if (!label.trim()) { setError("请输入快照标签"); return; }
-    setLoading(true); setError(null);
+    setSaving(true); setError(null);
     try {
-      const snap = await apiCreateBalanceSnapshot({ snapshot_date: date, label: label.trim(), note: note.trim() || undefined });
-      onDone(snap.id);
+      for (const acct of holdAccounts) {
+        if (!checked[acct.name] || !acct.balance_account_id || isDupe(acct)) continue;
+        const { amount, currency } = totals[acct.name] || { amount: 0, currency: acct.currency };
+        await apiCreateBalanceItem({
+          snapshot_id: snapId,
+          name: acct.name,
+          category: "投资",
+          side: "asset",
+          amount: Math.round(amount),
+          currency,
+          account_id: acct.balance_account_id,
+          sub_account_id: acct.balance_sub_account_id || null,
+        });
+      }
+      onDone();
     } catch (e) { setError(e.message); }
-    finally     { setLoading(false); }
+    finally     { setSaving(false); }
   };
 
   return (
-    <Modal open title="新建快照" onClose={onClose} width={400}>
-      <div style={{ padding: "16px 20px 20px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label="日期"><Input type="date" value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
-          <BalField label="标签"><Input value={label} onChange={setLabel} placeholder="例：2026-Q1 复盘" style={{ width: "100%" }}/></BalField>
-          <BalField label="备注（可选）"><Input value={note} onChange={setNote} placeholder="可选" style={{ width: "100%" }}/></BalField>
+    <Modal open title="插入投资组合" onClose={onClose} width={480}>
+      <div style={{ display: "flex", flexDirection: "column", maxHeight: "65vh" }}>
+        <div style={{ padding: "10px 20px 8px", flexShrink: 0, fontSize: 12, color: "var(--ink-3)" }}>
+          勾选账户插入当前快照。在投资组合账户设置中配置资产负债映射。
         </div>
-        {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "创建中…" : "创建"}</Button>
-        </div>
+        {loading ? (
+          <div style={{ padding: "20px", textAlign: "center", color: "var(--ink-3)" }}>加载中…</div>
+        ) : (
+          <>
+            <div style={{ overflowY: "auto", flex: 1, padding: "4px 20px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {holdAccounts.map(acct => {
+                const { amount, currency } = totals[acct.name] || {};
+                const sym = CURRENCY_SYMBOL[currency] || "";
+                const dupe = isDupe(acct);
+                const noMap = !acct.balance_account_id;
+                const isChecked = !!checked[acct.name];
+                return (
+                  <label key={acct.name} style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+                    border: "1px solid " + (isChecked ? "var(--line-strong)" : "var(--line)"),
+                    borderRadius: 9,
+                    background: (dupe || noMap) ? "var(--bg-deep)" : "var(--paper)",
+                    cursor: (dupe || noMap) ? "default" : "pointer",
+                    opacity: noMap ? 0.5 : 1,
+                  }}>
+                    <input type="checkbox" checked={isChecked && !dupe} disabled={dupe || noMap}
+                      onChange={e => setChecked(s => ({ ...s, [acct.name]: e.target.checked }))}/>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{acct.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>
+                        {dupe ? "已存在 — 跳过" : noMap ? "未配置映射 — 在账户设置中配置" : "投资"}
+                      </div>
+                    </div>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, opacity: dupe ? 0.5 : 1 }}>
+                      {amount != null ? `${sym}${fmtNum(amount, 0)}` : "—"}
+                      <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 4 }}>{currency}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ padding: "10px 20px 20px", flexShrink: 0, borderTop: "1px solid var(--line)" }}>
+              {error && <div style={{ color: "var(--up)", fontSize: 12, marginBottom: 10 }}>{error}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Button variant="secondary" onClick={onClose}>取消</Button>
+                <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? "插入中…" : "插入"}</Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );

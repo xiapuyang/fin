@@ -19,7 +19,7 @@ SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 # before persisting (market_state and change_pct are computed/transient).
 _NON_DB_FIELDS = frozenset({"market_state", "change_pct", "after_hours_change_pct"})
 
-_SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
+_SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN", ".TO": "CA", ".V": "CA"}
 
 
 def _market_for_symbol(symbol: str) -> str:

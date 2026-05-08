@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     name         VARCHAR  NOT NULL,
     currency     TEXT     DEFAULT 'CNY',
     note         VARCHAR,
-    cutoff_date  TEXT,        -- ignore transactions before this date (e.g. pre-transfer backup rows)
+    cutoff_date             TEXT,
+    balance_account_id      INTEGER,
+    balance_sub_account_id  INTEGER,
     create_time  DATETIME NOT NULL,
     update_time  DATETIME NOT NULL
 );
@@ -169,3 +171,55 @@ CREATE TABLE IF NOT EXISTS ledger (
     update_time     DATETIME NOT NULL,
     UNIQUE (user_id, direction, name, date, amount)   -- uq_ledger_dedup
 );
+
+-- ── balance_accounts (account hierarchy for balance sheet) ────────────────────
+CREATE TABLE IF NOT EXISTS balance_accounts (
+    id          INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    user_id     BIGINT,
+    name        VARCHAR  NOT NULL,
+    parent_id   INTEGER,             -- NULL = top-level account; set = sub-account
+    create_time DATETIME NOT NULL,
+    update_time DATETIME NOT NULL
+);
+-- COALESCE makes NULL parent_id comparable so top-level accounts are also deduplicated
+CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_account
+    ON balance_accounts (user_id, COALESCE(parent_id, -1), name);
+
+-- ── balance_snapshots (point-in-time net worth snapshots) ─────────────────────
+CREATE TABLE IF NOT EXISTS balance_snapshots (
+    id            INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    user_id       BIGINT,
+    snapshot_date VARCHAR  NOT NULL,  -- YYYY-MM-DD
+    label         VARCHAR  NOT NULL,
+    note          VARCHAR,
+    create_time   DATETIME NOT NULL,
+    update_time   DATETIME NOT NULL,
+    UNIQUE (user_id, snapshot_date, label)  -- uq_balance_snapshot
+);
+
+-- ── balance_items (line items within a snapshot) ──────────────────────────────
+CREATE TABLE IF NOT EXISTS balance_items (
+    id              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    snapshot_id     INTEGER NOT NULL,
+    user_id         BIGINT,
+    account_id      INTEGER,          -- FK-less ref to balance_accounts.id
+    sub_account_id  INTEGER,          -- FK-less ref to balance_accounts.id (child)
+    category        VARCHAR NOT NULL, -- 现金|理财|投资|期权|固定资产|房产|社保|外债|信用卡|贷款|其他贷款
+    side            VARCHAR NOT NULL, -- 'asset' | 'liability'
+    name            VARCHAR NOT NULL,
+    amount          FLOAT   NOT NULL,
+    currency        VARCHAR NOT NULL DEFAULT 'CNY',
+    note            VARCHAR,
+    -- extra fields for loans / options (do not affect totals)
+    price           FLOAT,
+    quantity        FLOAT,
+    start_date      VARCHAR,
+    end_date        VARCHAR,
+    interest_rate   FLOAT,
+    monthly_payment FLOAT,
+    create_time     DATETIME NOT NULL,
+    update_time     DATETIME NOT NULL,
+);
+-- COALESCE handles NULL account_id / sub_account_id (SQLite treats NULLs as distinct)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_item
+    ON balance_items (snapshot_id, side, COALESCE(account_id, -1), COALESCE(sub_account_id, -1), category);
