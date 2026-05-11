@@ -59,6 +59,40 @@ def test_delete_holding(client):
     assert r.json() == []
 
 
+def test_create_holding_ca_market(client):
+    r = client.post(
+        "/api/holdings",
+        json={
+            "code": "RY.TO",
+            "name": "Royal Bank",
+            "market": "CA",
+            "currency": "CAD",
+            "shares": 10.0,
+            "avg_cost": 130.0,
+        },
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["market"] == "CA"
+
+
+def test_create_holding_crypto_market(client):
+    r = client.post(
+        "/api/holdings",
+        json={
+            "code": "BTC",
+            "name": "Bitcoin",
+            "market": "CRYPTO",
+            "currency": "USD",
+            "shares": 0.5,
+            "avg_cost": 60000.0,
+        },
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["market"] == "CRYPTO"
+
+
 def test_create_holding_invalid_market(client):
     r = client.post(
         "/api/holdings",

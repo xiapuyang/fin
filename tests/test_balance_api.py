@@ -89,6 +89,27 @@ def test_account_delete_nullifies_item_refs(client):
     assert item["account_name"] is None
 
 
+def test_account_delete_nullifies_sub_account_id(client):
+    parent_id = _create_account(client, name="Parent").json()["id"]
+    child_id = _create_account(client, name="Child", parent_id=parent_id).json()["id"]
+    snap_id = _create_snap(client).json()["id"]
+    payload = {
+        "snapshot_id": snap_id,
+        "name": "Sub item",
+        "category": "现金",
+        "side": "asset",
+        "amount": 100.0,
+        "currency": "CNY",
+        "account_id": parent_id,
+        "sub_account_id": child_id,
+    }
+    client.post("/api/balance/items", json=payload).json()["id"]
+    client.delete(f"/api/balance/accounts/{child_id}")
+    items = client.get(f"/api/balance/snapshots/{snap_id}/items").json()
+    assert items[0]["sub_account_id"] is None
+    assert items[0]["sub_account_name"] is None
+
+
 def test_account_delete_not_found(client):
     r = client.delete("/api/balance/accounts/9999")
     assert r.status_code == 404
@@ -163,7 +184,7 @@ def test_copy_snapshot_basic(client):
     r = client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
     assert r.status_code == 201
     copy = r.json()
-    assert copy["label"] == "Orig"
+    assert copy["label"] == "Orig (副本)"
     assert copy["item_count"] == 2
 
     items = client.get(f"/api/balance/snapshots/{copy['id']}/items").json()
@@ -187,6 +208,13 @@ def test_copy_snapshot_with_new_label_and_date(client):
 def test_copy_snapshot_not_found(client):
     r = client.post("/api/balance/snapshots/9999/copy", json={})
     assert r.status_code == 404
+
+
+def test_copy_snapshot_conflict_returns_409(client):
+    snap_id = _create_snap(client, date="2025-01-01", label="Orig").json()["id"]
+    client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
+    r = client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
+    assert r.status_code == 409
 
 
 # ── Items ─────────────────────────────────────────────────────────────────────
@@ -359,6 +387,18 @@ def test_import_skips_unknown_snapshot_ref(client):
     data = r.json()
     assert data["items_imported"] == 0
     assert any("no recognized snapshot ref" in s["reason"] for s in data["skipped"])
+
+
+def test_import_skips_unparseable_amount(client):
+    csv_content = (
+        "资产项,金额,资产 OR 负债,分类,关联资产负债表\n"
+        "测试项,N/A,资产,现金,1819d2dbf46d8030acf2eccb7031086c\n"
+    )
+    f = io.BytesIO(csv_content.encode("utf-8"))
+    r = client.post("/api/balance/import", files={"file": ("test.csv", f, "text/csv")})
+    data = r.json()
+    assert data["items_imported"] == 0
+    assert any("unparseable amount" in s["reason"] for s in data["skipped"])
 
 
 def test_import_skips_unknown_side(client):

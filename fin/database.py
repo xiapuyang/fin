@@ -121,6 +121,16 @@ def _migrate_columns(db: "Session") -> None:
         ("stocks", "regular_close", "ALTER TABLE stocks ADD COLUMN regular_close REAL"),
         ("accounts", "cutoff_date", "ALTER TABLE accounts ADD COLUMN cutoff_date TEXT"),
         ("watchlist", "user_id", "ALTER TABLE watchlist ADD COLUMN user_id BIGINT"),
+        (
+            "balance_items",
+            "account_id",
+            "ALTER TABLE balance_items ADD COLUMN account_id INTEGER",
+        ),
+        (
+            "balance_items",
+            "sub_account_id",
+            "ALTER TABLE balance_items ADD COLUMN sub_account_id INTEGER",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:
@@ -293,6 +303,62 @@ def _migrate_indexes(db: "Session") -> None:
     db.commit()
 
 
+def _migrate_balance_indexes(db: "Session") -> None:
+    """Create COALESCE-based unique indexes for balance tables.
+
+    SQLAlchemy's Index() cannot express COALESCE(), so these are raw SQL.
+    Any existing non-unique index with the same name is dropped first so the
+    unique version can be created on both new and upgraded databases.
+    """
+    from sqlalchemy import text
+
+    # Drop old non-unique versions that block the unique COALESCE indexes
+    for name in ("uq_balance_item", "uq_balance_account"):
+        row = db.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='index' AND name=:n"),
+            {"n": name},
+        ).first()
+        if row and row[0] and "UNIQUE" not in row[0].upper():
+            db.execute(text(f"DROP INDEX {name}"))
+    db.commit()
+
+    indexes = [
+        (
+            "uq_balance_snapshot",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_snapshot "
+            "ON balance_snapshots(user_id, snapshot_date, label)",
+        ),
+        (
+            "uq_balance_account",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_account "
+            "ON balance_accounts(user_id, COALESCE(parent_id,-1), name)",
+        ),
+        (
+            "uq_balance_item",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_item "
+            "ON balance_items(snapshot_id, side, COALESCE(account_id,-1), "
+            "COALESCE(sub_account_id,-1), category)",
+        ),
+    ]
+    existing = {
+        row[1]
+        for row in db.execute(
+            text("SELECT type, name FROM sqlite_master WHERE type='index'")
+        )
+    }
+    for name, stmt in indexes:
+        if name not in existing:
+            try:
+                db.execute(text(stmt))
+            except Exception as exc:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Balance index %s skipped: %s", name, exc
+                )
+    db.commit()
+
+
 def init_db() -> None:
     import fin.models.alert  # noqa: F401
     import fin.models.stock  # noqa: F401
@@ -325,5 +391,6 @@ def init_db() -> None:
         _backfill_recurring_subcategory(db)
         _backfill_watchlist_user_id(db)
         _migrate_indexes(db)
+        _migrate_balance_indexes(db)
     finally:
         db.close()

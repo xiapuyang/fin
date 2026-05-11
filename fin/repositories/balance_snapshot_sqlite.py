@@ -15,22 +15,29 @@ class BalanceSnapshotSQLiteRepository:
         from fin.models.balance_item import BalanceItemModel
         from sqlalchemy import func
 
-        rows = (
-            self._db.query(
-                BalanceSnapshotModel,
-                func.count(BalanceItemModel.id).label("item_count"),
-            )
-            .outerjoin(
-                BalanceItemModel,
-                (BalanceItemModel.snapshot_id == BalanceSnapshotModel.id)
-                & (BalanceItemModel.user_id == user_id),
-            )
+        snaps = (
+            self._db.query(BalanceSnapshotModel)
             .filter(BalanceSnapshotModel.user_id == user_id)
-            .group_by(BalanceSnapshotModel.id)
             .order_by(BalanceSnapshotModel.snapshot_date)
             .all()
         )
-        return rows
+        if not snaps:
+            return []
+        snap_ids = [s.id for s in snaps]
+        counts_raw = (
+            self._db.query(
+                BalanceItemModel.snapshot_id,
+                func.count(BalanceItemModel.id).label("cnt"),
+            )
+            .filter(
+                BalanceItemModel.snapshot_id.in_(snap_ids),
+                BalanceItemModel.user_id == user_id,
+            )
+            .group_by(BalanceItemModel.snapshot_id)
+            .all()
+        )
+        count_map = {sid: cnt for sid, cnt in counts_raw}
+        return [(snap, count_map.get(snap.id, 0)) for snap in snaps]
 
     def get_by_id(self, snapshot_id: int, user_id: int) -> BalanceSnapshotModel:
         row = (

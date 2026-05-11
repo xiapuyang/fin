@@ -16,6 +16,8 @@ API_PORT = 8899
 
 SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
 
+TS_FMT = "%Y-%m-%d %H:%M:%S"
+
 # Ensure directories exist at import time
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)

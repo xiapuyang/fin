@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS balance_items (
     interest_rate   FLOAT,
     monthly_payment FLOAT,
     create_time     DATETIME NOT NULL,
-    update_time     DATETIME NOT NULL,
+    update_time     DATETIME NOT NULL
 );
 -- COALESCE handles NULL account_id / sub_account_id (SQLite treats NULLs as distinct)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_item
