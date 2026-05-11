@@ -5,18 +5,19 @@ from sqlalchemy import BigInteger, Column, DateTime, Integer, String, UniqueCons
 from fin.database import Base
 
 
-class AccountModel(Base):
-    __tablename__ = "accounts"
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_account_name"),)
+class BalanceSnapshotModel(Base):
+    __tablename__ = "balance_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "snapshot_date", "label", name="uq_balance_snapshot"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)
-    name = Column(String, nullable=False)
-    currency = Column(String, nullable=True, default="CNY")
+    snapshot_date = Column(String, nullable=False)  # YYYY-MM-DD
+    label = Column(String, nullable=False)
     note = Column(String, nullable=True)
-    cutoff_date = Column(String, nullable=True)
-    balance_account_id = Column(Integer, nullable=True)
-    balance_sub_account_id = Column(Integer, nullable=True)
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

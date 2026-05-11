@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 # before persisting (market_state and change_pct are computed/transient).
 _NON_DB_FIELDS = frozenset({"market_state", "change_pct", "after_hours_change_pct"})
 
-_SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN"}
+_SUFFIX_TO_MARKET = {".HK": "HK", ".SS": "CN", ".SZ": "CN", ".TO": "CA", ".V": "CA"}
 
 
 def _market_for_symbol(symbol: str) -> str:
@@ -164,5 +164,7 @@ class QuoteService:
 
     @staticmethod
     def _is_fresh(updated_at: datetime) -> bool:
-        now = datetime.utcnow()
-        return (now - updated_at).total_seconds() < STALE_SECONDS
+        now = datetime.now(timezone.utc)
+        return (
+            now - updated_at.replace(tzinfo=timezone.utc)
+        ).total_seconds() < STALE_SECONDS

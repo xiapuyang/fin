@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFi
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from fin.config import TS_FMT
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.holding import HoldingModel
@@ -31,8 +32,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-_TS_FMT = "%Y-%m-%d %H:%M:%S"
-
 
 def _account_response(a: AccountModel) -> AccountResponse:
     return AccountResponse(
@@ -41,8 +40,10 @@ def _account_response(a: AccountModel) -> AccountResponse:
         currency=a.currency or "CNY",
         note=a.note,
         cutoff_date=a.cutoff_date,
-        create_time=a.create_time.strftime(_TS_FMT),
-        update_time=a.update_time.strftime(_TS_FMT),
+        balance_account_id=a.balance_account_id,
+        balance_sub_account_id=a.balance_sub_account_id,
+        create_time=a.create_time.strftime(TS_FMT),
+        update_time=a.update_time.strftime(TS_FMT),
     )
 
 
@@ -59,8 +60,8 @@ def _holding_response(h: HoldingModel) -> HoldingResponse:
         shares=h.shares,
         avg_cost=h.avg_cost,
         note=h.note,
-        create_time=h.create_time.strftime(_TS_FMT),
-        update_time=h.update_time.strftime(_TS_FMT),
+        create_time=h.create_time.strftime(TS_FMT),
+        update_time=h.update_time.strftime(TS_FMT),
     )
 
 
@@ -77,8 +78,8 @@ def _tx_response(t: TransactionModel) -> TransactionResponse:
         account=t.account,
         realized=t.realized,
         note=t.note,
-        create_time=t.create_time.strftime(_TS_FMT),
-        update_time=t.update_time.strftime(_TS_FMT),
+        create_time=t.create_time.strftime(TS_FMT),
+        update_time=t.update_time.strftime(TS_FMT),
     )
 
 
@@ -93,8 +94,8 @@ def _income_response(i: IncomeModel) -> IncomeResponse:
         account=i.account,
         code=i.code,
         note=i.note,
-        create_time=i.create_time.strftime(_TS_FMT),
-        update_time=i.update_time.strftime(_TS_FMT),
+        create_time=i.create_time.strftime(TS_FMT),
+        update_time=i.update_time.strftime(TS_FMT),
     )
 
 
