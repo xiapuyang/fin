@@ -23,6 +23,10 @@ const App = () => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
     fetch("/api/settings").then(r => r.json()).then(s => setSettings(prev => ({ ...prev, ...s }))).catch(() => {});
+    fetch("/api/symbols").then(r => r.json()).then(data => {
+      Object.assign(SYMBOLS, data);
+      _rebuildSymbolIndex();
+    }).catch(() => {});
   }, []);
 
   // Fetch FX rates on load and every 5 minutes; also update global FX object
@@ -52,7 +56,7 @@ const App = () => {
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings currency={currency}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
-    balance:   <BalanceSheet/>,
+    balance:   <BalanceSheet currency={currency}/>,
     fire:      <Fire/>,
   }[route];
 
