@@ -6,56 +6,14 @@ const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", HKD: "HK$", CAD: "CA$" };
 const CURRENCY_LABEL  = { CNY: "人民币 CNY", USD: "美元 USD", HKD: "港元 HKD", CAD: "加元 CAD" };
 const CURRENCY_OPTIONS = CURRENCIES.map(c => ({ value: c, label: CURRENCY_LABEL[c] || c }));
 
-const SYMBOLS = {
-  "美股指数 US Index": [
-    { code: "^GSPC", name: "S&P 500",    market: "US", currency: "USD" },
-    { code: "^NDX",  name: "Nasdaq 100", market: "US", currency: "USD" },
-    { code: "^DJI",  name: "Dow Jones",  market: "US", currency: "USD" },
-    { code: "^VIX",  name: "VIX",        market: "US", currency: "USD" },
-  ],
-  "美股 ETF US ETF": [
-    { code: "SPY", name: "S&P ETF",      market: "US", currency: "USD" },
-    { code: "QQQ", name: "Nasdaq ETF",   market: "US", currency: "USD" },
-    { code: "IWM", name: "Russell 2000", market: "US", currency: "USD" },
-    { code: "GLD", name: "Gold",         market: "US", currency: "USD" },
-    { code: "TLT", name: "20Y Treasury", market: "US", currency: "USD" },
-  ],
-  "Mag7": [
-    { code: "NVDA",  name: "Nvidia",      market: "US", currency: "USD" },
-    { code: "AAPL",  name: "Apple",       market: "US", currency: "USD" },
-    { code: "MSFT",  name: "Microsoft",   market: "US", currency: "USD" },
-    { code: "GOOGL", name: "Alphabet A",  market: "US", currency: "USD" },
-    { code: "GOOG",  name: "Alphabet C",  market: "US", currency: "USD" },
-    { code: "AMZN",  name: "Amazon",      market: "US", currency: "USD" },
-    { code: "META",  name: "Meta",        market: "US", currency: "USD" },
-    { code: "TSLA",  name: "Tesla",       market: "US", currency: "USD" },
-    { code: "BRK-B", name: "Berkshire B", market: "US", currency: "USD" },
-  ],
-  "港股 HK Stocks": [
-    { code: "^HSI",    name: "恒生指数",   market: "HK", currency: "HKD" },
-    { code: "^HSTECH", name: "恒生科技",   market: "HK", currency: "HKD" },
-    { code: "^HSCE",   name: "国企指数",   market: "HK", currency: "HKD" },
-    { code: "0700.HK", name: "腾讯控股",   market: "HK", currency: "HKD" },
-    { code: "9988.HK", name: "阿里巴巴",   market: "HK", currency: "HKD" },
-    { code: "3690.HK", name: "美团",       market: "HK", currency: "HKD" },
-    { code: "1810.HK", name: "小米集团",   market: "HK", currency: "HKD" },
-  ],
-  "A 股 A-Shares": [
-    { code: "000300.SS", name: "沪深 300", market: "CN", currency: "CNY" },
-    { code: "000001.SS", name: "上证指数", market: "CN", currency: "CNY" },
-    { code: "399006.SZ", name: "创业板指", market: "CN", currency: "CNY" },
-    { code: "600519.SS", name: "贵州茅台", market: "CN", currency: "CNY" },
-    { code: "300750.SZ", name: "宁德时代", market: "CN", currency: "CNY" },
-  ],
-};
-
+const SYMBOLS = {};
 const FX = { USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 };
+const SYMBOL_INDEX = {};
 
-const SYMBOL_INDEX = (() => {
-  const out = {};
-  Object.values(SYMBOLS).flat().forEach(s => { out[s.code] = s; });
-  return out;
-})();
+const _rebuildSymbolIndex = () => {
+  Object.keys(SYMBOL_INDEX).forEach(k => delete SYMBOL_INDEX[k]);
+  Object.values(SYMBOLS).flat().forEach(s => { SYMBOL_INDEX[s.code] = s; });
+};
 
 function genSpark(seed, n = 30, base = 100, vol = 0.025, drift = 0) {
   let v = base;

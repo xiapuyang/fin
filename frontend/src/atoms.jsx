@@ -298,8 +298,12 @@ const Empty = ({ icon = "circle", title, hint }) => (
 // === Modal ================================================================
 const Modal = ({ open, onClose, children, width = 520, title }) => {
   if (!open) return null;
+  const downOnBackdrop = React.useRef(false);
   return (
-    <div onClick={onClose} style={{
+    <div
+      onMouseDown={e => { downOnBackdrop.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (downOnBackdrop.current && e.target === e.currentTarget) onClose(); }}
+      style={{
       position: "fixed", inset: 0, background: "rgba(20,22,27,.45)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60,
       animation: "fadeIn .15s ease",
