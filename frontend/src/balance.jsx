@@ -3,10 +3,11 @@
    FX conversion uses global FX object + currency prop from TopBar.
 */
 
-const BALANCE_CATEGORIES = ["现金","理财","投资","期权","固定资产","房产","社保","外债","信用卡","贷款","其他贷款"];
+const BALANCE_CATEGORIES = ["现金","存款","理财","投资","期权","固定资产","房产","社保","外债","信用卡","贷款","其他贷款"];
 
 const BALANCE_CAT_COLORS = {
   "现金":     "#1F8A4C",
+  "存款":     "#0E7A5A",
   "理财":     "#2D9E6E",
   "投资":     "#1F4FE0",
   "期权":     "#7A1F4F",
@@ -39,9 +40,11 @@ const BalanceSheet = ({ currency = "CNY" }) => {
   const [loading, setLoading]     = React.useState(true);
   const [snapId, setSnapId]       = React.useState(null);
   const [sideFilter, setSideFilter] = React.useState("all");
+  const [accountFilter, setAccountFilter] = React.useState(null);
 
   const [showSnapMenu, setShowSnapMenu]       = React.useState(false);
   const [editItem, setEditItem]               = React.useState(null);
+  const [copyItem, setCopyItem]               = React.useState(null);
   const [historyItem, setHistoryItem]         = React.useState(null);
   const [showCopySnap, setShowCopySnap]       = React.useState(false);
   const [showEditSnap, setShowEditSnap]       = React.useState(false);
@@ -116,11 +119,15 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       .map(c => ({ label: c, value: cats[c] || 0, color: BALANCE_CAT_COLORS[c] }))
       .filter(c => c.value > 0);
   };
-  const assetCats = aggCat("asset");
-  const liabCats  = aggCat("liability");
+  const assetCats  = aggCat("asset");
+  const liabCats   = aggCat("liability");
+  const assetItems = items.filter(i => i.side === "asset");
+  const liabItems  = items.filter(i => i.side === "liability");
 
-  const filtered = sideFilter === "all" ? items : items.filter(i => i.side === sideFilter);
+  const sideFiltered = sideFilter === "all" ? items : items.filter(i => i.side === sideFilter);
+  const filtered = accountFilter ? sideFiltered.filter(i => i.account_name === accountFilter) : sideFiltered;
   const sortedFiltered = [...filtered].sort((a, b) => toCNY(b) - toCNY(a));
+  const accountNames = [...new Set(items.map(i => i.account_name).filter(Boolean))].sort();
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -232,7 +239,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: "var(--down)" }}>
             +{symFor(currency)}{fmtNum(toDisplay(totalAssets, "CNY", currency), 0)}
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>{items.filter(i=>i.side==="asset").length} 项 · {assetCats.length} 类</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>{assetItems.length} 项 · {assetCats.length} 类</div>
         </Card>
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL LIABILITIES · 负债</div>
@@ -262,26 +269,57 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         </div>
       )}
 
+      {/* Account breakdowns */}
+      {(assetItems.length > 0 || liabItems.length > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+          <AccountBreakdownCard title="资产账户 Account Breakdown" items={assetItems} total={totalAssets} currency={currency}/>
+          <AccountBreakdownCard title="负债账户 Account Breakdown" items={liabItems} total={totalLiabilities} currency={currency}/>
+        </div>
+      )}
+
       {/* Detail table */}
       <Card padding={0} style={{ marginBottom: 18 }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
             <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>明细 Items</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>点击条目查看跨快照历史</div>
           </div>
-          <Tabs variant="pill" value={sideFilter} onChange={setSideFilter} tabs={[
+          <Tabs variant="pill" value={sideFilter} onChange={v => { setSideFilter(v); setAccountFilter(null); }} tabs={[
             { id: "all",       label: `全部 ${items.length}` },
             { id: "asset",     label: `资产 ${items.filter(i=>i.side==="asset").length}` },
             { id: "liability", label: `负债 ${items.filter(i=>i.side==="liability").length}` },
           ]}/>
         </div>
+        {accountNames.length > 0 && (
+          <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--line)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => setAccountFilter(null)} style={{
+              padding: "3px 10px", borderRadius: 20, border: "1px solid " + (!accountFilter ? "var(--ink)" : "var(--line)"),
+              background: !accountFilter ? "var(--ink)" : "transparent",
+              color: !accountFilter ? "var(--paper)" : "var(--ink-3)",
+              fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+            }}>全部</button>
+            {accountNames.map(name => {
+              const color = entityColor(name);
+              const active = accountFilter === name;
+              return (
+                <button key={name} onClick={() => setAccountFilter(active ? null : name)} style={{
+                  padding: "3px 10px", borderRadius: 20,
+                  border: "1px solid " + (active ? color : color + "55"),
+                  background: active ? color : color + "18",
+                  color: active ? "#fff" : color,
+                  fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                }}>{name}</button>
+              );
+            })}
+          </div>
+        )}
         {sortedFiltered.length === 0 ? (
           <div style={{ padding: "40px 18px", textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
             暂无条目 · <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink)", textDecoration: "underline", fontSize: 13 }} onClick={() => setEditItem({})}>新增条目</button>
           </div>
         ) : (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 100px 80px 130px 130px 1fr 50px", gap: 10, padding: "9px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 100px 80px 130px 130px 1fr 72px", gap: 10, padding: "9px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
               <span>NAME / ACCOUNT</span><span>CATEGORY</span><span>SIDE</span>
               <span style={{ textAlign: "right" }}>AMOUNT</span>
               <span style={{ textAlign: "right" }}>≈ {currency}</span>
@@ -297,6 +335,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
                 onClick={() => setHistoryItem(it)}
                 onEdit={(e) => { e.stopPropagation(); setEditItem(it); }}
                 onDelete={(e) => { e.stopPropagation(); setDeleteTarget({ type: "item", id: it.id }); }}
+                onCopy={(e) => { e.stopPropagation(); setCopyItem(it); }}
               />
             ))}
           </>
@@ -328,6 +367,15 @@ const BalanceSheet = ({ currency = "CNY" }) => {
           currentItems={items}
           onClose={() => setShowInjectHoldings(false)}
           onDone={async () => { setShowInjectHoldings(false); await loadItems(snapId); const ai = await apiGetAllBalanceItems(); setAllItems(ai); }}
+        />
+      )}
+      {copyItem && (
+        <CopyItemModal
+          item={copyItem}
+          snapshots={snapshots}
+          accounts={accounts}
+          onClose={() => setCopyItem(null)}
+          onDone={() => { setCopyItem(null); loadItems(snapId); loadAll(); }}
         />
       )}
       {showCopySnap && snap && (
@@ -451,9 +499,146 @@ const CatBreakdownCard = ({ title, cats, total, currency }) => (
   </Card>
 );
 
+// ── Unified color map: categories + accounts share one namespace ──────────────
+
+const ENTITY_COLORS = {
+  // categories (same as BALANCE_CAT_COLORS — keeps visual consistency)
+  "现金": "#1F8A4C", "理财": "#2D9E6E", "投资": "#1F4FE0", "期权": "#7A1F4F",
+  "固定资产": "#6B4FB8", "房产": "#4B3580", "社保": "#B8447B", "外债": "#C8821F",
+  "信用卡": "#C03A3A", "贷款": "#9A4D2E", "其他贷款": "#B85C2E",
+  // accounts
+  "招商银行": "#D32F2F", "微众银行": "#1565C0", "BMO": "#E65100",
+  "招商香港": "#AD1457", "汇丰银行": "#0277BD", "微信": "#2E7D32",
+  "支付宝": "#1677FF", "IB": "#283593", "招商证券": "#6A1B9A",
+  "招商信用卡": "#C62828", "中信信用卡": "#00695C", "房贷": "#4E342E",
+  "moomoo": "#BF360C", "陈兰微众银行": "#0288D1", "陈兰招商银行": "#F57F17",
+  "陈兰社保": "#558B2F", "陈兰招商证券": "#7B1FA2",
+};
+const entityColor = (name) => ENTITY_COLORS[name] || "#607D8B";
+
+// Blend hex towards white by t ∈ [0,1]
+const blendWhite = (hex, t) => {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const m = c => Math.round(c + (255 - c) * t).toString(16).padStart(2,"0");
+  return `#${m(r)}${m(g)}${m(b)}`;
+};
+
+const DonutChart = ({ segments, size = 52 }) => {
+  const total = segments.reduce((s, g) => s + g.value, 0);
+  if (!total) return (
+    <svg width={size} height={size}>
+      <circle cx={size/2} cy={size/2} r={size/2 - 2} fill="var(--bg-deep)"/>
+    </svg>
+  );
+  const R = size / 2 - 1.5, r = R * 0.46, cx = size / 2, cy = size / 2;
+  let a = -Math.PI / 2;
+  const arcs = segments.map(seg => {
+    const sweep = (seg.value / total) * 2 * Math.PI;
+    if (sweep < 0.002) { a += sweep; return null; }
+    const a0 = a, a1 = a + sweep;
+    a = a1;
+    const large = sweep > Math.PI ? 1 : 0;
+    const p = (ang, rad) => `${(cx + rad * Math.cos(ang)).toFixed(2)},${(cy + rad * Math.sin(ang)).toFixed(2)}`;
+    return { color: seg.color, d: `M${p(a0,R)} A${R},${R} 0 ${large},1 ${p(a1,R)} L${p(a1,r)} A${r},${r} 0 ${large},0 ${p(a0,r)} Z` };
+  }).filter(Boolean);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {arcs.map((arc, i) => <path key={i} d={arc.d} fill={arc.color} stroke="var(--paper)" strokeWidth="1.5"/>)}
+    </svg>
+  );
+};
+
+const AccountBreakdownCard = ({ title, items, total, currency }) => {
+  if (!items.length) return null;
+  const cnyOf = i => i.amount * (FX[i.currency] || 1);
+
+  const acctMap = {};
+  items.forEach(i => {
+    const acct = i.account_name || "其他";
+    if (!acctMap[acct]) acctMap[acct] = { total: 0, subs: {} };
+    const v = cnyOf(i);
+    acctMap[acct].total += v;
+    const sub = i.sub_account_name || null;
+    if (sub) acctMap[acct].subs[sub] = (acctMap[acct].subs[sub] || 0) + v;
+  });
+
+  const rows = Object.entries(acctMap)
+    .map(([name, data]) => {
+      const color = entityColor(name);
+      const subEntries = Object.entries(data.subs).sort((a, b) => b[1] - a[1]);
+      const subColors = subEntries.map((_, i) =>
+        blendWhite(color, subEntries.length > 1 ? i * 0.45 / (subEntries.length - 1) : 0)
+      );
+      return { name, total: data.total, color, subEntries, subColors };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  // Top overview pie: one segment per account
+  const topSegments = rows.map(r => ({ value: r.total, color: r.color }));
+  // Sub sections: accounts with sub-accounts and non-zero total
+  const withSubs = rows.filter(r => r.total > 0 && r.subEntries.length > 0);
+
+  return (
+    <Card padding={20}>
+      <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{title}</div>
+
+      {/* Overview: big donut + account legend */}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
+        <DonutChart segments={topSegments} size={96}/>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, paddingTop: 2 }}>
+          {rows.filter(r => r.total > 0).map(r => {
+            const pct = total ? (r.total / total) * 100 : 0;
+            return (
+              <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }}/>
+                <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{r.name}</span>
+                <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+                  {symFor(currency)}{fmtNum(toDisplay(r.total,"CNY",currency),0)}
+                </span>
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 28, textAlign: "right" }}>
+                  {pct.toFixed(0)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Per-account sub breakdown — text list, no mini donuts */}
+      {withSubs.length > 0 && (
+        <>
+          <div style={{ height: 1, background: "var(--line)", marginBottom: 14 }}/>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {withSubs.map(r => (
+              <div key={r.name}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: r.color, marginBottom: 5 }}>{r.name}</div>
+                {r.subEntries.map(([subName, subAmt], i) => {
+                  const subPct = r.total ? (subAmt / r.total) * 100 : 0;
+                  return (
+                    <div key={subName} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+                      <span style={{ width: 7, height: 7, borderRadius: 2, background: r.subColors[i], flexShrink: 0 }}/>
+                      <span style={{ fontSize: 12, color: "var(--ink-2)", flex: 1 }}>{subName}</span>
+                      <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                        {symFor(currency)}{fmtNum(toDisplay(subAmt,"CNY",currency),0)}
+                      </span>
+                      <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", width: 32, textAlign: "right" }}>
+                        {subPct.toFixed(0)}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
 // ── Item row ──────────────────────────────────────────────────────────────────
 
-const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete }) => {
+const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete, onCopy }) => {
   const dispAmt = toDisplay(it.amount, it.currency, currency);
   const cnyAmt  = toDisplay(it.amount, it.currency, "CNY");
   const iconBtn = (onClick, name) => (
@@ -462,7 +647,7 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete }) => {
     </button>
   );
   return (
-    <div onClick={onClick} style={{ display: "grid", gridTemplateColumns: "1.6fr 100px 80px 130px 130px 1fr 50px", gap: 10, padding: "11px 18px", alignItems: "center", borderBottom: last ? "none" : "1px solid var(--line)", fontSize: 12.5, cursor: "pointer" }}
+    <div onClick={onClick} style={{ display: "grid", gridTemplateColumns: "1.6fr 100px 80px 130px 130px 1fr 72px", gap: 10, padding: "11px 18px", alignItems: "center", borderBottom: last ? "none" : "1px solid var(--line)", fontSize: 12.5, cursor: "pointer" }}
       onMouseEnter={e => e.currentTarget.style.background = "var(--bg-deep)"}
       onMouseLeave={e => e.currentTarget.style.background = ""}
     >
@@ -481,13 +666,14 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete }) => {
       </span>
       <span><Badge tone={it.side === "asset" ? "down" : "up"} size="sm">{it.side === "asset" ? "资产" : "负债"}</Badge></span>
       <span className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
-        {fmtMoney(it.amount, it.currency, 0)}
+        {fmtMoney(it.amount, it.currency, 2)}
       </span>
       <span className="mono" style={{ textAlign: "right", color: currency === "CNY" ? "var(--ink-3)" : "var(--ink)" }}>
         {currency !== it.currency ? `${symFor(currency)}${fmtNum(dispAmt, 0)}` : <span style={{ color: "var(--ink-4)" }}>—</span>}
       </span>
       <span style={{ color: "var(--ink-3)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.note || "—"}</span>
       <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
+        {iconBtn(onCopy, "copy")}
         {iconBtn(onEdit, "edit")}
         {iconBtn(onDelete, "trash")}
       </div>
@@ -704,15 +890,6 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
               <BalSelect value={form.category} onChange={v => set("category", v)}
                 options={BALANCE_CATEGORIES.map(c => ({ value: c, label: c }))}/>
             </BalField>
-            <BalField label="金额 / 货币" span2>
-              <div style={{ display: "flex", gap: 0 }}>
-                <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
-                  style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
-                <Select value={form.currency} onChange={v => set("currency", v)}
-                  options={CURRENCIES.map(c => ({ value: c, label: c }))}
-                  style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
-              </div>
-            </BalField>
             {parentAccounts.length > 0 && (
               <>
                 <BalField label="账户">
@@ -726,6 +903,15 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
                 </BalField>
               </>
             )}
+            <BalField label="金额 / 货币" span2>
+              <div style={{ display: "flex", gap: 0 }}>
+                <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
+                  style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
+                <Select value={form.currency} onChange={v => set("currency", v)}
+                  options={CURRENCIES.map(c => ({ value: c, label: c }))}
+                  style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
+              </div>
+            </BalField>
             <BalField label="备注" span2>
               <Input value={form.note} onChange={v => set("note", v)} placeholder="可选" style={{ width: "100%" }}/>
             </BalField>
@@ -894,6 +1080,161 @@ const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
             </div>
           </>
         )}
+      </div>
+    </Modal>
+  );
+};
+
+// ── Copy item modal ───────────────────────────────────────────────────────────
+
+const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
+  const [form, setForm] = React.useState({
+    snapshot_id: String(snapshots[snapshots.length - 1]?.id || item.snapshot_id),
+    name:           item.name || "",
+    category:       item.category || "现金",
+    side:           item.side || "asset",
+    amount:         item.amount != null ? String(item.amount) : "",
+    currency:       item.currency || "CNY",
+    account_id:     item.account_id ? String(item.account_id) : "",
+    sub_account_id: item.sub_account_id ? String(item.sub_account_id) : "",
+    note:           item.note || "",
+    interest_rate:    item.interest_rate  != null ? String(item.interest_rate)  : "",
+    monthly_payment:  item.monthly_payment != null ? String(item.monthly_payment) : "",
+    start_date:     item.start_date || "",
+    end_date:       item.end_date || "",
+    price:          item.price    != null ? String(item.price)    : "",
+    quantity:       item.quantity != null ? String(item.quantity) : "",
+  });
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError]     = React.useState(null);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const parentAccounts = accounts.filter(a => !a.parent_id);
+  const subAccounts    = form.account_id
+    ? accounts.filter(a => a.parent_id === Number(form.account_id))
+    : [];
+  const isLoan   = LOAN_CATS.includes(form.category);
+  const isOption = OPTION_CATS.includes(form.category);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { setError("名称不能为空"); return; }
+    if (!form.amount || isNaN(parseFloat(form.amount))) { setError("金额不合法"); return; }
+    setLoading(true); setError(null);
+    try {
+      const p = {
+        snapshot_id:    Number(form.snapshot_id),
+        name:           form.name.trim(),
+        category:       form.category,
+        side:           form.side,
+        amount:         parseFloat(form.amount) || 0,
+        currency:       form.currency,
+        account_id:     form.account_id ? Number(form.account_id) : null,
+        sub_account_id: form.sub_account_id ? Number(form.sub_account_id) : null,
+        note:           form.note.trim() || null,
+      };
+      if (isLoan) {
+        p.interest_rate   = form.interest_rate   ? parseFloat(form.interest_rate)   : null;
+        p.monthly_payment = form.monthly_payment ? parseFloat(form.monthly_payment) : null;
+        p.start_date      = form.start_date  || null;
+        p.end_date        = form.end_date    || null;
+      }
+      if (isOption) {
+        p.price    = form.price    ? parseFloat(form.price)    : null;
+        p.quantity = form.quantity ? parseFloat(form.quantity) : null;
+      }
+      await apiCreateBalanceItem(p);
+      onDone();
+    } catch (e) { setError(e.message); }
+    finally     { setLoading(false); }
+  };
+
+  return (
+    <Modal open title="拷贝条目" onClose={onClose} width={480}>
+      <div style={{ padding: "16px 20px 20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <BalField label="目标快照" span2>
+            <BalSelect value={form.snapshot_id} onChange={v => set("snapshot_id", v)}
+              options={snapshots.map(s => ({ value: String(s.id), label: `${s.snapshot_date}  ${s.label}` }))}/>
+          </BalField>
+          <BalField label="资产 / 负债" span2>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ value: "asset", label: "资产" }, { value: "liability", label: "负债" }].map(opt => (
+                <button key={opt.value} onClick={() => set("side", opt.value)} style={{
+                  flex: 1, padding: "7px 0", border: "1px solid " + (form.side === opt.value ? "var(--ink)" : "var(--line)"),
+                  borderRadius: 7, background: form.side === opt.value ? "var(--ink)" : "transparent",
+                  color: form.side === opt.value ? "var(--paper)" : "var(--ink-2)",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </BalField>
+          <BalField label="名称" span2>
+            <Input value={form.name} onChange={v => set("name", v)} placeholder="例：招商银行存款" style={{ width: "100%" }}/>
+          </BalField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <BalField label="分类" span2>
+              <BalSelect value={form.category} onChange={v => set("category", v)}
+                options={BALANCE_CATEGORIES.map(c => ({ value: c, label: c }))}/>
+            </BalField>
+            {parentAccounts.length > 0 && (
+              <>
+                <BalField label="账户">
+                  <BalSelect value={form.account_id} onChange={v => { set("account_id", v); set("sub_account_id", ""); }}
+                    options={[{ value: "", label: "— 不选 —" }, ...parentAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                </BalField>
+                <BalField label="子账户">
+                  <BalSelect value={form.sub_account_id} onChange={v => set("sub_account_id", v)}
+                    disabled={!form.account_id || subAccounts.length === 0}
+                    options={[{ value: "", label: "— 不选 —" }, ...subAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                </BalField>
+              </>
+            )}
+            <BalField label="金额 / 货币" span2>
+              <div style={{ display: "flex", gap: 0 }}>
+                <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
+                  style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
+                <Select value={form.currency} onChange={v => set("currency", v)}
+                  options={CURRENCIES.map(c => ({ value: c, label: c }))}
+                  style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
+              </div>
+            </BalField>
+            <BalField label="备注" span2>
+              <Input value={form.note} onChange={v => set("note", v)} placeholder="可选" style={{ width: "100%" }}/>
+            </BalField>
+            {isLoan && (
+              <>
+                <BalField label="年利率 (如 0.0365)">
+                  <Input type="number" value={form.interest_rate} onChange={v => set("interest_rate", v)} placeholder="0.0365" style={{ width: "100%" }}/>
+                </BalField>
+                <BalField label="月还款额">
+                  <Input type="number" value={form.monthly_payment} onChange={v => set("monthly_payment", v)} placeholder="10400" style={{ width: "100%" }}/>
+                </BalField>
+                <BalField label="起始日期">
+                  <Input type="date" value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
+                </BalField>
+                <BalField label="到期日期">
+                  <Input type="date" value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
+                </BalField>
+              </>
+            )}
+            {isOption && (
+              <>
+                <BalField label="单价">
+                  <Input type="number" value={form.price} onChange={v => set("price", v)} style={{ width: "100%" }}/>
+                </BalField>
+                <BalField label="数量">
+                  <Input type="number" value={form.quantity} onChange={v => set("quantity", v)} style={{ width: "100%" }}/>
+                </BalField>
+              </>
+            )}
+          </div>
+        </div>
+        {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "拷贝中…" : "拷贝"}</Button>
+        </div>
       </div>
     </Modal>
   );

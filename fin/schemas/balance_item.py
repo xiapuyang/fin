@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 
 BALANCE_CATEGORIES = {
     "现金",
+    "存款",
     "理财",
     "投资",
     "期权",
