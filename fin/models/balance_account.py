@@ -1,17 +1,13 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, Index, Integer, String
+from sqlalchemy import BigInteger, Column, DateTime, Integer, String
 
 from fin.database import Base
 
 
 class BalanceAccountModel(Base):
     __tablename__ = "balance_accounts"
-    __table_args__ = (
-        # COALESCE(parent_id, -1) makes top-level accounts (parent_id IS NULL) comparable
-        # Enforced at DB level via: CREATE UNIQUE INDEX uq_balance_account ON balance_accounts (user_id, COALESCE(parent_id, -1), name)
-        Index("uq_balance_account", "user_id", "parent_id", "name"),
-    )
+    # uq_balance_account COALESCE unique index is created in database._migrate_balance_indexes()
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)

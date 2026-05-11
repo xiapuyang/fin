@@ -22,22 +22,29 @@ class BalanceItemSQLiteRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def get_all(self, user_id: int) -> list[tuple[BalanceItemModel, str, str]]:
-        """Return (item, snapshot_date, snapshot_date) — snapshot_date denormalized."""
+    def get_all(
+        self, user_id: int
+    ) -> list[tuple[BalanceItemModel, str, dict[int, str]]]:
+        """Return (item, snapshot_date, account_map) — snapshot_date denormalized."""
         from fin.models.balance_snapshot import BalanceSnapshotModel
 
+        snaps = (
+            self._db.query(BalanceSnapshotModel.id, BalanceSnapshotModel.snapshot_date)
+            .filter(BalanceSnapshotModel.user_id == user_id)
+            .all()
+        )
+        snap_date_map = {s.id: s.snapshot_date for s in snaps}
         rows = (
-            self._db.query(BalanceItemModel, BalanceSnapshotModel.snapshot_date)
-            .join(
-                BalanceSnapshotModel,
-                BalanceSnapshotModel.id == BalanceItemModel.snapshot_id,
-            )
+            self._db.query(BalanceItemModel)
             .filter(BalanceItemModel.user_id == user_id)
             .order_by(BalanceItemModel.snapshot_id, BalanceItemModel.id)
             .all()
         )
         account_map = _build_account_map(self._db, user_id)
-        return [(item, snap_date, account_map) for item, snap_date in rows]
+        return [
+            (item, snap_date_map.get(item.snapshot_id, ""), account_map)
+            for item in rows
+        ]
 
     def get_by_snapshot(
         self, snapshot_id: int, user_id: int

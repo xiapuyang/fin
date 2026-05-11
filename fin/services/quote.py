@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -164,5 +164,7 @@ class QuoteService:
 
     @staticmethod
     def _is_fresh(updated_at: datetime) -> bool:
-        now = datetime.utcnow()
-        return (now - updated_at).total_seconds() < STALE_SECONDS
+        now = datetime.now(timezone.utc)
+        return (
+            now - updated_at.replace(tzinfo=timezone.utc)
+        ).total_seconds() < STALE_SECONDS

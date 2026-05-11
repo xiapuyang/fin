@@ -581,6 +581,11 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
     .sort((a, b) => b.total - a.total);
 
   const [selectedName, setSelectedName] = React.useState(rows[0]?.name || "");
+  React.useEffect(() => {
+    if (rows.length && !rows.find(r => r.name === selectedName)) {
+      setSelectedName(rows[0].name);
+    }
+  }, [rows]);
   const selected = rows.find(r => r.name === selectedName) || rows[0];
   const topSegments = rows.map(r => ({ value: r.total, color: r.color }));
   const subSegments = selected?.subEntries.map(([, v], i) => ({ value: v, color: selected.subColors[i] })) || [];
@@ -759,7 +764,8 @@ const HistoryModal = ({ item, allItems, snapshots, currency, onClose }) => {
       if (item.account_id) {
         return i.account_id === item.account_id &&
                i.sub_account_id === item.sub_account_id &&
-               i.category === item.category;
+               i.category === item.category &&
+               i.name === item.name;
       }
       return i.name === item.name;
     })

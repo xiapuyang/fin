@@ -3,9 +3,14 @@ import io
 import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, UploadFile
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from fin.config import TS_FMT
 from fin.database import get_db
+from fin.models.balance_account import BalanceAccountModel
+from fin.models.balance_item import BalanceItemModel
+from fin.models.balance_snapshot import BalanceSnapshotModel
 from fin.models.user import MOCK_USER_ID
 from fin.repositories.balance_account_sqlite import BalanceAccountSQLiteRepository
 from fin.repositories.balance_item_sqlite import BalanceItemSQLiteRepository
@@ -16,19 +21,19 @@ from fin.schemas.balance_account import (
     BalanceAccountUpdate,
 )
 from fin.schemas.balance_item import (
+    BALANCE_CATEGORIES,
     BalanceItemCreate,
     BalanceItemResponse,
     BalanceItemUpdate,
 )
 from fin.schemas.balance_snapshot import (
+    BalanceImportResponse,
     BalanceSnapshotCreate,
     BalanceSnapshotResponse,
     BalanceSnapshotUpdate,
 )
 
 router = APIRouter(prefix="/api")
-
-_TS_FMT = "%Y-%m-%d %H:%M:%S"
 
 # Notion page-ID → (snapshot_date, label) for the CSV import
 _NOTION_SNAPSHOT_MAP = {
@@ -71,7 +76,9 @@ _ITEM_NAME_TO_ACCOUNT: dict[str, tuple[str, str | None]] = {
 }
 
 
-def _seed_accounts_if_empty(account_repo, user_id: int) -> int:
+def _seed_accounts_if_empty(
+    account_repo: BalanceAccountSQLiteRepository, user_id: int
+) -> int:
     """Create account hierarchy derived from _ITEM_NAME_TO_ACCOUNT if table is empty."""
     if account_repo.get_all(user_id):
         return 0
@@ -96,29 +103,33 @@ def _seed_accounts_if_empty(account_repo, user_id: int) -> int:
 # ── Response helpers ──────────────────────────────────────────────────────────
 
 
-def _account_response(m) -> BalanceAccountResponse:
+def _account_response(m: BalanceAccountModel) -> BalanceAccountResponse:
     return BalanceAccountResponse(
         id=m.id,
         name=m.name,
         parent_id=m.parent_id,
-        create_time=m.create_time.strftime(_TS_FMT),
-        update_time=m.update_time.strftime(_TS_FMT),
+        create_time=m.create_time.strftime(TS_FMT),
+        update_time=m.update_time.strftime(TS_FMT),
     )
 
 
-def _snapshot_response(m, item_count: int) -> BalanceSnapshotResponse:
+def _snapshot_response(
+    m: BalanceSnapshotModel, item_count: int
+) -> BalanceSnapshotResponse:
     return BalanceSnapshotResponse(
         id=m.id,
         snapshot_date=m.snapshot_date,
         label=m.label,
         note=m.note,
         item_count=item_count,
-        create_time=m.create_time.strftime(_TS_FMT),
-        update_time=m.update_time.strftime(_TS_FMT),
+        create_time=m.create_time.strftime(TS_FMT),
+        update_time=m.update_time.strftime(TS_FMT),
     )
 
 
-def _item_response(item, snapshot_date: str, account_map: dict) -> BalanceItemResponse:
+def _item_response(
+    item: BalanceItemModel, snapshot_date: str, account_map: dict[int, str]
+) -> BalanceItemResponse:
     return BalanceItemResponse(
         id=item.id,
         snapshot_id=item.snapshot_id,
@@ -141,8 +152,8 @@ def _item_response(item, snapshot_date: str, account_map: dict) -> BalanceItemRe
         end_date=item.end_date,
         interest_rate=item.interest_rate,
         monthly_payment=item.monthly_payment,
-        create_time=item.create_time.strftime(_TS_FMT),
-        update_time=item.update_time.strftime(_TS_FMT),
+        create_time=item.create_time.strftime(TS_FMT),
+        update_time=item.update_time.strftime(TS_FMT),
     )
 
 
@@ -247,14 +258,19 @@ def copy_snapshot(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    new_snap = snap_repo.create(
-        BalanceSnapshotCreate(
-            snapshot_date=new_date or source.snapshot_date,
-            label=new_label or source.label,
-            note=source.note,
-        ),
-        MOCK_USER_ID,
-    )
+    try:
+        new_snap = snap_repo.create(
+            BalanceSnapshotCreate(
+                snapshot_date=new_date or source.snapshot_date,
+                label=new_label if new_label is not None else f"{source.label} (副本)",
+                note=source.note,
+            ),
+            MOCK_USER_ID,
+        )
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="A snapshot with this label and date already exists"
+        )
     count = item_repo.copy_snapshot(snapshot_id, new_snap.id, MOCK_USER_ID)
     return _snapshot_response(new_snap, count)
 
@@ -288,8 +304,13 @@ def list_all_items(db: Session = Depends(get_db)):
 def create_item(data: BalanceItemCreate, db: Session = Depends(get_db)):
     item_repo = BalanceItemSQLiteRepository(db)
     item = item_repo.create(data, MOCK_USER_ID)
+    snap = (
+        db.query(BalanceSnapshotModel)
+        .filter(BalanceSnapshotModel.id == data.snapshot_id)
+        .first()
+    )
+    snap_date = snap.snapshot_date if snap else ""
     rows = item_repo.get_by_snapshot(data.snapshot_id, MOCK_USER_ID)
-    snap_date = rows[0][1] if rows else ""
     account_map = rows[0][2] if rows else {}
     return _item_response(item, snap_date, account_map)
 
@@ -301,8 +322,13 @@ def update_item(item_id: int, data: BalanceItemUpdate, db: Session = Depends(get
         item = item_repo.update(item_id, data, MOCK_USER_ID)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    snap = (
+        db.query(BalanceSnapshotModel)
+        .filter(BalanceSnapshotModel.id == item.snapshot_id)
+        .first()
+    )
+    snap_date = snap.snapshot_date if snap else ""
     rows = item_repo.get_by_snapshot(item.snapshot_id, MOCK_USER_ID)
-    snap_date = rows[0][1] if rows else ""
     account_map = rows[0][2] if rows else {}
     return _item_response(item, snap_date, account_map)
 
@@ -327,7 +353,7 @@ def _parse_import_amount(raw: str) -> float | None:
         return None
 
 
-@router.post("/balance/import")
+@router.post("/balance/import", response_model=BalanceImportResponse, status_code=200)
 async def import_balance(file: UploadFile, db: Session = Depends(get_db)):
     """Import balance sheet items from a Notion CSV export."""
     content = await file.read()
@@ -453,8 +479,6 @@ async def import_balance(file: UploadFile, db: Session = Depends(get_db)):
             continue
 
         raw_cat = (row.get("分类", "") or "").strip()
-        from fin.schemas.balance_item import BALANCE_CATEGORIES
-
         category = (
             raw_cat
             if raw_cat in BALANCE_CATEGORIES
