@@ -531,6 +531,13 @@ const DonutChart = ({ segments, size = 52 }) => {
     </svg>
   );
   const R = size / 2 - 1.5, r = R * 0.46, cx = size / 2, cy = size / 2;
+  const nonZero = segments.filter(s => s.value > 0);
+  if (nonZero.length === 1) return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={R} fill={nonZero[0].color}/>
+      <circle cx={cx} cy={cy} r={r} fill="var(--paper)"/>
+    </svg>
+  );
   let a = -Math.PI / 2;
   const arcs = segments.map(seg => {
     const sweep = (seg.value / total) * 2 * Math.PI;
@@ -573,29 +580,39 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
     })
     .sort((a, b) => b.total - a.total);
 
-  // Top overview pie: one segment per account
+  const [selectedName, setSelectedName] = React.useState(rows[0]?.name || "");
+  const selected = rows.find(r => r.name === selectedName) || rows[0];
   const topSegments = rows.map(r => ({ value: r.total, color: r.color }));
-  // Sub sections: accounts with sub-accounts and non-zero total
-  const withSubs = rows.filter(r => r.total > 0 && r.subEntries.length > 0);
+  const subSegments = selected?.subEntries.map(([, v], i) => ({ value: v, color: selected.subColors[i] })) || [];
 
   return (
     <Card padding={20}>
-      <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{title}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
+        <Select
+          value={selectedName}
+          onChange={setSelectedName}
+          options={rows.filter(r => r.total > 0).map(r => ({ value: r.name, label: r.name }))}
+          style={{ width: 140 }}
+        />
+      </div>
 
-      {/* Overview: big donut + account legend */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 18 }}>
-        <DonutChart segments={topSegments} size={96}/>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, paddingTop: 2 }}>
+      {/* Overview donut + account legend */}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: selected?.subEntries.length > 0 ? 14 : 0 }}>
+        <DonutChart segments={topSegments} size={80}/>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, paddingTop: 2 }}>
           {rows.filter(r => r.total > 0).map(r => {
             const pct = total ? (r.total / total) * 100 : 0;
+            const isSel = r.name === selectedName;
             return (
-              <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div key={r.name} onClick={() => setSelectedName(r.name)}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", padding: "2px 4px", borderRadius: 5, background: isSel ? "var(--bg-deep)" : "transparent" }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }}/>
-                <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{r.name}</span>
-                <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+                <span style={{ fontSize: 12, fontWeight: isSel ? 700 : 500, flex: 1 }}>{r.name}</span>
+                <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
                   {symFor(currency)}{fmtNum(toDisplay(r.total,"CNY",currency),0)}
                 </span>
-                <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 28, textAlign: "right" }}>
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 26, textAlign: "right" }}>
                   {pct.toFixed(0)}%
                 </span>
               </div>
@@ -604,31 +621,30 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
         </div>
       </div>
 
-      {/* Per-account sub breakdown — text list, no mini donuts */}
-      {withSubs.length > 0 && (
+      {/* Selected account sub breakdown */}
+      {selected?.subEntries.length > 0 && (
         <>
-          <div style={{ height: 1, background: "var(--line)", marginBottom: 14 }}/>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {withSubs.map(r => (
-              <div key={r.name}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: r.color, marginBottom: 5 }}>{r.name}</div>
-                {r.subEntries.map(([subName, subAmt], i) => {
-                  const subPct = r.total ? (subAmt / r.total) * 100 : 0;
-                  return (
-                    <div key={subName} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
-                      <span style={{ width: 7, height: 7, borderRadius: 2, background: r.subColors[i], flexShrink: 0 }}/>
-                      <span style={{ fontSize: 12, color: "var(--ink-2)", flex: 1 }}>{subName}</span>
-                      <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                        {symFor(currency)}{fmtNum(toDisplay(subAmt,"CNY",currency),0)}
-                      </span>
-                      <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", width: 32, textAlign: "right" }}>
-                        {subPct.toFixed(0)}%
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+          <div style={{ height: 1, background: "var(--line)", marginBottom: 12 }}/>
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <DonutChart segments={subSegments} size={64}/>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, paddingTop: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: selected.color, marginBottom: 4 }}>{selected.name}</div>
+              {selected.subEntries.map(([subName, subAmt], i) => {
+                const subPct = selected.total ? (subAmt / selected.total) * 100 : 0;
+                return (
+                  <div key={subName} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: selected.subColors[i], flexShrink: 0 }}/>
+                    <span style={{ fontSize: 11.5, color: "var(--ink-2)", flex: 1 }}>{subName}</span>
+                    <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+                      {symFor(currency)}{fmtNum(toDisplay(subAmt,"CNY",currency),0)}
+                    </span>
+                    <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 28, textAlign: "right" }}>
+                      {subPct.toFixed(0)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </>
       )}
@@ -684,32 +700,51 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete, onCopy }
 // ── Net worth trend ───────────────────────────────────────────────────────────
 
 const NetWorthTrend = ({ series, highlightId }) => {
-  const W = 380, H = 80, pad = 12;
+  const W = 380, padX = 12, padTop = 20, padBottom = 18, chartH = 70;
+  const H = padTop + chartH + padBottom;
   const nets = series.map(s => s.net);
   const maxV = Math.max(...nets, 0);
   const minV = Math.min(...nets, 0);
   const range = maxV - minV || 1;
-  const x = (i) => pad + (i / (series.length - 1)) * (W - pad * 2);
-  const y = (v) => pad + (1 - (v - minV) / range) * (H - pad * 2);
+  const n = series.length;
+  const x = (i) => padX + (n > 1 ? (i / (n - 1)) : 0.5) * (W - padX * 2);
+  const y = (v) => padTop + (1 - (v - minV) / range) * chartH;
   const netPath = "M " + series.map((s, i) => `${x(i).toFixed(1)},${y(s.net).toFixed(1)}`).join(" L ");
-  const fill = netPath + ` L ${x(series.length-1).toFixed(1)},${y(0).toFixed(1)} L ${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
+  const fill = netPath + ` L ${x(n-1).toFixed(1)},${y(0).toFixed(1)} L ${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
   const hi = series.findIndex(s => s.id === highlightId);
+  const fmtVal = (v) => {
+    const abs = Math.abs(v);
+    if (abs >= 1e6) return (v / 1e6).toFixed(2) + "M";
+    if (abs >= 1e3) return (v / 1e3).toFixed(0) + "K";
+    return v.toFixed(0);
+  };
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 4 }}>HISTORY · {series.length} snapshots</div>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 4 }}>HISTORY · {n} snapshots</div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }} preserveAspectRatio="none">
-        {minV < 0 && <line x1={pad} x2={W-pad} y1={y(0)} y2={y(0)} stroke="var(--line-2)" strokeDasharray="2 3"/>}
+        {minV < 0 && <line x1={padX} x2={W-padX} y1={y(0)} y2={y(0)} stroke="var(--line-2)" strokeDasharray="2 3"/>}
         <path d={fill} fill="var(--ink)" fillOpacity=".06"/>
         <path d={netPath} stroke="var(--ink)" strokeWidth="1.8" fill="none"/>
-        {series.map((s, i) => (
-          <circle key={s.id} cx={x(i)} cy={y(s.net)} r={i === hi ? 4 : 2.5}
-            fill={i === hi ? "var(--up)" : "var(--ink)"} stroke="#fff" strokeWidth="1"/>
-        ))}
+        {series.map((s, i) => {
+          const cx = x(i), cy = y(s.net);
+          const isHi = i === hi;
+          const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle";
+          return (
+            <g key={s.id}>
+              <circle cx={cx} cy={cy} r={isHi ? 4 : 2.5}
+                fill={isHi ? "var(--up)" : "var(--ink)"} stroke="#fff" strokeWidth="1"/>
+              <text x={cx} y={cy - 6} textAnchor={anchor} fontSize="9" fontFamily="monospace"
+                fill={isHi ? "var(--up)" : "var(--ink-3)"} fontWeight={isHi ? "700" : "400"}>
+                ¥{fmtVal(s.net)}
+              </text>
+              <text x={cx} y={H - 2} textAnchor={anchor} fontSize="9" fontFamily="monospace"
+                fill="var(--ink-4)">
+                {s.date}
+              </text>
+            </g>
+          );
+        })}
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-        <span className="mono" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>{series[0]?.date}</span>
-        <span className="mono" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>{series[series.length-1]?.date}</span>
-      </div>
     </div>
   );
 };
@@ -819,7 +854,14 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError]     = React.useState(null);
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => {
+    const next = { ...f, [k]: v };
+    if ((k === "price" || k === "quantity") && OPTION_CATS.includes(next.category)) {
+      const p = parseFloat(next.price), q = parseFloat(next.quantity);
+      if (!isNaN(p) && !isNaN(q)) next.amount = String(p * q);
+    }
+    return next;
+  });
 
   const parentAccounts = accounts.filter(a => !a.parent_id);
   const subAccounts    = form.account_id

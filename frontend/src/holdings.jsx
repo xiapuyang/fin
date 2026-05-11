@@ -238,11 +238,11 @@ const Holdings = ({ currency = "CNY" }) => {
   const summarySym = ccySymbol(currency);
 
   const isBond = (p) => p.sym?.asset_type === "bond";
-  const knownMarkets = ["US", "HK", "CN", "CA"];
+  const knownMarkets = ["US", "HK", "CN", "CA", "CRYPTO"];
   const byMarket = [
     ...knownMarkets.map(m => {
       const v = allPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
-      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C" }[m] };
+      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
     { label: "美债", value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
     { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
@@ -255,7 +255,7 @@ const Holdings = ({ currency = "CNY" }) => {
   const acctByMarket = [
     ...knownMarkets.map(m => {
       const v = acctPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0);
-      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C" }[m] };
+      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
     { label: "美债", value: acctPositions.filter(isBond).reduce((s, p) => s + p.value / acctFx, 0), color: "#7C3AED" },
     { label: "其他", value: acctPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
@@ -847,7 +847,7 @@ const RebalancePanel = ({ positions, total }) => {
 
 // ── CRUD Modals ───────────────────────────────────────────────────────────────
 
-const MARKET_CCY = { US: "USD", HK: "HKD", CN: "CNY", CA: "CAD" };
+const MARKET_CCY = { US: "USD", HK: "HKD", CN: "CNY", CA: "CAD", CRYPTO: "USD" };
 
 const _guessMarket = (code) => {
   if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
@@ -1148,7 +1148,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
               {/^\d{6}$/.test(form.code) && <div style={{fontSize:11,color:"var(--ink-3)",marginTop:3}}>6位纯数字为基金代码；A股股票请加交易所后缀（如 002594.SZ / 600519.SS）</div>}
             </FormRow>
             <FormRow label="市场">
-              <Select value={form.market} onChange={setMarket} options={[{value:"US",label:"美股 US"},{value:"HK",label:"港股 HK"},{value:"CN",label:"A股 CN"},{value:"CA",label:"加股 CA"}]}/>
+              <Select value={form.market} onChange={setMarket} options={[{value:"US",label:"美股 US"},{value:"HK",label:"港股 HK"},{value:"CN",label:"A股 CN"},{value:"CA",label:"加股 CA"},{value:"CRYPTO",label:"加密货币"}]}/>
             </FormRow>
             <FormRow label="持仓股数 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
             <FormRow label="均价成本 *"><Input value={form.avg_cost} onChange={v => set("avg_cost", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
