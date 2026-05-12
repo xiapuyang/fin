@@ -112,6 +112,7 @@ const computeAccountXIRR = (incomeItems, positions) => {
 const Holdings = ({ currency = "CNY" }) => {
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
+  const [viewMode, setViewMode] = React.useState("portfolio");
   const [tab, setTab] = React.useState("positions");
   const [holdings, setHoldings] = React.useState([]);
   const [transactions, setTransactions] = React.useState([]);
@@ -307,8 +308,25 @@ const Holdings = ({ currency = "CNY" }) => {
         kicker="MODULE 02 · PORTFOLIO"
         title="投资组合"
         subtitle="Portfolio Tracker · 所有账户汇总 + 年化回报率"
-        right={null}
+        right={
+          <div style={{ display: "flex", border: "1px solid var(--line-2)", borderRadius: 8, overflow: "hidden" }}>
+            {[["portfolio","持仓"],["rebalance","再平衡"]].map(([id, label]) => (
+              <button key={id} onClick={() => setViewMode(id)} style={{
+                padding: "6px 16px", fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none",
+                background: viewMode === id ? "var(--ink)" : "transparent",
+                color:      viewMode === id ? "var(--paper)" : "var(--ink-3)",
+              }}>{label}</button>
+            ))}
+          </div>
+        }
       />
+
+      {viewMode === "rebalance" && (() => {
+        const allPos = computePositions(holdings, transactions, prices);
+        const allCNY = allPos.reduce((s, p) => s + p.value, 0);
+        return <RebalancePanel positions={allPos} total={allCNY} currency={currency}/>;
+      })()}
+      {viewMode === "portfolio" && (<>
 
       {/* ── All-accounts aggregate ─────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
@@ -466,7 +484,6 @@ const Holdings = ({ currency = "CNY" }) => {
           { id: "positions",    label: "持仓 Positions",     count: acctPositions.length },
           { id: "transactions", label: "交易记录 Trades",    count: acctTxns.length },
           { id: "income",       label: "收入/转账 Income",   count: acctIncome.length },
-          { id: "rebalance",    label: "再平衡 Rebalance",   icon: "spark" },
         ]}/>
       </div>
 
@@ -490,9 +507,8 @@ const Holdings = ({ currency = "CNY" }) => {
           onImportDone={all => setIncome(all)}
           defaultAccount={acctName}
         />}
-      {tab === "rebalance"    && <RebalancePanel positions={acctPositions} total={acctTotal}/>}
 
-      {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
+{showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => { setHoldings(prev => editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h]); setShowHoldingModal(false); }}/>}
       {showTxnModal && <TransactionModal editing={editingTxn} accounts={accounts} defaultAccount={acctName} onClose={() => setShowTxnModal(false)}
           onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setShowTxnModal(false); }}/>}
@@ -504,6 +520,7 @@ const Holdings = ({ currency = "CNY" }) => {
           onSaved={a => { setAccounts(prev => prev.map(x => x.id === a.id ? a : x)); setEditingAccount(null); }}/>}
 
       <ComingSoonBanner module="Holdings" features={["批量分配账户", "Auto-import 券商 CSV", "Tax-loss harvesting hints", "Dividend calendar"]} />
+      </>)}
     </div>
   );
 };
@@ -765,82 +782,563 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
   );
 };
 
-// ── Rebalance panel (unchanged) ───────────────────────────────────────────────
-const RebalancePanel = ({ positions, total }) => {
-  const targets = {
-    "美股科技 US Tech":  { pct: 50, current: 0, color: "#1F4FE0", codes: ["NVDA","GOOGL","AAPL","TSM"] },
-    "宽基 ETF":         { pct: 20, current: 0, color: "#5C8AE6", codes: ["QQQ"] },
-    "港股 HK":          { pct: 15, current: 0, color: "#B8447B", codes: ["0700.HK"] },
-    "A 股":             { pct: 10, current: 0, color: "#C8460F", codes: ["600519.SS"] },
-    "现金 / 黄金":       { pct: 5,  current: 0, color: "#5C6270", codes: [] },
+// ── Rebalance constants ────────────────────────────────────────────────────────
+
+const RB_EQUITY_TYPES = ["equity", "etf", "mutualfund", "cryptocurrency"];
+
+const computeAge = (birthDate) => {
+  if (!birthDate) return 30;
+  const ms = Date.now() - new Date(birthDate).getTime();
+  return Math.max(1, Math.min(99, Math.floor(ms / (365.25 * 24 * 3600 * 1000))));
+};
+
+const computeAgeRuleBuckets = (age) => [
+  { label: "股票 Equity",  pct: Math.max(0, 100 - age), color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, markets: [], isCash: false },
+  { label: "债券 / 现金",   pct: Math.min(100, age),     color: "#5C6270", codes: [], assetTypes: ["bond"],        markets: [], isCash: true  },
+];
+
+const RB_PRESETS = [
+  {
+    id: "personal",
+    label: "个人配置",
+    author: "自定义",
+    quote: "按实际持仓设定目标比例",
+    buckets: [
+      { label: "美股 US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
+      { label: "港股 HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
+      { label: "A 股 CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
+      { label: "债券 Bonds",  pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
+      { label: "黄金 Gold",   pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
+      { label: "现金 Cash",   pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
+    ],
+  },
+  {
+    id: "60_40",
+    label: "经典 60/40",
+    author: "John Bogle",
+    quote: "时间证明，简单的股债平衡胜过大多数主动策略。",
+    buckets: [
+      { label: "股票 Equity",  pct: 60, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { label: "债券 / 现金",   pct: 40, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+    ],
+  },
+  {
+    id: "70_30",
+    label: "积极 70/30",
+    author: "Vanguard",
+    quote: "收益与波动之间的黄金分割，适合30-45岁积累期。",
+    buckets: [
+      { label: "股票 Equity",  pct: 70, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { label: "债券 / 现金",   pct: 30, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+    ],
+  },
+  {
+    id: "all_weather",
+    label: "全天候",
+    author: "Ray Dalio",
+    quote: "没有人能预测未来，所以要准备好应对所有经济季节。",
+    buckets: [
+      { label: "股票 Equity",      pct: 30,  color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { label: "长债 LT Bonds",    pct: 40,  color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
+      { label: "中债 MT Bonds",    pct: 15,  color: "#B8447B", codes: [], assetTypes: [],               isCash: false },
+      { label: "黄金 Gold",        pct: 7.5, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
+      { label: "大宗 Commodities", pct: 7.5, color: "#9C6E3A", codes: [], assetTypes: [],               isCash: true  },
+    ],
+  },
+  {
+    id: "permanent",
+    label: "永久组合",
+    author: "Harry Browne",
+    quote: "无论通胀、通缩、繁荣还是萧条，各分一杯羹。",
+    buckets: [
+      { label: "股票 Equity",   pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { label: "长债 LT Bonds", pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
+      { label: "现金 Cash",     pct: 25, color: "#5C6270", codes: [], assetTypes: [],               isCash: true  },
+      { label: "黄金 Gold",     pct: 25, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
+    ],
+  },
+  {
+    id: "age_rule",
+    label: "100 - 年龄",
+    author: "生命周期理论",
+    quote: "随年龄增长，逐步降低风险敞口。股票% = 100 - 年龄，其余配置债券/现金。",
+    buckets: null,
+  },
+];
+
+const RB_TRIGGER_MODES = [
+  { id: "calendar", label: "日历触发", desc: "按固定周期检查，不管偏离大小" },
+  { id: "absolute", label: "绝对偏离", desc: "任一桶偏离超过 N pp 触发" },
+  { id: "relative", label: "相对偏离", desc: "任一桶偏离超过目标 N% 触发" },
+  { id: "hybrid",   label: "混合触发", desc: "日历 + 绝对偏离 (Vanguard 标准)" },
+];
+
+const RB_CAL_OPTIONS = [
+  { value: "monthly",   label: "每月" },
+  { value: "quarterly", label: "每季度" },
+  { value: "semi",      label: "每半年" },
+  { value: "annual",    label: "每年" },
+];
+
+const RB_DEFAULT_CONFIG = {
+  presetId: "personal",
+  buckets: [
+    { label: "美股 US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
+    { label: "港股 HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
+    { label: "A 股 CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
+    { label: "债券 Bonds",  pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
+    { label: "黄金 Gold",   pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [], markets: [], isCash: false },
+    { label: "现金 Cash",   pct: 15, color: "#5C6270", codes: [], assetTypes: [],               markets: [],               isCash: true  },
+  ],
+  trigger: { mode: "hybrid", calFreq: "annual", absDriftPp: 5, relDriftPct: 20 },
+  birthDate: "",
+};
+
+// ── Rebalance edit modal ────────────────────────────────────────────────────────
+
+const RebalanceEditModal = ({ config, onSave, onClose }) => {
+  const [draft, setDraft] = React.useState(JSON.parse(JSON.stringify(config)));
+  const [codesTexts, setCodesTexts] = React.useState(config.buckets.map(b => (b.codes || []).join(", ")));
+
+  const applyPreset = (p) => {
+    const newBuckets = p.id === "age_rule"
+      ? computeAgeRuleBuckets(computeAge(draft.birthDate))
+      : JSON.parse(JSON.stringify(p.buckets));
+    setDraft(d => ({ ...d, presetId: p.id, buckets: newBuckets }));
+    setCodesTexts(newBuckets.map(b => (b.codes || []).join(", ")));
   };
-  positions.forEach(p => {
-    Object.values(targets).forEach(t => {
-      if (t.codes.includes(p.code)) t.current += p.value;
-    });
+  const updateBucket = (i, key, val) => setDraft(d => ({
+    ...d, buckets: d.buckets.map((b, j) => j === i ? { ...b, [key]: val } : b),
+  }));
+  const handleSave = (d) => {
+    const finalDraft = {
+      ...d,
+      buckets: d.buckets.map((b, i) => ({
+        ...b,
+        codes: codesTexts[i].split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
+      })),
+    };
+    onSave(finalDraft);
+  };
+  const setBirthDate = (bd) => {
+    const age = computeAge(bd);
+    setDraft(d => ({ ...d, birthDate: bd, buckets: computeAgeRuleBuckets(age) }));
+  };
+
+  const sumPct = draft.buckets.reduce((s, b) => s + (parseFloat(b.pct) || 0), 0);
+  const valid = Math.abs(sumPct - 100) < 0.5;
+
+  return (
+    <Modal open={true} onClose={onClose} title="编辑目标配置" width={500}>
+      <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>选择预设</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
+          {RB_PRESETS.map(p => (
+            <button key={p.id} onClick={() => applyPreset(p)} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: draft.presetId === p.id ? "var(--accent)" : "var(--line-2)",
+              background:  draft.presetId === p.id ? "var(--accent-soft)" : "transparent",
+              color:       draft.presetId === p.id ? "var(--accent)" : "var(--ink-3)",
+            }}>{p.label}</button>
+          ))}
+        </div>
+
+        {(() => {
+          const pr = RB_PRESETS.find(p => p.id === draft.presetId);
+          return pr && pr.id !== "personal" && (
+            <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 18, borderLeft: "3px solid var(--accent)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-2)", fontStyle: "italic" }}>"{pr.quote}"</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>— {pr.author}</div>
+            </div>
+          );
+        })()}
+
+        {draft.presetId === "age_rule" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>出生日期</span>
+            <input type="date" value={draft.birthDate || ""} onChange={e => setBirthDate(e.target.value)}
+              style={{ fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "4px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}/>
+            {draft.birthDate && (
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
+                {computeAge(draft.birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(draft.birthDate))}% / 债 {Math.min(100, computeAge(draft.birthDate))}%
+              </span>
+            )}
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".1em" }}>资产桶 · 目标比例</div>
+        {draft.buckets.map((b, i) => (
+          <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 64px 20px", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span style={{ width: 10, height: 10, background: b.color, borderRadius: 2, display: "block" }}/>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+              <Input value={String(b.pct)} onChange={v => updateBucket(i, "pct", parseFloat(v) || 0)} inputMode="decimal" style={{ textAlign: "right" }}/>
+              <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 18 }}>
+              <span style={{ fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, width: 52 }}>代码覆盖</span>
+              <input
+                value={codesTexts[i]}
+                onChange={e => setCodesTexts(t => t.map((v, j) => j === i ? e.target.value : v))}
+                placeholder="逗号分隔，如 013308, TEC.TO"
+                style={{ flex: 1, fontSize: 11.5, border: "1px solid var(--line-2)", borderRadius: 5, padding: "3px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}
+              />
+            </div>
+          </div>
+        ))}
+        <div style={{ textAlign: "right", fontSize: 12, color: valid ? "var(--down)" : "var(--up)", marginBottom: 16 }}>
+          合计 {sumPct.toFixed(1)}% {valid ? "✓" : "· 需等于 100%"}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="primary" onClick={() => handleSave(draft)} disabled={!valid}>保存</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ── Rebalance panel ────────────────────────────────────────────────────────────
+
+const RB_DEFAULT_TRIGGER = { mode: "hybrid", calFreq: "annual", absDriftPp: 5, relDriftPct: 20 };
+
+const rehydrateBuckets = (buckets, id, birthDate) => {
+  const tpl = id === "age_rule"
+    ? computeAgeRuleBuckets(computeAge(birthDate))
+    : RB_PRESETS.find(p => p.id === id)?.buckets;
+  return tpl && buckets
+    ? buckets.map((b, i) => ({ ...b, assetTypes: b.assetTypes ?? tpl[i]?.assetTypes ?? [] }))
+    : buckets;
+};
+
+const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
+  const [activeId, setActiveId] = React.useState("personal");
+  const [perPreset, setPerPreset] = React.useState({});
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [expandedBucket, setExpandedBucket] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch("/api/rebalance")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.presets) {
+          // migrate "current" key → "personal"
+          const presets = d.presets;
+          if (presets["current"] && !presets["personal"]) {
+            presets["personal"] = presets["current"];
+            delete presets["current"];
+          }
+          const activeId = d.activeId === "current" ? "personal" : (d.activeId || "personal");
+          setActiveId(activeId);
+          setPerPreset(presets);
+        } else if (d.presetId) {
+          // migrate v1 flat format
+          const id = d.presetId;
+          const buckets = rehydrateBuckets(d.buckets, id, d.birthDate);
+          setActiveId(id);
+          setPerPreset({ [id]: { buckets, trigger: d.trigger, birthDate: d.birthDate || "" } });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Derive active config — fall back to preset defaults if not yet customised
+  const activeData = perPreset[activeId] || {};
+  const defaultBuckets = activeId === "age_rule"
+    ? computeAgeRuleBuckets(computeAge(activeData.birthDate || ""))
+    : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === activeId)?.buckets || []));
+  const config = {
+    presetId: activeId,
+    buckets:   activeData.buckets   || defaultBuckets,
+    trigger:   activeData.trigger   || RB_DEFAULT_TRIGGER,
+    birthDate: activeData.birthDate || "",
+  };
+
+  const persist = (id, data, newMap) => {
+    const next = newMap || { ...perPreset, [id]: data };
+    setPerPreset(next);
+    fetch("/api/rebalance", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activeId: id, presets: next }),
+    }).catch(() => {});
+  };
+
+  const saveConfig = (updates) => {
+    const data = { ...activeData, ...updates };
+    persist(activeId, data);
+  };
+
+  const switchPreset = (newId) => {
+    setActiveId(newId);
+    setExpandedBucket(null);
+    const existing = perPreset[newId];
+    const birthDate = existing?.birthDate || activeData.birthDate || "";
+    const newBuckets = newId === "age_rule"
+      ? computeAgeRuleBuckets(computeAge(birthDate))
+      : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === newId)?.buckets || []));
+    const newData = existing || { buckets: newBuckets, trigger: config.trigger, birthDate };
+    persist(newId, newData, { ...perPreset, [newId]: newData });
+  };
+
+  const setTrigger = (k, v) => saveConfig({ trigger: { ...config.trigger, [k]: v } });
+
+  // Use CNY-denominated total for consistent percentage calculations
+  // (total prop is in account native currency; p.value is always CNY)
+  const totalCNY = positions.reduce((s, p) => s + p.value, 0);
+  const dispFx  = FX[currency] || 1;
+  const dispSym = ccySymbol(currency);
+
+  // Allocate positions to buckets; isCash bucket absorbs unallocated remainder
+  const matchesBucket = (p, b) => {
+    if (p.code === "CASH") return false; // CASH always falls to isCash remainder
+    if (b.codes?.includes(p.code)) return true;
+    const hasType = b.assetTypes?.length > 0;
+    const hasMkt  = b.markets?.length > 0;
+    if (!hasType && !hasMkt) return false;
+    const typeOk = !hasType || b.assetTypes.includes(p.sym?.asset_type);
+    const mktOk  = !hasMkt  || b.markets.includes(_guessMarket(p.code));
+    return typeOk && mktOk;
+  };
+
+  // Build per-bucket matched position sets so cash bucket = unallocated remainder
+  const codedPositionSet = new Set();
+  const codedValues = config.buckets.map(b => {
+    if (b.isCash) return { matched: [], value: 0 };
+    const matched = positions.filter(p => matchesBucket(p, b));
+    matched.forEach(p => codedPositionSet.add(p));
+    return { matched, value: matched.reduce((s, p) => s + p.value, 0) };
   });
-  const allocated = Object.values(targets).reduce((s, t) => s + t.current, 0);
-  targets["现金 / 黄金"].current = total - allocated + targets["现金 / 黄金"].current;
+  const codedAllocated = codedValues.reduce((s, c) => s + c.value, 0);
+
+  const buckets = config.buckets.map((b, i) => {
+    const bPositions = b.isCash
+      ? positions.filter(p => !codedPositionSet.has(p))
+      : codedValues[i].matched;
+    const current = b.isCash ? (totalCNY - codedAllocated) : codedValues[i].value;
+    const curPct  = totalCNY ? (current / totalCNY) * 100 : 0;
+    const drift   = curPct - b.pct;
+    const relDrift = b.pct > 0 ? (Math.abs(drift) / b.pct) * 100 : 0;
+    return { ...b, current, curPct, drift, relDrift, delta: (b.pct / 100) * totalCNY - current, bPositions };
+  });
+
+  const { mode, absDriftPp, relDriftPct, calFreq } = config.trigger;
+  const triggered = mode === "calendar" ? [] : buckets.filter(b =>
+    mode === "absolute" ? Math.abs(b.drift) >= absDriftPp :
+    mode === "relative" ? b.relDrift >= relDriftPct :
+    Math.abs(b.drift) >= absDriftPp  // hybrid: absolute threshold
+  );
+
+  const preset   = RB_PRESETS.find(p => p.id === config.presetId) || RB_PRESETS[0];
+  const calLabel = (RB_CAL_OPTIONS.find(o => o.value === calFreq) || {}).label || "";
 
   return (
     <Card padding={20}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 }}>
-        <div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "3px 10px", background: "var(--warn-soft)", color: "#7A4D0E", borderRadius: 999, fontSize: 11, fontWeight: 600, marginBottom: 8 }}>
-            <Icon name="spark" size={12}/> ROADMAP · COMING SOON
-          </div>
-          <div className="serif-cn" style={{ fontSize: 19, fontWeight: 700 }}>年度再平衡通知</div>
-          <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>定义目标比例 · 阈值偏离 ≥ 5pp 自动邮件提醒 · 一键生成调仓清单</div>
+      {/* Header: preset chips + edit button */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {RB_PRESETS.map(p => (
+            <button key={p.id} onClick={() => switchPreset(p.id)}
+              style={{
+                padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+                borderColor: activeId === p.id ? "var(--accent)" : "var(--line-2)",
+                background:  activeId === p.id ? "var(--accent-soft)" : "transparent",
+                color:       activeId === p.id ? "var(--accent)" : "var(--ink-3)",
+              }}
+            >{p.label}</button>
+          ))}
         </div>
-        <Button variant="secondary" icon="settings">编辑目标比例</Button>
+        <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>编辑目标</Button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24 }}>
+
+      {/* Strategy quote */}
+      <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, borderLeft: "3px solid var(--accent)" }}>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", fontStyle: "italic" }}>"{preset.quote}"</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--ink-4)" }}>— {preset.author}</div>
+          {config.presetId === "age_rule" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>出生日期</span>
+              <input type="date" value={config.birthDate || ""} onChange={e => {
+                const bd = e.target.value;
+                saveConfig({ birthDate: bd, buckets: computeAgeRuleBuckets(computeAge(bd)) });
+              }} style={{ fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "2px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}/>
+              {config.birthDate && (
+                <span style={{ fontSize: 11, color: "var(--ink-4)" }}>
+                  {computeAge(config.birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(config.birthDate))}% / 债 {Math.min(100, computeAge(config.birthDate))}%
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
+        {/* Left: drift bars */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>偏离度 Drift vs Target</div>
-          {Object.entries(targets).map(([label, t]) => {
-            const curPct = total ? (t.current / total) * 100 : 0;
-            const drift = curPct - t.pct;
-            const deltaCny = (t.pct/100 * total) - t.current;
+          {[...buckets].sort((a, b) => b.curPct - a.curPct).map((b, i) => {
+            const fires = triggered.includes(b);
+            const isExpanded = expandedBucket === i;
             return (
-              <div key={label} style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                    <span style={{ width: 8, height: 8, background: t.color, borderRadius: 2 }}/>{label}
+              <div key={i} style={{ marginBottom: 18 }}>
+                {/* Header: label (clickable) + amount + pct */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <button onClick={() => setExpandedBucket(isExpanded ? null : i)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 500,
+                    background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink)",
+                  }}>
+                    <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2 }}/>
+                    {b.label}
+                    <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
+                  </button>
+                  <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
+                    {dispSym}{fmtNum(b.current / dispFx / 1000, 1)}k
+                    <span style={{ color: "var(--ink-5)", margin: "0 5px" }}>·</span>
+                    <span style={{ color: b.drift > 0 ? "var(--up)" : b.drift < 0 ? "var(--down)" : "var(--ink-3)", fontWeight: 600 }}>{b.curPct.toFixed(1)}%</span>
+                    <span style={{ color: "var(--ink-4)" }}> → {b.pct}%</span>
                   </span>
-                  <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{curPct.toFixed(1)}% / {t.pct}%</span>
                 </div>
-                <div style={{ position: "relative", height: 8, background: "var(--bg-deep)", borderRadius: 4 }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(curPct,100)}%`, height: "100%", background: t.color, borderRadius: 4, opacity: .5 }}/>
-                  <div style={{ position: "absolute", left: `${t.pct}%`, top: -3, width: 2, height: 14, background: "var(--ink)" }}/>
+
+                {/* Current bar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                  <span style={{ fontSize: 9, color: "var(--ink-4)", width: 22, textAlign: "right" }}>当前</span>
+                  <div style={{ position: "relative", flex: 1, height: 7, background: "var(--bg-deep)", borderRadius: 3 }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(b.curPct, 100)}%`, height: "100%", background: b.color, borderRadius: 3 }}/>
+                    <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 13, background: "var(--ink-3)", borderRadius: 1 }}/>
+                  </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 11 }}>
-                  <span style={{ color: Math.abs(drift) >= 5 ? "var(--up)" : "var(--ink-4)", fontWeight: Math.abs(drift) >= 5 ? 600 : 400 }} className="mono">
-                    drift {drift >= 0 ? "+" : ""}{drift.toFixed(1)}pp {Math.abs(drift) >= 5 ? "⚠" : ""}
+
+                {/* Target bar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 9, color: "var(--ink-5)", width: 22, textAlign: "right" }}>目标</span>
+                  <div style={{ position: "relative", flex: 1, height: 5, background: "var(--bg-deep)", borderRadius: 3 }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, width: `${b.pct}%`, height: "100%", background: b.color, opacity: 0.25, borderRadius: 3 }}/>
+                    <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 11, background: "var(--ink-3)", borderRadius: 1 }}/>
+                  </div>
+                </div>
+
+                {/* Drift row */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, paddingLeft: 28 }}>
+                  <span className="mono" style={{ color: fires ? "var(--up)" : "var(--ink-4)", fontWeight: fires ? 600 : 400 }}>
+                    drift {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp
+                    {mode !== "calendar" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {b.relDrift.toFixed(0)}%相对</span>}
+                    {fires && " ⚠"}
                   </span>
-                  <span className="mono" style={{ color: "var(--ink-4)" }}>建议 {deltaCny >= 0 ? "买入" : "卖出"} ¥{fmtNum(Math.abs(deltaCny)/1000, 1)}k</span>
+                  <span className="mono" style={{ color: "var(--ink-4)" }}>
+                    建议 {b.delta >= 0 ? "买入" : "卖出"} {dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k
+                  </span>
                 </div>
+
+                {/* Expanded positions */}
+                {isExpanded && (
+                  <div style={{ marginTop: 8, marginLeft: 28, padding: "8px 12px", background: "var(--bg-deep)", borderRadius: 6, borderLeft: `3px solid ${b.color}` }}>
+                    {b.bPositions.length === 0 ? (
+                      <div style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>
+                        {b.isCash ? "暂无未分配持仓" : "无匹配持仓"}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "2px 12px", fontSize: 10, color: "var(--ink-5)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
+                          <span>代码</span><span>账户</span><span style={{ textAlign: "right" }}>金额</span><span style={{ textAlign: "right" }}>占比</span>
+                        </div>
+                        {b.bPositions.map((p, j) => (
+                          <div key={j} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "3px 12px", fontSize: 11.5, padding: "3px 0", borderTop: j > 0 ? "1px solid var(--line)" : "none", alignItems: "center" }}>
+                            <span style={{ fontWeight: 600, color: "var(--ink-2)" }}>{p.code}</span>
+                            <span style={{ color: "var(--ink-4)", fontSize: 11 }}>{p.account}</span>
+                            <span className="mono" style={{ color: "var(--ink-2)", textAlign: "right" }}>{dispSym}{fmtNum(p.value / dispFx / 1000, 1)}k</span>
+                            <span className="mono" style={{ color: "var(--ink-4)", textAlign: "right" }}>{totalCNY ? (p.value / totalCNY * 100).toFixed(1) : 0}%</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+
+        {/* Right: trigger config */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>提醒规则 Rules</div>
-          {[
-            { label: "年度自动提醒", desc: "每年 1 月 1 日发送一次", on: true },
-            { label: "偏离 ≥ 5pp 触发", desc: "任一桶超过 5 个百分点", on: true },
-            { label: "现金 ≥ 10% 提醒投入", desc: "未投资现金堆积时", on: false },
-            { label: "新仓位 5 日提醒", desc: "买入后 5 个工作日检查", on: false },
-          ].map((r, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: i < 3 ? "1px dashed var(--line)" : "none" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{r.label}</div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 2 }}>{r.desc}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>触发规则 Rules</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
+            {RB_TRIGGER_MODES.map(m => (
+              <button key={m.id} onClick={() => setTrigger("mode", m.id)} style={{
+                padding: "8px 10px", borderRadius: 8, border: "1px solid", textAlign: "left", cursor: "pointer",
+                borderColor: mode === m.id ? "var(--accent)" : "var(--line-2)",
+                background:  mode === m.id ? "var(--accent-soft)" : "var(--bg-deep)",
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: mode === m.id ? "var(--accent)" : "var(--ink-2)" }}>{m.label}</div>
+                <div style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.35 }}>{m.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+            {(mode === "calendar" || mode === "hybrid") && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>检查周期</span>
+                <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }}/>
               </div>
-              <Toggle value={r.on} onChange={()=>{}}/>
-            </div>
-          ))}
+            )}
+            {(mode === "absolute" || mode === "hybrid") && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>绝对阈值</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Input value={String(absDriftPp)} onChange={v => setTrigger("absDriftPp", parseFloat(v) || 5)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
+                  <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>pp</span>
+                </div>
+              </div>
+            )}
+            {(mode === "relative" || mode === "hybrid") && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>相对阈值</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Input value={String(relDriftPct)} onChange={v => setTrigger("relDriftPct", parseFloat(v) || 20)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
+                  <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>%</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Trigger status */}
+          <div style={{
+            marginTop: 14, padding: "10px 12px", borderRadius: 8,
+            background: triggered.length > 0 ? "var(--warn-soft)" : "var(--bg-deep)",
+            border: `1px solid ${triggered.length > 0 ? "#E8C06080" : "var(--line-2)"}`,
+          }}>
+            {mode === "calendar" ? (
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>📅 {calLabel}定期检查 · 偏离不触发</div>
+            ) : triggered.length > 0 ? (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#7A4D0E", marginBottom: 4 }}>⚠ {triggered.length} 个桶已触发</div>
+                {triggered.map((b, i) => (
+                  <div key={i} style={{ fontSize: 11, color: "#7A4D0E" }}>
+                    {b.label}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp ({b.relDrift.toFixed(0)}% 相对)
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>✓ 所有桶在阈值内，无需再平衡</div>
+            )}
+            {mode === "hybrid" && (
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: triggered.length > 0 ? 6 : 0 }}>
+                {calLabel}检查 · 超 {absDriftPp}pp 再平衡
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {editOpen && (
+        <RebalanceEditModal config={config} onSave={next => {
+          saveConfig({ buckets: next.buckets, birthDate: next.birthDate });
+          setEditOpen(false);
+        }} onClose={() => setEditOpen(false)}/>
+      )}
     </Card>
   );
 };
@@ -853,6 +1351,7 @@ const _guessMarket = (code) => {
   if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
   if (code.endsWith(".SS") || code.endsWith(".SZ")) return "CN";
   if (code.endsWith(".TO") || code.endsWith(".V")) return "CA";
+  if (/^\d{6}$/.test(code)) return "CN"; // bare 6-digit = A-share / CN-listed fund
   return "US";
 };
 

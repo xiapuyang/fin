@@ -1,7 +1,8 @@
 import json
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -49,6 +50,17 @@ def get_fx(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.warning("FX fetch failed: %s", exc)
         return _FX_FALLBACK
+
+
+@router.get("/rebalance")
+def get_rebalance():
+    return settings_store.load().get("rebalance") or {}
+
+
+@router.put("/rebalance")
+def put_rebalance(data: Any = Body(...)):
+    settings_store.save({"rebalance": data})
+    return data
 
 
 @router.get("/last-check")
