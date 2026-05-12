@@ -8,6 +8,7 @@ _DEFAULTS = {
     "notify_email": "",
     "notify_enabled": True,
     "timezone": "America/Toronto",
+    "rebalance": None,
 }
 
 
