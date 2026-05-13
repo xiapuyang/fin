@@ -172,7 +172,20 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     return out;
   }, [investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget]);
 
+  // Debounce MC inputs so slider drags don't trigger a full simulation on every pixel
+  const [simInputs, setSimInputs] = React.useState(null);
+  React.useEffect(() => {
+    const id = setTimeout(() => setSimInputs({
+      investable, realCagr, age, monthly, monthlyExp,
+      effectiveFireTarget, fireNumber, targetRetireAge, inflation, mcSigma, lifeExpectancy,
+    }), 150);
+    return () => clearTimeout(id);
+  }, [investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget, fireNumber, targetRetireAge, inflation, mcSigma, lifeExpectancy]);
+
   const monteCarlo = React.useMemo(() => {
+    if (!simInputs) return null;
+    const { investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget,
+            fireNumber, targetRetireAge, inflation, mcSigma, lifeExpectancy } = simInputs;
     if (investable <= 0 && monthly <= 0) return null;
     const N = 500, SIGMA = mcSigma / 100;
     const targetYears = Math.max(1, targetRetireAge - age);
@@ -258,7 +271,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     }
 
     return { bands, successRate, fireAgePcts, minNomCagr, sustainability, years: totalYears };
-  }, [investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget, fireNumber, targetRetireAge, inflation, mcSigma, lifeExpectancy]);
+  }, [simInputs]);
 
   const fireYear = project.find(p => p.value >= effectiveFireTarget);
   const fireAge = fireYear ? fireYear.age : null;
