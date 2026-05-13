@@ -57,6 +57,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const [swr,             setSwr]             = React.useState(4);
   const [targetRetireAge, setTargetRetireAge] = React.useState(50);
   const [mcSigma,         setMcSigma]         = React.useState(15);
+  const [lifeExpectancy,  setLifeExpectancy]  = React.useState(80);
 
   React.useEffect(() => {
     Promise.all([
@@ -71,7 +72,8 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       if (s.fire_swr       != null) setSwr(s.fire_swr);
       if (s.fire_manual_age  != null) setManualAge(s.fire_manual_age);
       if (s.fire_target_age  != null) setTargetRetireAge(s.fire_target_age);
-      if (s.fire_mc_sigma    != null) setMcSigma(s.fire_mc_sigma);
+      if (s.fire_mc_sigma       != null) setMcSigma(s.fire_mc_sigma);
+      if (s.fire_life_expectancy != null) setLifeExpectancy(s.fire_life_expectancy);
 
       // monthly expense — ledger avg always shown as reference
       if (avgExp != null) {
@@ -131,6 +133,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const setManualAgeP       = (v) => { setManualAge(v);       saveSettings({ fire_manual_age: v }); };
   const setTargetRetireAgeP = (v) => { setTargetRetireAge(v); saveSettings({ fire_target_age: v }); };
   const setMcSigmaP         = (v) => { setMcSigma(v);         saveSettings({ fire_mc_sigma: v }); };
+  const setLifeExpectancyP  = (v) => { setLifeExpectancy(v); saveSettings({ fire_life_expectancy: v }); };
 
   const investable = portfolioValue ?? 0;
 
@@ -170,43 +173,62 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const monteCarlo = React.useMemo(() => {
     if (investable <= 0 && monthly <= 0) return null;
     const N = 500, SIGMA = mcSigma / 100;
-    const years = 75 - age + 1;
     const targetYears = Math.max(1, targetRetireAge - age);
+    const totalYears  = Math.max(targetYears + 1, lifeExpectancy - age + 1);
     const paths = [];
+
     for (let i = 0; i < N; i++) {
       let v = investable;
       const path = [v];
-      for (let y = 1; y < years; y++) {
+      let ruinAge = null;
+      for (let y = 1; y < totalYears; y++) {
         const u1 = Math.max(1e-10, Math.random()), u2 = Math.random();
         const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        v = Math.max(0, v * (1 + realCagr / 100 + SIGMA * z) + monthly * 12);
+        if (y <= targetYears) {
+          // Accumulation: grow with monthly contributions
+          v = Math.max(0, v * (1 + realCagr / 100 + SIGMA * z) + monthly * 12);
+        } else {
+          // Withdrawal: pay annual expenses
+          v = v * (1 + realCagr / 100 + SIGMA * z) - monthlyExp * 12;
+          if (v <= 0 && ruinAge == null) ruinAge = age + y;
+          v = Math.max(0, v);
+        }
         path.push(v);
       }
-      paths.push(path);
+      paths.push({ path, ruinAge });
     }
-    // Sort once per year, extract all percentile bands for the fan chart
+
+    // Fan chart bands across full lifespan
     const ps = [10, 25, 50, 75, 90];
     const bands = ps.map(() => []);
-    for (let i = 0; i < years; i++) {
-      const sorted = paths.map(pa => pa[i]).sort((a, b) => a - b);
+    for (let i = 0; i < totalYears; i++) {
+      const sorted = paths.map(p => p.path[i]).sort((a, b) => a - b);
       ps.forEach((p, k) => {
         bands[k].push(sorted[Math.min(sorted.length - 1, Math.floor(p / 100 * sorted.length))]);
       });
     }
-    // Success rate: % of paths reaching target by targetRetireAge
-    const successRate = paths.filter(pa =>
-      pa.slice(0, targetYears + 1).some(v => v >= effectiveFireTarget)
+
+    // Success rate: % reaching effectiveFireTarget by targetRetireAge
+    const successRate = paths.filter(({ path }) =>
+      path.slice(0, targetYears + 1).some(v => v >= effectiveFireTarget)
     ).length / N;
-    // FIRE age distribution from all paths that ever succeed
+
+    // FIRE age distribution
     const fireAges = paths
-      .map(pa => { const idx = pa.findIndex(v => v >= effectiveFireTarget); return idx >= 0 ? age + idx : null; })
-      .filter(a => a != null)
-      .sort((a, b) => a - b);
+      .map(({ path }) => { const idx = path.findIndex(v => v >= effectiveFireTarget); return idx >= 0 ? age + idx : null; })
+      .filter(a => a != null).sort((a, b) => a - b);
     const pAge = (p) => fireAges.length > 0
       ? fireAges[Math.min(fireAges.length - 1, Math.floor(p / 100 * fireAges.length))]
       : null;
     const fireAgePcts = { p25: pAge(25), p50: pAge(50), p75: pAge(75) };
-    // Minimum nominal CAGR to reach full fireNumber by targetRetireAge — same formula as dashboard
+
+    // Withdrawal sustainability: ruin age per path (null = outlasts lifeExpectancy)
+    const ruinAges = paths.map(p => p.ruinAge);
+    const sortedRuins = [...ruinAges].sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
+    const pRuin = (pct) => sortedRuins[Math.min(Math.floor(pct / 100 * N), N - 1)];
+    const sustainability = { p25: pRuin(25), p50: pRuin(50), p90: pRuin(90) };
+
+    // Minimum nominal CAGR — same formula as dashboard
     let minNomCagr = fireNumber <= 0 || investable >= fireNumber ? 0 : null;
     if (fireNumber > 0 && investable < fireNumber) {
       const canReach = (nomCagr) => {
@@ -227,8 +249,9 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         minNomCagr = Math.round(hi * 10) / 10;
       }
     }
-    return { bands, successRate, fireAgePcts, minNomCagr, years };
-  }, [investable, realCagr, age, monthly, effectiveFireTarget, targetRetireAge, inflation, mcSigma]);
+
+    return { bands, successRate, fireAgePcts, minNomCagr, sustainability, years: totalYears };
+  }, [investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget, fireNumber, targetRetireAge, inflation, mcSigma, lifeExpectancy]);
 
   const fireYear = project.find(p => p.value >= effectiveFireTarget);
   const fireAge = fireYear ? fireYear.age : null;
@@ -300,7 +323,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div>
               <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>净资产时间轴 Net Worth Timeline</div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Projected · age {age}–75</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Projected · age {age}–{lifeExpectancy}</div>
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--ink)" }}/>Accumulation</span>
@@ -341,10 +364,21 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                       }}>{s}%</button>
                     ))}
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>预期寿命</span>
+                    {[70, 80, 90].map(a => (
+                      <button key={a} onClick={() => setLifeExpectancyP(a)} style={{
+                        padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
+                        borderColor: lifeExpectancy === a ? "var(--ink)" : "var(--line-2)",
+                        background:  lifeExpectancy === a ? "var(--ink)" : "transparent",
+                        color:       lifeExpectancy === a ? "#fff" : "var(--ink-3)",
+                      }}>{a}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              {/* 3 stat tiles */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 1fr", gap: 8, marginBottom: 12 }}>
+              {/* 4 stat tiles */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 1.3fr 1fr", gap: 8, marginBottom: 12 }}>
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
                   <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>达标率 · age {targetRetireAge}</div>
                   <div className="mono" style={{
@@ -384,11 +418,38 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                       : "超出范围"}
                   </div>
                 </div>
+                {/* Sustainability tile */}
+                <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>退休金可持续至</div>
+                  {(() => {
+                    const { p25, p50, p90 } = monteCarlo.sustainability;
+                    const fmt = (v) => v == null ? `>${lifeExpectancy}` : v;
+                    const color = (v) => v == null || v >= lifeExpectancy ? "var(--up)" : v >= lifeExpectancy - 10 ? "var(--warn)" : "var(--down)";
+                    return (
+                      <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P25</div>
+                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: color(p25) }}>{fmt(p25)}<span style={{ fontSize: 9 }}>岁</span></div>
+                        </div>
+                        <div style={{ textAlign: "center", flex: 1 }}>
+                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P50</div>
+                          <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: color(p50) }}>{fmt(p50)}<span style={{ fontSize: 10 }}>岁</span></div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P90</div>
+                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: color(p90) }}>{fmt(p90)}<span style={{ fontSize: 9 }}>岁</span></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 3 }}>提取阶段 · {targetRetireAge}岁退休后</div>
+                </div>
               </div>
               <MonteCarloChart
                 bands={monteCarlo.bands} years={monteCarlo.years}
                 age={age} fireTarget={effectiveFireTarget} currency={currency}
                 medFireAge={monteCarlo.fireAgePcts.p50}
+                targetRetireAge={targetRetireAge} lifeExpectancy={lifeExpectancy}
               />
               <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 10.5, color: "var(--ink-4)", flexWrap: "wrap" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -685,7 +746,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         </Card>
       </div>
 
-      <ComingSoonBanner module="FIRE" features={["提取阶段建模 4% rule", "税务影响 / 社保接续"]}/>
+      <ComingSoonBanner module="FIRE" features={["税务影响 / 社保接续"]}/>
     </div>
   );
 };
@@ -798,7 +859,7 @@ const FireChart = ({ data, fireNumber, effectiveFireTarget, liquidAssets = 0, fi
   );
 };
 
-const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medFireAge }) => {
+const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medFireAge, targetRetireAge, lifeExpectancy }) => {
   const chartSym  = CURRENCY_SYMBOL[currency] || "¥";
   const chartRate = FX[currency] || 1;
   const toD = (cny) => cny / chartRate;
@@ -837,6 +898,19 @@ const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medF
         </g>
       ); })}
       <text x={padL-8} y={padT+h+14} fontSize="9" fill="var(--ink-5)" textAnchor="end">log</text>
+      {/* Withdrawal zone shading */}
+      {targetRetireAge != null && (() => {
+        const retireIdx = targetRetireAge - age;
+        if (retireIdx < 0 || retireIdx >= years) return null;
+        const rx = xs(retireIdx);
+        return (
+          <g>
+            <rect x={rx} y={padT} width={padL + w - rx} height={h} fill="var(--ink)" fillOpacity=".03"/>
+            <line x1={rx} x2={rx} y1={padT} y2={padT+h} stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity=".5"/>
+            <text x={rx+4} y={padT+10} fontSize="9.5" fill="var(--ink-3)" fontWeight="600">提取</text>
+          </g>
+        );
+      })()}
       {/* FIRE target line */}
       <line x1={padL} x2={padL+w} y1={fireY} y2={fireY} stroke="var(--up)" strokeDasharray="4 3" strokeWidth="1.5"/>
       <text x={padL+w-4} y={fireY-5} fontSize="10" fill="var(--up)" textAnchor="end" fontWeight="600">
