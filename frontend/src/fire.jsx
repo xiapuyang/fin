@@ -189,7 +189,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     if (investable <= 0 && monthly <= 0) return null;
     const N = 500, SIGMA = mcSigma / 100;
     const targetYears = Math.max(1, targetRetireAge - age);
-    const totalYears  = Math.max(targetYears + 1, lifeExpectancy - age + 1);
+    const totalYears  = Math.max(targetYears + 2, lifeExpectancy - age + 1);
     const paths = [];
 
     for (let i = 0; i < N; i++) {
