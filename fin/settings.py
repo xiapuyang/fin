@@ -1,8 +1,11 @@
 """Persistent app settings stored in data/settings.json."""
 
 import json
+import logging
 
 from fin.config import SETTINGS_PATH
+
+logger = logging.getLogger(__name__)
 
 _DEFAULTS = {
     "notify_email": "",
@@ -18,6 +21,7 @@ _DEFAULTS = {
     "fire_inflation": 3,
     "fire_target_age": 50,
     "fire_mc_sigma": 15,
+    "fire_life_expectancy": 80,
     "currency": "CNY",
 }
 
@@ -27,7 +31,8 @@ def load() -> dict:
         return dict(_DEFAULTS)
     try:
         return {**_DEFAULTS, **json.loads(SETTINGS_PATH.read_text())}
-    except Exception:
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to load settings, using defaults: %s", exc)
         return dict(_DEFAULTS)
 
 

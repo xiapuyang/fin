@@ -42,6 +42,8 @@ const _calcAge = (birthDate) => {
   return a > 0 && a < 120 ? a : null;
 };
 
+const _LIQUID_CATS = new Set(["现金", "存款", "理财", "期权", "社保"]);
+
 const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const [loading, setLoading] = React.useState(true);
 
@@ -98,12 +100,11 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       }).catch(() => setPortfolioValue(0));
 
       // liquid assets from balance sheet (0% real return — maintains purchasing power)
-      const LIQUID_CATS = new Set(["现金", "存款", "理财", "期权", "社保"]);
       apiGetBalanceSnapshots().then(snaps => {
         if (snaps.length === 0) return;
         return apiGetBalanceItems(snaps[snaps.length - 1].id).then(items => {
           const liquid = items
-            .filter(i => i.side === "asset" && LIQUID_CATS.has(i.category))
+            .filter(i => i.side === "asset" && _LIQUID_CATS.has(i.category))
             .reduce((sum, i) => sum + i.amount * (FX[i.currency] || 1), 0);
           setLiquidAssets(liquid);
         });
@@ -120,20 +121,21 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     _saveTimer.current = setTimeout(() => {
       const p = { ..._pendingPatch.current };
       _pendingPatch.current = {};
-      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch(() => {});
+      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch((err) => console.warn("Settings save failed:", err));
     }, 600);
   };
 
   // Persisting setters
-  const setMonthlyExpP = (v) => { setMonthlyExp(v); saveSettings({ fire_monthly_exp: v }); };
-  const setCagrP       = (v) => { setCagr(v);      saveSettings({ fire_cagr: v }); };
-  const setInflationP  = (v) => { setInflation(v); saveSettings({ fire_inflation: v }); };
-  const setMonthlyP    = (v) => { setMonthly(v);   saveSettings({ fire_monthly: v }); };
-  const setSwrP        = (v) => { setSwr(v);        saveSettings({ fire_swr: v }); };
-  const setManualAgeP       = (v) => { setManualAge(v);       saveSettings({ fire_manual_age: v }); };
-  const setTargetRetireAgeP = (v) => { setTargetRetireAge(v); saveSettings({ fire_target_age: v }); };
-  const setMcSigmaP         = (v) => { setMcSigma(v);         saveSettings({ fire_mc_sigma: v }); };
-  const setLifeExpectancyP  = (v) => { setLifeExpectancy(v); saveSettings({ fire_life_expectancy: v }); };
+  const persist = (setter, key) => (v) => { setter(v); saveSettings({ [key]: v }); };
+  const setMonthlyExpP      = persist(setMonthlyExp,      "fire_monthly_exp");
+  const setCagrP            = persist(setCagr,            "fire_cagr");
+  const setInflationP       = persist(setInflation,       "fire_inflation");
+  const setMonthlyP         = persist(setMonthly,         "fire_monthly");
+  const setSwrP             = persist(setSwr,             "fire_swr");
+  const setManualAgeP       = persist(setManualAge,       "fire_manual_age");
+  const setTargetRetireAgeP = persist(setTargetRetireAge, "fire_target_age");
+  const setMcSigmaP         = persist(setMcSigma,         "fire_mc_sigma");
+  const setLifeExpectancyP  = persist(setLifeExpectancy,  "fire_life_expectancy");
 
   const investable = portfolioValue ?? 0;
 
@@ -198,13 +200,15 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       paths.push({ path, ruinAge });
     }
 
-    // Fan chart bands across full lifespan
+    // Fan chart bands across full lifespan — transpose once, then sort each year row
     const ps = [10, 25, 50, 75, 90];
     const bands = ps.map(() => []);
     for (let i = 0; i < totalYears; i++) {
-      const sorted = paths.map(p => p.path[i]).sort((a, b) => a - b);
+      const col = new Array(N);
+      for (let j = 0; j < N; j++) col[j] = paths[j].path[i];
+      col.sort((a, b) => a - b);
       ps.forEach((p, k) => {
-        bands[k].push(sorted[Math.min(sorted.length - 1, Math.floor(p / 100 * sorted.length))]);
+        bands[k].push(col[Math.min(N - 1, Math.floor(p / 100 * N))]);
       });
     }
 
@@ -513,7 +517,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               fontSize: 10.5, color: "#78350F", lineHeight: 1.55,
             }}>
               提前退休需自缴社保约 <span className="mono" style={{ fontWeight: 700 }}>{sym}{fmtNum(toDisp(2000), 0)}/月</span>（城镇职工医保 + 养老），约 10 年后至 60 岁可停缴并领养老金。当前计算暂不考虑养老金收入，社保按永久支出处理，FIRE 数字偏保守。
-              <button onClick={() => setMonthlyExpP(monthlyExp + 2000)} style={{
+              <button onClick={() => setMonthlyExpP(Math.min(50000, monthlyExp + 2000))} style={{
                 marginLeft: 7, fontSize: 9.5, padding: "1px 5px", borderRadius: 3,
                 border: "1px solid #D97706", background: "transparent", color: "#D97706", cursor: "pointer",
               }}>+{sym}{fmtNum(toDisp(2000), 0)}</button>
