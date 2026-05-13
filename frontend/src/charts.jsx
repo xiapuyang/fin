@@ -33,9 +33,9 @@ const Donut = ({ data, size = 220, thickness = 28, centerLabel, centerValue, cen
 };
 
 // === Area chart ===========================================================
-const AreaChart = ({ data, width = 560, height = 200, color = "var(--ink)", fillOpacity = .08, showAxis = true, yLabels = 4 }) => {
+const AreaChart = ({ data, width = 560, height = 200, color = "var(--ink)", fillOpacity = .08, showAxis = true, yLabels = 4, yFormat }) => {
   if (!data || data.length < 2) return null;
-  const padL = showAxis ? 44 : 4, padR = 8, padT = 12, padB = showAxis ? 22 : 4;
+  const padL = showAxis ? 56 : 4, padR = 8, padT = 12, padB = showAxis ? 22 : 4;
   const w = width - padL - padR, h = height - padT - padB;
   const min = Math.min(...data.map(d => d.value));
   const max = Math.max(...data.map(d => d.value));
@@ -56,7 +56,7 @@ const AreaChart = ({ data, width = 560, height = 200, color = "var(--ink)", fill
       {showAxis && yTicks.map((t, i) => (
         <g key={i}>
           <line x1={padL} x2={padL + w} y1={t.y} y2={t.y} stroke="var(--line)" strokeDasharray="2 3" />
-          <text x={padL - 6} y={t.y + 3} fontSize="10" fill="var(--ink-4)" textAnchor="end" className="mono">{Math.round(t.v).toLocaleString()}</text>
+          <text x={padL - 6} y={t.y + 3} fontSize="10" fill="var(--ink-4)" textAnchor="end" className="mono">{yFormat ? yFormat(t.v) : Math.round(t.v).toLocaleString()}</text>
         </g>
       ))}
       <path d={fill} fill={color} fillOpacity={fillOpacity} />

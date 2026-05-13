@@ -143,9 +143,10 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
       .catch(() => setPortfolioLoading(false));
   }, []);
 
-  // ── Balance sheet → net worth history ───────────────────────────────────────
+  // ── Balance sheet → net worth history + asset breakdown ────────────────────
   const [snapSeries, setSnapSeries] = React.useState([]);
   const [snapCount, setSnapCount] = React.useState(0);
+  const [assetBreakdown, setAssetBreakdown] = React.useState([]);
   const [balLoading, setBalLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -160,6 +161,18 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
             .reduce((sum, i) => sum + _bsCNY(i), 0);
           return { date: s.snapshot_date, net: assets - liabilities, liquid };
         });
+        // Asset breakdown by category for the latest snapshot
+        const latestSnap = sorted[sorted.length - 1];
+        if (latestSnap) {
+          const latestItems = allItems.filter(i => i.snapshot_id === latestSnap.id && i.side === "asset");
+          const byCategory = {};
+          latestItems.forEach(i => { byCategory[i.category] = (byCategory[i.category] || 0) + _bsCNY(i); });
+          const breakdown = Object.entries(byCategory)
+            .filter(([, v]) => v > 0)
+            .map(([label, value]) => ({ label, value, color: BS_CAT_COLORS[label] || "#aaa" }))
+            .sort((a, b) => b.value - a.value);
+          setAssetBreakdown(breakdown);
+        }
         setSnapSeries(series);
         setSnapCount(snaps.length);
         setBalLoading(false);
@@ -331,67 +344,105 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
       </div>
 
       {/* Top stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.9fr 0.9fr 0.9fr", gap: 14, marginBottom: 22 }}>
         {/* Net Worth */}
         <Card padding={20}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
-              {balLoading && portfolioLoading ? (
-                <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 10 }}>加载中…</div>
-              ) : (
-                <>
-                  <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
-                    ¥{(netWorth / 1e6).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
-                    {momPct != null
-                      ? <><ChangeNum value={momPct} format="pct" size="sm"/><span style={{ fontSize: 12, color: "var(--ink-4)" }}>vs prev snapshot</span></>
-                      : <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{snapSeries.length > 0 ? "首个快照" : "来自持仓估值"}</span>
-                    }
-                  </div>
-                </>
-              )}
-            </div>
-            {netWorthSeries.length > 1 && (
-              <Sparkline data={netWorthSeries.map(d => d.value)} width={120} height={40} color="var(--up)" fill={true}/>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
+            {balLoading && portfolioLoading ? (
+              <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 10 }}>加载中…</div>
+            ) : (
+              <>
+                <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
+                  ¥{(netWorth / 1e6).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
+                </div>
+                <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
+                  {momPct != null
+                    ? <><ChangeNum value={momPct} format="pct" size="sm"/><span style={{ fontSize: 12, color: "var(--ink-4)" }}>vs prev snapshot</span></>
+                    : <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{snapSeries.length > 0 ? "首个快照" : "来自持仓估值"}</span>
+                  }
+                </div>
+              </>
             )}
           </div>
           {netWorthSeries.length > 1 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
-              <AreaChart data={netWorthSeries} width={420} height={120} color="var(--ink)" fillOpacity={.06} yLabels={3}/>
+              <AreaChart
+                data={netWorthSeries} width={380} height={120}
+                color="var(--ink)" fillOpacity={.06} yLabels={3}
+                yFormat={v => {
+                  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+                  if (Math.abs(v) >= 1e4) return `${(v / 1e4).toFixed(0)}w`;
+                  return Math.round(v).toLocaleString();
+                }}
+              />
             </div>
           )}
         </Card>
 
-        {/* Allocation */}
+        {/* Asset Breakdown (balance sheet categories) */}
+        <Card padding={20}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ASSET BREAKDOWN · 资产分类</div>
+          {balLoading ? (
+            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>加载中…</div>
+          ) : assetBreakdown.length === 0 ? (
+            <Empty icon="target" title="无资产数据" hint="在资产负债页记录资产"/>
+          ) : (() => {
+            const totalAssets = assetBreakdown.reduce((s, a) => s + a.value, 0);
+            return (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
+                <Donut
+                  data={assetBreakdown} size={110} thickness={18}
+                  centerValue={`${(totalAssets / 1e6).toFixed(1)}M`}
+                  centerSub="总资产"
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
+                  {assetBreakdown.map(a => {
+                    const pct = totalAssets > 0 ? a.value / totalAssets * 100 : 0;
+                    return (
+                      <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
+                        <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
+                        <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+
+        {/* Allocation (portfolio by market) */}
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ALLOCATION · 仓位</div>
           {portfolioLoading ? (
             <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>加载中…</div>
           ) : allocation.length === 0 ? (
             <Empty icon="wallet" title="暂无持仓" hint="在投资组合页面添加持仓"/>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
-              <Donut
-                data={allocation} size={140} thickness={20}
-                centerValue={`${(allTotal / 1e6).toFixed(2)}M`}
-                centerSub="¥ CNY"
-              />
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11.5, flex: 1 }}>
-                {allocation.map(a => {
-                  const pct = allTotal > 0 ? a.value / allTotal * 100 : 0;
-                  return (
-                    <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
-                      <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
-                      <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
-                    </div>
-                  );
-                })}
+          ) : (() => {
+            return (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
+                <Donut
+                  data={allocation} size={110} thickness={18}
+                  centerValue={`${(allTotal / 1e6).toFixed(1)}M`}
+                  centerSub="投资组合"
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
+                  {allocation.map(a => {
+                    const pct = allTotal > 0 ? a.value / allTotal * 100 : 0;
+                    return (
+                      <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
+                        <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
+                        <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </Card>
 
         {/* FIRE Target */}
