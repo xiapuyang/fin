@@ -220,7 +220,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     const pAge = (p) => fireAges.length > 0
       ? fireAges[Math.min(fireAges.length - 1, Math.floor(p / 100 * fireAges.length))]
       : null;
-    const fireAgePcts = { p25: pAge(25), p50: pAge(50), p75: pAge(75) };
+    const fireAgePcts = { p25: pAge(25), p50: pAge(50), p90: pAge(90) };
 
     // Withdrawal sustainability: ruin age per path (null = outlasts lifeExpectancy)
     const ruinAges = paths.map(p => p.ruinAge);
@@ -400,8 +400,8 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                         <div className="mono" style={{ fontSize: 20, fontWeight: 700 }}>{monteCarlo.fireAgePcts.p50}</div>
                       </div>
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P75</div>
-                        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-3)" }}>{monteCarlo.fireAgePcts.p75}</div>
+                        <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P90</div>
+                        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-3)" }}>{monteCarlo.fireAgePcts.p90}</div>
                       </div>
                     </div>
                   ) : <div style={{ fontSize: 13, color: "var(--ink-4)", paddingTop: 6 }}>—</div>}
@@ -424,20 +424,19 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                   {(() => {
                     const { p25, p50, p90 } = monteCarlo.sustainability;
                     const fmt = (v) => v == null ? `>${lifeExpectancy}` : v;
-                    const color = (v) => v == null || v >= lifeExpectancy ? "var(--up)" : v >= lifeExpectancy - 10 ? "var(--warn)" : "var(--down)";
                     return (
                       <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
                         <div style={{ textAlign: "center" }}>
                           <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P25</div>
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: color(p25) }}>{fmt(p25)}<span style={{ fontSize: 9 }}>岁</span></div>
+                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "#D97706" }}>{fmt(p25)}<span style={{ fontSize: 9 }}>岁</span></div>
                         </div>
                         <div style={{ textAlign: "center", flex: 1 }}>
                           <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P50</div>
-                          <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: color(p50) }}>{fmt(p50)}<span style={{ fontSize: 10 }}>岁</span></div>
+                          <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>{fmt(p50)}<span style={{ fontSize: 10 }}>岁</span></div>
                         </div>
                         <div style={{ textAlign: "center" }}>
                           <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P90</div>
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: color(p90) }}>{fmt(p90)}<span style={{ fontSize: 9 }}>岁</span></div>
+                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "#16A34A" }}>{fmt(p90)}<span style={{ fontSize: 9 }}>岁</span></div>
                         </div>
                       </div>
                     );
