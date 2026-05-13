@@ -206,30 +206,25 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       ? fireAges[Math.min(fireAges.length - 1, Math.floor(p / 100 * fireAges.length))]
       : null;
     const fireAgePcts = { p25: pAge(25), p50: pAge(50), p75: pAge(75) };
-    // Minimum nominal CAGR for 70% success by targetRetireAge — binary search with mini MC
-    let minNomCagr = effectiveFireTarget <= 0 ? 0 : null;
-    if (effectiveFireTarget > 0) {
-      const runMini = (rc) => {
-        let ok = 0;
-        for (let i = 0; i < 200; i++) {
-          let v = investable;
-          for (let y = 1; y <= targetYears; y++) {
-            const u1 = Math.max(1e-10, Math.random()), u2 = Math.random();
-            const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-            v = Math.max(0, v * (1 + rc / 100 + SIGMA * z) + monthly * 12);
-          }
-          if (v >= effectiveFireTarget) ok++;
+    // Minimum nominal CAGR to reach full fireNumber by targetRetireAge — same formula as dashboard
+    let minNomCagr = fireNumber <= 0 || investable >= fireNumber ? 0 : null;
+    if (fireNumber > 0 && investable < fireNumber) {
+      const canReach = (nomCagr) => {
+        const real = nomCagr - inflation;
+        let v = investable;
+        for (let y = 1; y <= targetYears; y++) {
+          v = v * (1 + real / 100) + monthly * 12;
+          if (v >= fireNumber) return true;
         }
-        return ok / 200;
+        return false;
       };
-      if (runMini(25) >= 0.70) {
-        let lo = 0, hi = 25;
-        for (let iter = 0; iter < 10; iter++) {
+      if (canReach(40)) {
+        let lo = 0, hi = 40;
+        for (let iter = 0; iter < 24; iter++) {
           const mid = (lo + hi) / 2;
-          if (runMini(mid) >= 0.70) hi = mid; else lo = mid;
+          if (canReach(mid)) hi = mid; else lo = mid;
         }
-        // Round to nearest 0.5% to absorb Monte Carlo noise
-        minNomCagr = Math.round((hi + inflation) * 2) / 2;
+        minNomCagr = Math.round(hi * 10) / 10;
       }
     }
     return { bands, successRate, fireAgePcts, minNomCagr, years };
@@ -385,7 +380,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                   </div>
                   <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>
                     {monteCarlo.minNomCagr != null
-                      ? `实际 ${Math.max(0, monteCarlo.minNomCagr - inflation).toFixed(1)}% · 70% 置信`
+                      ? `实际 ${Math.max(0, monteCarlo.minNomCagr - inflation).toFixed(1)}% · 确定性计算`
                       : "超出范围"}
                   </div>
                 </div>

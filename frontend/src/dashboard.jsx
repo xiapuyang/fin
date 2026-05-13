@@ -202,7 +202,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
   const fireTargetAge   = fireSettings?.fire_target_age   ?? 50;
 
   const realCagr      = fireCagr - fireInflation;
-  const investable    = (latestSnap?.liquid > 0) ? latestSnap.liquid : allTotal;
+  const investable    = allTotal;
   const fireTarget    = fireMonthlyExp > 0 ? (fireMonthlyExp * 12) / (fireSwr / 100) : 0;
   const fireProgress  = fireTarget > 0 ? Math.min(1, investable / fireTarget) : 0;
 
