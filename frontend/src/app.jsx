@@ -18,11 +18,16 @@ const App = () => {
   const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
   const [showSettings, setShowSettings] = React.useState(false);
+  const [marketNow, setMarketNow] = React.useState(new Date());
+  const [serverMarket, setServerMarket] = React.useState({});
 
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
-    fetch("/api/settings").then(r => r.json()).then(s => setSettings(prev => ({ ...prev, ...s }))).catch(() => {});
+    fetch("/api/settings").then(r => r.json()).then(s => {
+      setSettings(prev => ({ ...prev, ...s }));
+      if (s.currency && CURRENCIES.includes(s.currency)) setCurrency(s.currency);
+    }).catch(() => {});
     fetch("/api/symbols").then(r => r.json()).then(data => {
       Object.assign(SYMBOLS, data);
       _rebuildSymbolIndex();
@@ -41,6 +46,29 @@ const App = () => {
     return () => clearInterval(t);
   }, []);
 
+  // Market state — drives TopBar indicator dots, refreshed every minute
+  React.useEffect(() => {
+    const t = setInterval(() => setMarketNow(new Date()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    const poll = () => fetch("/api/market-states", { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null).then(d => d && setServerMarket(d)).catch(() => {});
+    poll();
+    const t = setInterval(poll, 60 * 1000);
+    return () => { clearInterval(t); ctrl.abort(); };
+  }, []);
+  const _timeBased = MARKET_HOURS(marketNow);
+  const _serverFresh = serverMarket.updated_at &&
+    (Date.now() - new Date(serverMarket.updated_at).getTime()) < 5 * 60 * 1000;
+  const market = Object.fromEntries(
+    Object.entries(_timeBased).map(([k, v]) => {
+      const state = _serverFresh ? (serverMarket[k] || v.state) : v.state;
+      return [k, { state, label: STATE_LABEL[state] || v.label }];
+    })
+  );
+
   const navigate = (target) => {
     if (typeof target === "object") {
       setRoute(target.route);
@@ -52,19 +80,22 @@ const App = () => {
   };
 
   const Page = {
-    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
+    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone} currency={currency}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
-    holdings:  <Holdings currency={currency}/>,
+    holdings:  <Holdings currency={currency} birthDate={settings.birth_date || ""}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
     balance:   <BalanceSheet currency={currency}/>,
-    fire:      <Fire/>,
+    fire:      <Fire currency={currency} birthDate={settings.birth_date || ""}/>,
   }[route];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} onCurrencyChange={setCurrency} onOpenSettings={() => setShowSettings(true)}/>
+        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} onCurrencyChange={c => {
+          setCurrency(c);
+          fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
+        }} onOpenSettings={() => setShowSettings(true)}/>
         <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
           {Page}
         </div>
@@ -139,7 +170,7 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, currency = "CNY", onCurrencyChange, onOpenSettings }) => {
+const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrencyChange, onOpenSettings }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
@@ -154,6 +185,26 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", onCurrencyChange, onOpe
         <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{cur?.cn} {cur?.label}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Market status dots */}
+        {Object.keys(market).length > 0 && (
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            {Object.entries(market).map(([k, v]) => (
+              <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: v.state === "REGULAR" ? "var(--up)"
+                      : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
+                      : "var(--ink-5)",
+                  }}/>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".03em" }}>{k}</span>
+                </div>
+                <span style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: ".02em" }}>{v.label.split(" ")[0]}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)} · CAD ¥{cad.toFixed(2)}</span>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <div style={{ display: "flex", gap: 2 }}>
@@ -186,8 +237,9 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
-  const [tz, setTz] = React.useState(settings.timezone || "America/Toronto");
-  const [saving, setSaving] = React.useState(false);
+  const [tz, setTz]              = React.useState(settings.timezone   || "America/Toronto");
+  const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
+  const [saving, setSaving]       = React.useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -195,9 +247,9 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone: tz }),
+        body: JSON.stringify({ timezone: tz, birth_date: birthDate }),
       });
-      if (res.ok) { onSaved({ timezone: tz }); onClose(); }
+      if (res.ok) { onSaved({ timezone: tz, birth_date: birthDate }); onClose(); }
     } finally { setSaving(false); }
   };
 
@@ -208,6 +260,20 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
           <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>影响日期显示和时间相关计算</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>出生日期 Birth Date</div>
+          <input
+            type="date"
+            value={birthDate}
+            onChange={e => setBirthDate(e.target.value)}
+            style={{
+              width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+              border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+              boxSizing: "border-box",
+            }}
+          />
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于 FIRE 退休计划自动计算当前年龄</div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>

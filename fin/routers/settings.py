@@ -1,7 +1,8 @@
 import json
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,17 @@ class SettingsPayload(BaseModel):
     notify_email: str | None = None
     notify_enabled: bool | None = None
     timezone: str | None = None
+    birth_date: str | None = None
+    fire_monthly_exp: float | None = None
+    fire_cagr: float | None = None
+    fire_monthly: float | None = None
+    fire_swr: float | None = None
+    fire_manual_age: int | None = None
+    fire_inflation: float | None = None
+    fire_target_age: int | None = None
+    fire_mc_sigma: int | None = None
+    fire_life_expectancy: int | None = None
+    currency: str | None = None
 
 
 @router.get("/config")
@@ -49,6 +61,19 @@ def get_fx(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.warning("FX fetch failed: %s", exc)
         return _FX_FALLBACK
+
+
+@router.get("/rebalance")
+def get_rebalance():
+    """Return the stored rebalance configuration."""
+    return settings_store.load().get("rebalance") or {}
+
+
+@router.put("/rebalance")
+def put_rebalance(data: Any = Body(...)):
+    """Persist rebalance configuration and return it."""
+    settings_store.save({"rebalance": data})
+    return data
 
 
 @router.get("/last-check")
