@@ -109,7 +109,7 @@ const computeAccountXIRR = (incomeItems, positions) => {
 };
 
 // ── Holdings root component ───────────────────────────────────────────────────
-const Holdings = ({ currency = "CNY" }) => {
+const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
   const [viewMode, setViewMode] = React.useState("portfolio");
@@ -324,7 +324,7 @@ const Holdings = ({ currency = "CNY" }) => {
       {viewMode === "rebalance" && (() => {
         const allPos = computePositions(holdings, transactions, prices);
         const allCNY = allPos.reduce((s, p) => s + p.value, 0);
-        return <RebalancePanel positions={allPos} total={allCNY} currency={currency}/>;
+        return <RebalancePanel positions={allPos} total={allCNY} currency={currency} birthDate={birthDate}/>;
       })()}
       {viewMode === "portfolio" && (<>
 
@@ -896,13 +896,13 @@ const RB_DEFAULT_CONFIG = {
 
 // ── Rebalance edit modal ────────────────────────────────────────────────────────
 
-const RebalanceEditModal = ({ config, onSave, onClose }) => {
+const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
   const [draft, setDraft] = React.useState(JSON.parse(JSON.stringify(config)));
   const [codesTexts, setCodesTexts] = React.useState(config.buckets.map(b => (b.codes || []).join(", ")));
 
   const applyPreset = (p) => {
     const newBuckets = p.id === "age_rule"
-      ? computeAgeRuleBuckets(computeAge(draft.birthDate))
+      ? computeAgeRuleBuckets(computeAge(birthDate))
       : JSON.parse(JSON.stringify(p.buckets));
     setDraft(d => ({ ...d, presetId: p.id, buckets: newBuckets }));
     setCodesTexts(newBuckets.map(b => (b.codes || []).join(", ")));
@@ -920,11 +920,6 @@ const RebalanceEditModal = ({ config, onSave, onClose }) => {
     };
     onSave(finalDraft);
   };
-  const setBirthDate = (bd) => {
-    const age = computeAge(bd);
-    setDraft(d => ({ ...d, birthDate: bd, buckets: computeAgeRuleBuckets(age) }));
-  };
-
   const sumPct = draft.buckets.reduce((s, b) => s + (parseFloat(b.pct) || 0), 0);
   const valid = Math.abs(sumPct - 100) < 0.5;
 
@@ -956,12 +951,12 @@ const RebalanceEditModal = ({ config, onSave, onClose }) => {
         {draft.presetId === "age_rule" && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <span style={{ fontSize: 12, color: "var(--ink-3)" }}>出生日期</span>
-            <input type="date" value={draft.birthDate || ""} onChange={e => setBirthDate(e.target.value)}
-              style={{ fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "4px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}/>
-            {draft.birthDate && (
+            {birthDate ? (
               <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                {computeAge(draft.birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(draft.birthDate))}% / 债 {Math.min(100, computeAge(draft.birthDate))}%
+                {birthDate} · {computeAge(birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(birthDate))}% / 债 {Math.min(100, computeAge(birthDate))}%
               </span>
+            ) : (
+              <span style={{ fontSize: 12, color: "var(--ink-4)" }}>未设置 · 请在右上角设置中填写</span>
             )}
           </div>
         )}
@@ -1012,7 +1007,7 @@ const rehydrateBuckets = (buckets, id, birthDate) => {
     : buckets;
 };
 
-const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
+const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) => {
   const [activeId, setActiveId] = React.useState("personal");
   const [perPreset, setPerPreset] = React.useState({});
   const [editOpen, setEditOpen] = React.useState(false);
@@ -1047,13 +1042,12 @@ const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
   // Derive active config — fall back to preset defaults if not yet customised
   const activeData = perPreset[activeId] || {};
   const defaultBuckets = activeId === "age_rule"
-    ? computeAgeRuleBuckets(computeAge(activeData.birthDate || ""))
+    ? computeAgeRuleBuckets(computeAge(birthDate))
     : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === activeId)?.buckets || []));
   const config = {
     presetId: activeId,
-    buckets:   activeData.buckets   || defaultBuckets,
-    trigger:   activeData.trigger   || RB_DEFAULT_TRIGGER,
-    birthDate: activeData.birthDate || "",
+    buckets:   activeData.buckets || defaultBuckets,
+    trigger:   activeData.trigger || RB_DEFAULT_TRIGGER,
   };
 
   const persist = (id, data, newMap) => {
@@ -1074,11 +1068,10 @@ const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
     setActiveId(newId);
     setExpandedBucket(null);
     const existing = perPreset[newId];
-    const birthDate = existing?.birthDate || activeData.birthDate || "";
     const newBuckets = newId === "age_rule"
       ? computeAgeRuleBuckets(computeAge(birthDate))
       : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === newId)?.buckets || []));
-    const newData = existing || { buckets: newBuckets, trigger: config.trigger, birthDate };
+    const newData = existing || { buckets: newBuckets, trigger: config.trigger };
     persist(newId, newData, { ...perPreset, [newId]: newData });
   };
 
@@ -1158,17 +1151,15 @@ const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
           <div style={{ fontSize: 11, color: "var(--ink-4)" }}>— {preset.author}</div>
           {config.presetId === "age_rule" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>出生日期</span>
-              <input type="date" value={config.birthDate || ""} onChange={e => {
-                const bd = e.target.value;
-                saveConfig({ birthDate: bd, buckets: computeAgeRuleBuckets(computeAge(bd)) });
-              }} style={{ fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "2px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}/>
-              {config.birthDate && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {birthDate ? (
                 <span style={{ fontSize: 11, color: "var(--ink-4)" }}>
-                  {computeAge(config.birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(config.birthDate))}% / 债 {Math.min(100, computeAge(config.birthDate))}%
+                  {computeAge(birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(birthDate))}% / 债 {Math.min(100, computeAge(birthDate))}%
                 </span>
+              ) : (
+                <span style={{ fontSize: 11, color: "var(--ink-4)" }}>未设置出生日期</span>
               )}
+              <span style={{ fontSize: 10.5, color: "var(--ink-5)" }}>· 在右上角设置中修改</span>
             </div>
           )}
         </div>
@@ -1334,8 +1325,8 @@ const RebalancePanel = ({ positions, total, currency = "CNY" }) => {
       </div>
 
       {editOpen && (
-        <RebalanceEditModal config={config} onSave={next => {
-          saveConfig({ buckets: next.buckets, birthDate: next.birthDate });
+        <RebalanceEditModal config={config} birthDate={birthDate} onSave={next => {
+          saveConfig({ buckets: next.buckets });
           setEditOpen(false);
         }} onClose={() => setEditOpen(false)}/>
       )}

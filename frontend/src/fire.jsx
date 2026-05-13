@@ -1,78 +1,301 @@
-/* Module 05 — FIRE 退休计划 (extracted from Balance Sheet)
+/* Module 05 — FIRE 退休计划
    Standalone page: header + KPI tiles + chart + parameters + milestones
-   Net worth is read from the latest balance-sheet snapshot.
+   Investable capital and MWRR are loaded live from the portfolio (holdings) page.
 */
 
-const Fire = () => {
-  // Pull current net worth from latest balance-sheet snapshot
-  const latest = BS_SNAPSHOTS[BS_SNAPSHOTS.length - 1];
-  const items = BS_ITEMS.filter(it => it.inSnapshot.includes(latest.id));
-  const inCNY = (it) => it.amount * (FX[it.currency] || 1);
-  const assets      = items.filter(i => i.side === "asset")    .reduce((s, i) => s + inCNY(i), 0);
-  const liabilities = items.filter(i => i.side === "liability").reduce((s, i) => s + inCNY(i), 0);
-  const netWorth = assets - liabilities;
+// Fetch all expense ledger items for the past 3 years and return avg monthly CNY total.
+// Returns null if no data is available.
+const _avgMonthlyExpense = async () => {
+  const now = new Date();
+  const start = new Date(now);
+  start.setFullYear(start.getFullYear() - 3);
+  const startDate = start.toISOString().split("T")[0];
 
-  const [age, setAge] = React.useState(32);
-  const [monthlyExp, setMonthlyExp] = React.useState(15000);
-  const [cagr, setCagr] = React.useState(10);
-  const [monthly, setMonthly] = React.useState(8000);
-  const [scenario, setScenario] = React.useState("base"); // base | conservative | aggressive
+  let all = [];
+  let page = 1;
+  while (true) {
+    const r = await fetch(`/api/ledger?direction=expense&start_date=${startDate}&page=${page}&page_size=200`)
+      .then(res => res.json()).catch(() => ({ items: [], pages: 1 }));
+    all = all.concat(r.items || []);
+    if (page >= (r.pages || 1)) break;
+    page++;
+  }
+  if (all.length === 0) return null;
 
-  const fireNumber = monthlyExp * 12 * 25;
+  const totalCNY = all.reduce((sum, it) => sum + it.amount * (FX[it.currency] || 1), 0);
+  const earliest = all.reduce((min, it) => it.date < min ? it.date : min, all[0].date);
+  const monthSpan = Math.max(1, Math.round(
+    (now - new Date(earliest)) / (1000 * 60 * 60 * 24 * 30.44)
+  ));
+  const months = Math.min(36, monthSpan);
+  return Math.round(totalCNY / months / 100) * 100;
+};
+
+const _calcAge = (birthDate) => {
+  if (!birthDate) return null;
+  const b = new Date(birthDate);
+  if (isNaN(b)) return null;
+  const now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+  return a > 0 && a < 120 ? a : null;
+};
+
+const Fire = ({ currency = "CNY", birthDate = "" }) => {
+  const [loading, setLoading] = React.useState(true);
+
+  const [manualAge,       setManualAge]       = React.useState(32);
+  const [monthlyExp,      setMonthlyExp]      = React.useState(15000);
+  const [ledgerAvgExp,    setLedgerAvgExp]    = React.useState(null);
+  const [portfolioValue,  setPortfolioValue]  = React.useState(null); // from holdings, null until prices arrive
+  const [portfolioMwrr,   setPortfolioMwrr]   = React.useState(null); // MWRR reference for CAGR reset
+  const [liquidAssets,    setLiquidAssets]    = React.useState(0);    // 现金/存款/理财/期权/社保 from balance sheet (0% real return)
+  const [cagr,            setCagr]            = React.useState(10);
+  const [inflation,       setInflation]       = React.useState(3);
+  const [monthly,         setMonthly]         = React.useState(8000);
+  const [swr,             setSwr]             = React.useState(4);
+  const [targetRetireAge, setTargetRetireAge] = React.useState(50);
+  const [mcSigma,         setMcSigma]         = React.useState(15);
+
+  React.useEffect(() => {
+    Promise.all([
+      apiGetAccounts(), apiGetHoldings(), apiGetTransactions(), apiGetIncome(),
+      fetch("/api/settings").then(r => r.json()).catch(() => ({})),
+      _avgMonthlyExpense(),
+    ]).then(([_accts, h, t, inc, s, avgExp]) => {
+      // settings
+      if (s.fire_cagr     != null) setCagr(s.fire_cagr);
+      if (s.fire_inflation != null) setInflation(s.fire_inflation);
+      if (s.fire_monthly   != null) setMonthly(s.fire_monthly);
+      if (s.fire_swr       != null) setSwr(s.fire_swr);
+      if (s.fire_manual_age  != null) setManualAge(s.fire_manual_age);
+      if (s.fire_target_age  != null) setTargetRetireAge(s.fire_target_age);
+      if (s.fire_mc_sigma    != null) setMcSigma(s.fire_mc_sigma);
+
+      // monthly expense — ledger avg always shown as reference
+      if (avgExp != null) {
+        setLedgerAvgExp(avgExp);
+        if (s.fire_monthly_exp == null) setMonthlyExp(avgExp);
+      }
+      if (s.fire_monthly_exp != null) setMonthlyExp(s.fire_monthly_exp);
+
+      // portfolio value + MWRR — fetched async after basic load
+      const codes = [...new Set([...h, ...t].map(r => r.code).filter(Boolean))];
+      const priceP = codes.length > 0 ? apiGetPrices(codes) : Promise.resolve({});
+      priceP.then(prices => {
+        const positions = computePositions(h, t, prices);
+        const total = positions.reduce((sum, p) => sum + p.value, 0);
+        setPortfolioValue(total);
+        const mwrr = computeAccountXIRR(inc, positions);
+        if (mwrr != null && isFinite(mwrr) && mwrr > 0) {
+          const rounded = Math.round(mwrr * 10) / 10;
+          setPortfolioMwrr(rounded);
+          if (s.fire_cagr == null) setCagr(rounded);
+        }
+      }).catch(() => setPortfolioValue(0));
+
+      // liquid assets from balance sheet (0% real return — maintains purchasing power)
+      const LIQUID_CATS = new Set(["现金", "存款", "理财", "期权", "社保"]);
+      apiGetBalanceSnapshots().then(snaps => {
+        if (snaps.length === 0) return;
+        return apiGetBalanceItems(snaps[snaps.length - 1].id).then(items => {
+          const liquid = items
+            .filter(i => i.side === "asset" && LIQUID_CATS.has(i.category))
+            .reduce((sum, i) => sum + i.amount * (FX[i.currency] || 1), 0);
+          setLiquidAssets(liquid);
+        });
+      }).catch(() => {});
+    }).finally(() => setLoading(false));
+  }, []);
+
+  // Debounced settings save — merges patches so rapid multi-setter calls (e.g. applyScenario) all persist
+  const _saveTimer = React.useRef(null);
+  const _pendingPatch = React.useRef({});
+  const saveSettings = (patch) => {
+    Object.assign(_pendingPatch.current, patch);
+    if (_saveTimer.current) clearTimeout(_saveTimer.current);
+    _saveTimer.current = setTimeout(() => {
+      const p = { ..._pendingPatch.current };
+      _pendingPatch.current = {};
+      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch(() => {});
+    }, 600);
+  };
+
+  // Persisting setters
+  const setMonthlyExpP = (v) => { setMonthlyExp(v); saveSettings({ fire_monthly_exp: v }); };
+  const setCagrP       = (v) => { setCagr(v);      saveSettings({ fire_cagr: v }); };
+  const setInflationP  = (v) => { setInflation(v); saveSettings({ fire_inflation: v }); };
+  const setMonthlyP    = (v) => { setMonthly(v);   saveSettings({ fire_monthly: v }); };
+  const setSwrP        = (v) => { setSwr(v);        saveSettings({ fire_swr: v }); };
+  const setManualAgeP       = (v) => { setManualAge(v);       saveSettings({ fire_manual_age: v }); };
+  const setTargetRetireAgeP = (v) => { setTargetRetireAge(v); saveSettings({ fire_target_age: v }); };
+  const setMcSigmaP         = (v) => { setMcSigma(v);         saveSettings({ fire_mc_sigma: v }); };
+
+  const investable = portfolioValue ?? 0;
+
+  const sym    = CURRENCY_SYMBOL[currency] || "¥";
+  const toDisp = (cny) => cny / (FX[currency] || 1);
+  const fmtM   = (cny, dp = 1) => `${sym}${(toDisp(cny) / 1_000_000).toFixed(dp)}M`;
+
+  const derivedAge = _calcAge(birthDate);
+  const age = derivedAge ?? manualAge;
+
+  // SWR drives the multiplier — changing the card changes FIRE NUMBER
+  const multiplier = Math.round(100 / swr);
+  const fireNumber = monthlyExp * 12 * multiplier;
+  // Projection uses real CAGR (inflation-adjusted) so values stay in today's purchasing power
+  const realCagr = Math.max(0, cagr - inflation);
+  // Liquid assets (0% real return) reduce the portfolio target directly
+  const effectiveFireTarget = Math.max(0, fireNumber - liquidAssets);
+
   const project = React.useMemo(() => {
     const out = [];
-    let v = netWorth;
+    let v = investable;
     let yr = age;
+    let fired = false;
     while (yr <= 75) {
-      out.push({ age: yr, value: v });
-      v = v * (1 + cagr/100) + monthly * 12;
+      if (!fired && v >= effectiveFireTarget) fired = true;
+      out.push({ age: yr, value: v, fired });
+      // Pre-FIRE: accumulate with monthly contributions
+      // Post-FIRE: drawdown — withdraw annual expenses, no new contributions
+      v = fired
+        ? Math.max(0, v * (1 + realCagr / 100) - monthlyExp * 12)
+        : v * (1 + realCagr / 100) + monthly * 12;
       yr++;
     }
     return out;
-  }, [netWorth, cagr, age, monthly]);
+  }, [investable, realCagr, age, monthly, monthlyExp, effectiveFireTarget]);
 
-  const fireYear = project.find(p => p.value >= fireNumber);
+  const monteCarlo = React.useMemo(() => {
+    if (investable <= 0 && monthly <= 0) return null;
+    const N = 500, SIGMA = mcSigma / 100;
+    const years = 75 - age + 1;
+    const targetYears = Math.max(1, targetRetireAge - age);
+    const paths = [];
+    for (let i = 0; i < N; i++) {
+      let v = investable;
+      const path = [v];
+      for (let y = 1; y < years; y++) {
+        const u1 = Math.max(1e-10, Math.random()), u2 = Math.random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        v = Math.max(0, v * (1 + realCagr / 100 + SIGMA * z) + monthly * 12);
+        path.push(v);
+      }
+      paths.push(path);
+    }
+    // Sort once per year, extract all percentile bands for the fan chart
+    const ps = [10, 25, 50, 75, 90];
+    const bands = ps.map(() => []);
+    for (let i = 0; i < years; i++) {
+      const sorted = paths.map(pa => pa[i]).sort((a, b) => a - b);
+      ps.forEach((p, k) => {
+        bands[k].push(sorted[Math.min(sorted.length - 1, Math.floor(p / 100 * sorted.length))]);
+      });
+    }
+    // Success rate: % of paths reaching target by targetRetireAge
+    const successRate = paths.filter(pa =>
+      pa.slice(0, targetYears + 1).some(v => v >= effectiveFireTarget)
+    ).length / N;
+    // FIRE age distribution from all paths that ever succeed
+    const fireAges = paths
+      .map(pa => { const idx = pa.findIndex(v => v >= effectiveFireTarget); return idx >= 0 ? age + idx : null; })
+      .filter(a => a != null)
+      .sort((a, b) => a - b);
+    const pAge = (p) => fireAges.length > 0
+      ? fireAges[Math.min(fireAges.length - 1, Math.floor(p / 100 * fireAges.length))]
+      : null;
+    const fireAgePcts = { p25: pAge(25), p50: pAge(50), p75: pAge(75) };
+    // Minimum nominal CAGR for 70% success by targetRetireAge — binary search with mini MC
+    let minNomCagr = effectiveFireTarget <= 0 ? 0 : null;
+    if (effectiveFireTarget > 0) {
+      const runMini = (rc) => {
+        let ok = 0;
+        for (let i = 0; i < 200; i++) {
+          let v = investable;
+          for (let y = 1; y <= targetYears; y++) {
+            const u1 = Math.max(1e-10, Math.random()), u2 = Math.random();
+            const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+            v = Math.max(0, v * (1 + rc / 100 + SIGMA * z) + monthly * 12);
+          }
+          if (v >= effectiveFireTarget) ok++;
+        }
+        return ok / 200;
+      };
+      if (runMini(25) >= 0.70) {
+        let lo = 0, hi = 25;
+        for (let iter = 0; iter < 10; iter++) {
+          const mid = (lo + hi) / 2;
+          if (runMini(mid) >= 0.70) hi = mid; else lo = mid;
+        }
+        // Round to nearest 0.5% to absorb Monte Carlo noise
+        minNomCagr = Math.round((hi + inflation) * 2) / 2;
+      }
+    }
+    return { bands, successRate, fireAgePcts, minNomCagr, years };
+  }, [investable, realCagr, age, monthly, effectiveFireTarget, targetRetireAge, inflation, mcSigma]);
+
+  const fireYear = project.find(p => p.value >= effectiveFireTarget);
   const fireAge = fireYear ? fireYear.age : null;
   const yearsToFire = fireAge ? fireAge - age : null;
 
-  // Scenario presets
+  // Scenario: derived from cagr + monthly — no separate state needed
+  const activeScenario =
+    (cagr === 6  && monthly === 6000  && swr === 3) ? "conservative" :
+    (cagr === 10 && monthly === 8000  && swr === 4) ? "base" :
+    (cagr === 13 && monthly === 12000 && swr === 5) ? "aggressive" : null;
+
   const applyScenario = (s) => {
-    setScenario(s);
-    if (s === "conservative") { setCagr(6);  setMonthly(6000);  }
-    if (s === "base")         { setCagr(10); setMonthly(8000);  }
-    if (s === "aggressive")   { setCagr(13); setMonthly(12000); }
+    if (s === "conservative") { setCagrP(6);  setMonthlyP(6000);  setSwrP(3); }
+    if (s === "base")         { setCagrP(10); setMonthlyP(8000);  setSwrP(4); }
+    if (s === "aggressive")   { setCagrP(13); setMonthlyP(12000); setSwrP(5); }
   };
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 320, color: "var(--ink-3)", fontSize: 14 }}>
+      Loading…
+    </div>
+  );
+
 
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
         kicker="MODULE 05 · FIRE"
         title="FIRE 退休计划"
-        subtitle="Financial Independence, Retire Early · 月投入 + 复利 · 25× 年支出法则 · 净资产取自资产负债最新快照"
+        subtitle={`Financial Independence, Retire Early · 月投入 + 复利 · ${multiplier}× 年支出法则（SWR ${swr}%）· 投资数据取自投资组合页面`}
         right={
-          <div style={{ display: "flex", gap: 6, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 7 }}>
+          <div style={{ display: "flex", gap: 2, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
             {[
-              { id: "conservative", label: "保守 6%" },
-              { id: "base",         label: "基准 10%" },
-              { id: "aggressive",   label: "激进 13%" },
-            ].map(s => (
-              <button key={s.id} onClick={() => applyScenario(s.id)} style={{
-                padding: "5px 10px", fontSize: 11.5, fontWeight: 500, border: "none",
-                background: scenario === s.id ? "var(--ink)" : "transparent",
-                color: scenario === s.id ? "#fff" : "var(--ink-3)",
-                borderRadius: 5, cursor: "pointer",
-              }}>{s.label}</button>
-            ))}
+              { id: "conservative", label: "保守",  cagr: 6,  monthly: 6000,  swr: 3 },
+              { id: "base",         label: "基准",  cagr: 10, monthly: 8000,  swr: 4 },
+              { id: "aggressive",   label: "激进",  cagr: 13, monthly: 12000, swr: 5 },
+            ].map(s => {
+              const active = activeScenario === s.id;
+              return (
+                <button key={s.id} onClick={() => applyScenario(s.id)} style={{
+                  padding: "5px 10px 6px", border: "none", borderRadius: 6, cursor: "pointer",
+                  background: active ? "var(--ink)" : "transparent",
+                  color: active ? "#fff" : "var(--ink-3)",
+                  textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1 }}>{s.label} {s.cagr}%</div>
+                  <div style={{ fontSize: 9.5, opacity: .55, marginTop: 2, letterSpacing: ".01em" }}>
+                    CAGR {s.cagr}% · 月投 ¥{(s.monthly/1000).toFixed(0)}k · SWR {s.swr}%
+                  </div>
+                </button>
+              );
+            })}
           </div>
         }
       />
 
       {/* KPI tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 14 }}>
-        <FireTile label="FIRE NUMBER" value={`¥${(fireNumber/1000000).toFixed(1)}M`} sub="25× 年支出"/>
-        <FireTile label="CURRENT" value={`¥${(netWorth/1000000).toFixed(2)}M`} sub={`${(netWorth/fireNumber*100).toFixed(0)}% 已达成 · 来自 ${latest.label}`}/>
+        <FireTile label="FIRE NUMBER" value={fmtM(fireNumber)} sub={`月 ${sym}${fmtNum(toDisp(monthlyExp), 0)} × 12 × ${multiplier} (SWR ${swr}%)`}/>
+        <FireTile label="CURRENT" value={portfolioValue != null ? fmtM(investable + liquidAssets, 2) : "—"} sub={portfolioValue != null ? `${((investable+liquidAssets)/fireNumber*100).toFixed(0)}% 已达成 · 投资 + 流动资产` : "加载中…"}/>
         <FireTile label="FIRE AGE" value={fireAge ? `${fireAge}` : "—"} sub={fireAge ? `${yearsToFire}y from now` : "Out of range"} accent={fireAge ? "var(--up)" : "var(--down)"}/>
-        <FireTile label="EXPECTED CAGR" value={`${cagr.toFixed(1)}%`} sub="预期年化收益"/>
+        <FireTile label="REAL CAGR" value={`${realCagr.toFixed(1)}%`} sub={`名义 ${cagr.toFixed(1)}% − 通胀 ${inflation}% · 投影使用实际收益率`}/>
       </div>
 
       {/* Chart + Parameters */}
@@ -84,79 +307,370 @@ const Fire = () => {
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Projected · age {age}–75</div>
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--ink)" }}/>Projection</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--ink)" }}/>Accumulation</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 0, borderTop: "2px dashed var(--ink)", opacity: .45 }}/>Drawdown</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--up)", borderTop: "1px dashed var(--up)" }}/>FIRE target</span>
             </div>
           </div>
-          <FireChart data={project} fireNumber={fireNumber} fireAge={fireAge}/>
+          <FireChart data={project} fireNumber={fireNumber} effectiveFireTarget={effectiveFireTarget} liquidAssets={liquidAssets} fireAge={fireAge} currency={currency}/>
+
+          {monteCarlo && (
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px dashed var(--line)" }}>
+              {/* Header: title + target age picker */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div>
+                  <div className="serif-cn" style={{ fontSize: 14, fontWeight: 700 }}>蒙特卡洛模拟 Monte Carlo</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>500 次模拟 · 年收益正态分布 μ={realCagr.toFixed(1)}% σ={mcSigma}%</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>目标退休</span>
+                    {[45, 50, 55, 60].map(a => (
+                      <button key={a} onClick={() => setTargetRetireAgeP(a)} style={{
+                        padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
+                        borderColor: targetRetireAge === a ? "var(--ink)" : "var(--line-2)",
+                        background:  targetRetireAge === a ? "var(--ink)" : "transparent",
+                        color:       targetRetireAge === a ? "#fff" : "var(--ink-3)",
+                      }}>{a}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>波动率 σ</span>
+                    {[10, 15, 20, 25].map(s => (
+                      <button key={s} onClick={() => setMcSigmaP(s)} style={{
+                        padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
+                        borderColor: mcSigma === s ? "var(--ink)" : "var(--line-2)",
+                        background:  mcSigma === s ? "var(--ink)" : "transparent",
+                        color:       mcSigma === s ? "#fff" : "var(--ink-3)",
+                      }}>{s}%</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* 3 stat tiles */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 1fr", gap: 8, marginBottom: 12 }}>
+                <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>达标率 · age {targetRetireAge}</div>
+                  <div className="mono" style={{
+                    fontSize: 22, fontWeight: 700,
+                    color: monteCarlo.successRate >= 0.7 ? "var(--up)" : monteCarlo.successRate >= 0.4 ? "var(--warn)" : "var(--down)",
+                  }}>{(monteCarlo.successRate * 100).toFixed(0)}%</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>500 条路径</div>
+                </div>
+                <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>FIRE 年龄区间</div>
+                  {monteCarlo.fireAgePcts.p50 != null ? (
+                    <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P25</div>
+                        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-3)" }}>{monteCarlo.fireAgePcts.p25}</div>
+                      </div>
+                      <div style={{ textAlign: "center", flex: 1 }}>
+                        <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P50</div>
+                        <div className="mono" style={{ fontSize: 20, fontWeight: 700 }}>{monteCarlo.fireAgePcts.p50}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P75</div>
+                        <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-3)" }}>{monteCarlo.fireAgePcts.p75}</div>
+                      </div>
+                    </div>
+                  ) : <div style={{ fontSize: 13, color: "var(--ink-4)", paddingTop: 6 }}>—</div>}
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 3 }}>成功路径退休年龄分布</div>
+                </div>
+                <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>最低名义 CAGR</div>
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
+                    {monteCarlo.minNomCagr != null ? `${monteCarlo.minNomCagr.toFixed(1)}%` : "—"}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>
+                    {monteCarlo.minNomCagr != null
+                      ? `实际 ${Math.max(0, monteCarlo.minNomCagr - inflation).toFixed(1)}% · 70% 置信`
+                      : "超出范围"}
+                  </div>
+                </div>
+              </div>
+              <MonteCarloChart
+                bands={monteCarlo.bands} years={monteCarlo.years}
+                age={age} fireTarget={effectiveFireTarget} currency={currency}
+                medFireAge={monteCarlo.fireAgePcts.p50}
+              />
+              <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 10.5, color: "var(--ink-4)", flexWrap: "wrap" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 20, height: 7, background: "var(--ink)", opacity: .12, display: "inline-block", borderRadius: 1 }}/> P10–P90
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 20, height: 7, background: "var(--ink)", opacity: .22, display: "inline-block", borderRadius: 1 }}/> P25–P75
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 20, height: 2, background: "var(--ink)", opacity: .7, display: "inline-block" }}/> 中位数 P50
+                </span>
+              </div>
+            </div>
+          )}
         </Card>
         <Card padding={20}>
           <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700, marginBottom: 14 }}>参数 Parameters</div>
-          <FireSlider label="当前年龄" value={age} onChange={setAge} min={20} max={60} suffix="岁"/>
-          <FireSlider label="月支出" value={monthlyExp} onChange={setMonthlyExp} min={3000} max={50000} step={500} suffix="¥"/>
-          <FireSlider label="预期年化 CAGR" value={cagr} onChange={setCagr} min={3} max={20} step={0.5} suffix="%"/>
-          <FireSlider label="月度投入" value={monthly} onChange={setMonthly} min={0} max={30000} step={500} suffix="¥"/>
+
+          {/* Age */}
+          {derivedAge != null ? (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>当前年龄</span>
+                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{derivedAge} 岁</span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>根据出生日期自动计算 · 在设置中修改</div>
+            </div>
+          ) : (
+            <FireSlider label="当前年龄" value={manualAge} onChange={setManualAgeP} min={20} max={60} suffix="岁"/>
+          )}
+
+          {/* Monthly expense */}
+          <FireSlider label="月支出" value={monthlyExp} onChange={setMonthlyExpP} min={3000} max={50000} step={500} suffix="¥"/>
+          {ledgerAvgExp != null && (
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: -8, marginBottom: 10 }}>
+              过去 3 年月均支出 <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
+              {monthlyExp !== ledgerAvgExp && (
+                <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
+                  marginLeft: 8, fontSize: 10, padding: "1px 5px", borderRadius: 3, cursor: "pointer",
+                  border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
+                }}>还原</button>
+              )}
+            </div>
+          )}
+
+          {/* SWR — 3 compact cards */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>提取率 SWR</span>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{swr}% · {multiplier}×</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              {[
+                { rate: 3, label: "保守", blurb: "40+ 年退休" },
+                { rate: 4, label: "标准", blurb: "Bengen 法则" },
+                { rate: 5, label: "激进", blurb: "有其他收入" },
+              ].map(({ rate, label, blurb }) => {
+                const mult = Math.round(100 / rate);
+                const active = swr === rate;
+                return (
+                  <div key={rate} onClick={() => setSwrP(rate)} style={{
+                    padding: "8px 10px", borderRadius: 7, cursor: "pointer",
+                    border: "1px solid " + (active ? "var(--ink)" : "var(--line)"),
+                    background: active ? "var(--ink)" : "var(--paper-2)",
+                    color: active ? "#fff" : "var(--ink)",
+                    transition: "background .12s",
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, opacity: .75 }}>{label} {rate}%</div>
+                    <div className="mono" style={{ fontSize: 15, fontWeight: 700, margin: "2px 0" }}>{mult}×</div>
+                    <div style={{ fontSize: 10, opacity: .55, lineHeight: 1.3 }}>{blurb}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* CAGR — quick buttons + slider */}
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>预期年化 CAGR <span style={{ color: "var(--ink-5)", fontWeight: 400 }}>名义</span></span>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}%</span>
+            </div>
+            <div style={{ display: "flex", gap: 4, marginBottom: 7 }}>
+              {[4, 6, 8, 10, 13, 15].map(v => (
+                <button key={v} onClick={() => setCagrP(v)} style={{
+                  flex: 1, padding: "3px 0", fontSize: 11, fontWeight: 500, cursor: "pointer",
+                  border: "1px solid", borderRadius: 5,
+                  borderColor: cagr === v ? "var(--ink)" : "var(--line-2)",
+                  background:  cagr === v ? "var(--ink)" : "transparent",
+                  color:       cagr === v ? "#fff" : "var(--ink-3)",
+                }}>{v}%</button>
+              ))}
+            </div>
+            <input type="range" min={3} max={20} step={0.5} value={cagr}
+              onChange={e => setCagrP(parseFloat(e.target.value))} style={{ width: "100%" }}/>
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 4 }}>
+              实际收益率 <span className="mono" style={{ fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}% − {inflation}% = {realCagr.toFixed(1)}%</span> · 投影使用实际值
+            </div>
+            {portfolioMwrr != null && (
+              <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3, marginBottom: 10 }}>
+                投资组合 MWRR <span className="mono" style={{ fontWeight: 600 }}>{portfolioMwrr.toFixed(1)}%</span>
+                {Math.abs(cagr - portfolioMwrr) > 0.05 && (
+                  <button onClick={() => setCagrP(portfolioMwrr)} style={{
+                    marginLeft: 8, fontSize: 10, padding: "1px 5px", borderRadius: 3, cursor: "pointer",
+                    border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
+                  }}>还原</button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Inflation rate — quick buttons only */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>通胀率 Inflation</span>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{inflation}%</span>
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {[1, 2, 3, 4, 5].map(v => (
+                <button key={v} onClick={() => setInflationP(v)} style={{
+                  flex: 1, padding: "3px 0", fontSize: 11, fontWeight: 500, cursor: "pointer",
+                  border: "1px solid", borderRadius: 5,
+                  borderColor: inflation === v ? "var(--ink)" : "var(--line-2)",
+                  background:  inflation === v ? "var(--ink)" : "transparent",
+                  color:       inflation === v ? "#fff" : "var(--ink-3)",
+                }}>{v}%</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Monthly contribution */}
+          <FireSlider label="月度投入" value={monthly} onChange={setMonthlyP} min={0} max={30000} step={500} suffix="¥"/>
+
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>当前净资产</div>
-            <div className="mono" style={{ fontSize: 18, fontWeight: 700 }}>¥{(netWorth/1000000).toFixed(2)}M</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>自动取自资产负债最新快照 · {latest.label}</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>资产构成</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>投资组合 TOTAL VALUE</span>
+                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{portfolioValue != null ? fmtM(investable, 2) : "—"}</span>
+              </div>
+              {liquidAssets > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>现金/存款/理财/期权/社保</span>
+                  <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}>{fmtM(liquidAssets, 2)}</span>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 5, borderTop: "1px solid var(--line)" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)" }}>合计</span>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 700 }}>{fmtM(investable + liquidAssets, 2)}</span>
+              </div>
+            </div>
+            {liquidAssets > 0 && (
+              <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6 }}>
+                流动资产按通胀率增长（实际收益 0%）· 投资组合缺口 {fmtM(effectiveFireTarget, 2)}
+              </div>
+            )}
           </div>
         </Card>
       </div>
 
       {/* Milestones */}
+      {(() => {
+        // Coast FIRE: amount needed TODAY so portfolio reaches fireNumber by 65 with zero contributions
+        const coastRetireAge = 65;
+        const coastYearsLeft = Math.max(1, coastRetireAge - age);
+        const coastTarget = fireNumber / Math.pow(1 + realCagr / 100, coastYearsLeft);
+        const coastAlready = (investable + liquidAssets) >= coastTarget;
+        const coastYr = coastAlready ? null : project.find(p => p.value >= coastTarget);
+
+        const milestones = [
+          {
+            label: "Lean FIRE", color: "var(--info)",
+            target: monthlyExp * 12 * 15,
+            multiplierLabel: "15×",
+            desc: "极简生活退休",
+            detail: "仅覆盖衣食住行基本开支，无旅行娱乐预算。适合低消费生活方式或低物价地区。",
+          },
+          {
+            label: "FIRE", color: "var(--up)",
+            target: monthlyExp * 12 * 25,
+            multiplierLabel: "25×",
+            desc: "标准退休（4% 法则）",
+            detail: "退休后维持当前生活水准。Bengen 1994 研究证明按 4% 提取，30 年成功率约 95%。",
+          },
+          {
+            label: "Fat FIRE", color: "var(--warn)",
+            target: monthlyExp * 12 * 40,
+            multiplierLabel: "40×",
+            desc: "富裕退休（2.5% 提取率）",
+            detail: "有充足缓冲可应对通胀、医疗、旅行及馈赠，无需在退休后精打细算。",
+          },
+          {
+            label: "Coast FIRE", color: "var(--violet)",
+            target: coastTarget,
+            multiplierLabel: `到 ${coastRetireAge} 岁`,
+            desc: "停止投入，靠复利滑行",
+            detail: `今天达到此金额后即可停止定投，复利自然增长至 ${coastRetireAge} 岁时覆盖 FIRE 目标。`,
+            coastMode: true,
+            coastAlready,
+            coastYr,
+          },
+        ];
+
+        return (
+          <div style={{ marginTop: 14 }}>
+            <Card padding={20}>
+              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>关键里程碑 Milestones</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                {milestones.map(m => {
+                  const yr = m.coastMode
+                    ? (m.coastAlready ? null : m.coastYr)
+                    : project.find(p => p.value >= m.target);
+                  const reached = m.coastMode ? m.coastAlready : (investable + liquidAssets) >= m.target;
+                  return (
+                    <div key={m.label} style={{ background: "var(--paper-2)", border: `1px solid ${reached ? m.color : "var(--line)"}`, borderRadius: 10, padding: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: m.color, flexShrink: 0 }}/>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{m.label}</span>
+                        <span className="mono" style={{ fontSize: 9, color: "var(--ink-5)", marginLeft: "auto" }}>{m.multiplierLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: m.color, marginBottom: 4 }}>{m.desc}</div>
+                      <div className="mono" style={{ fontSize: 17, fontWeight: 700 }}>{fmtM(m.target)}</div>
+                      <div style={{ fontSize: 11, color: reached ? m.color : "var(--ink-3)", marginTop: 3, fontWeight: reached ? 600 : 400 }}>
+                        {reached
+                          ? "✓ 已达成"
+                          : yr ? `→ age ${yr.age} · ${yr.age - age}y` : "Out of range"}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6, lineHeight: 1.5 }}>{m.detail}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* SWR scenario comparison — read-only, all three rates side by side */}
       <div style={{ marginTop: 14 }}>
         <Card padding={20}>
-          <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>关键里程碑 Milestones</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>提取率场景推演 SWR Scenarios</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>当前月支出 · 三种提取率下的目标与退休时间对比</div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
+              退休后每年从投资组合提取的比例。越保守所需本金越高，但资金安全性更强。当前选中方案高亮显示。
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
-              { label: "Lean FIRE", multiplier: 15, color: "var(--info)",   blurb: "极简退休 · 仅覆盖基本生活" },
-              { label: "FIRE",      multiplier: 25, color: "var(--up)",     blurb: "标准退休 · 维持当前生活水准" },
-              { label: "Fat FIRE",  multiplier: 40, color: "var(--warn)",   blurb: "充裕退休 · 旅行 + 通胀缓冲" },
-              { label: "Coast FIRE",multiplier: 12, color: "var(--violet)", blurb: "停止投入 · 复利达到 FIRE 即可" },
-            ].map(m => {
-              const target = monthlyExp * 12 * m.multiplier;
-              const yr = project.find(p => p.value >= target);
-              const reached = yr && yr.age <= age + 60;
+              { rate: 3, label: "保守", blurb: "本金更安全，可支撑 40+ 年退休" },
+              { rate: 4, label: "标准", blurb: "Bengen 1994 四十年实证黄金法则" },
+              { rate: 5, label: "激进", blurb: "所需本金少，适合有其他收入来源" },
+            ].map(({ rate, label, blurb }) => {
+              const mult = Math.round(100 / rate);
+              const annualExp = monthlyExp * 12;
+              const required = annualExp / (rate / 100);
+              const effTarget = Math.max(0, required - liquidAssets);
+              const yr = project.find(p => p.value >= effTarget);
+              const active = swr === rate;
               return (
-                <div key={m.label} style={{ background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: m.color }}/>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{m.label}</span>
-                    <span className="mono" style={{ fontSize: 9.5, color: "var(--ink-4)", marginLeft: "auto" }}>{m.multiplier}×</span>
-                  </div>
-                  <div className="mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>¥{(target/1000000).toFixed(1)}M</div>
-                  <div style={{ fontSize: 11, color: reached ? "var(--up)" : "var(--ink-3)", marginTop: 2, fontWeight: reached ? 500 : 400 }}>
-                    {yr ? `→ age ${yr.age} · ${yr.age - age}y` : "Out of range"}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 4, lineHeight: 1.4 }}>{m.blurb}</div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-
-      {/* Withdrawal scenarios */}
-      <div style={{ marginTop: 14 }}>
-        <Card padding={20}>
-          <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>提取率敏感性 Withdrawal Rate Sensitivity</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 14 }}>不同提取率下的所需 FIRE 数字 · 当前月支出 ¥{fmtNum(monthlyExp,0)}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-            {[3.0, 3.5, 4.0, 4.5, 5.0].map(rate => {
-              const required = (monthlyExp * 12) / (rate / 100);
-              const yr = project.find(p => p.value >= required);
-              const isStandard = rate === 4.0;
-              return (
-                <div key={rate} style={{
-                  background: isStandard ? "var(--ink)" : "transparent",
-                  color: isStandard ? "#fff" : "var(--ink)",
-                  border: "1px solid " + (isStandard ? "var(--ink)" : "var(--line)"),
-                  borderRadius: 8, padding: 12,
+                <div key={rate} onClick={() => setSwrP(rate)} style={{
+                  background: active ? "var(--ink)" : "var(--paper-2)",
+                  color:      active ? "#fff" : "var(--ink)",
+                  border: "1px solid " + (active ? "var(--ink)" : "var(--line)"),
+                  borderRadius: 10, padding: 16, cursor: "pointer",
+                  transition: "background .12s, border-color .12s",
                 }}>
-                  <div className="mono" style={{ fontSize: 11, opacity: .7, fontWeight: 600 }}>SWR {rate.toFixed(1)}%</div>
-                  <div className="mono" style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>¥{(required/1000000).toFixed(1)}M</div>
-                  <div style={{ fontSize: 10.5, opacity: .7, marginTop: 2 }}>{yr ? `age ${yr.age}` : "—"}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, opacity: .7 }}>{label} SWR {rate}%</span>
+                    <span className="mono" style={{ fontSize: 11, opacity: .6 }}>{mult}×</span>
+                  </div>
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>{fmtM(required)}</div>
+                  <div style={{ fontSize: 11, opacity: .7, marginTop: 4 }}>
+                    {yr ? `age ${yr.age} · ${yr.age - age}y` : "—"} · {sym}{fmtNum(toDisp(annualExp), 0)} ÷ {rate}%
+                  </div>
+                  <div style={{ fontSize: 10.5, opacity: .55, marginTop: 5, lineHeight: 1.4 }}>{blurb}</div>
                 </div>
               );
             })}
@@ -164,7 +678,7 @@ const Fire = () => {
         </Card>
       </div>
 
-      <ComingSoonBanner module="FIRE" features={["蒙特卡洛模拟", "通胀调整 (real return)", "提取阶段建模 4% rule", "税务影响 / 社保接续"]}/>
+      <ComingSoonBanner module="FIRE" features={["提取阶段建模 4% rule", "税务影响 / 社保接续"]}/>
     </div>
   );
 };
@@ -188,29 +702,79 @@ const FireSlider = ({ label, value, onChange, min, max, step = 1, suffix }) => (
   </div>
 );
 
-const FireChart = ({ data, fireNumber, fireAge }) => {
+const FireChart = ({ data, fireNumber, effectiveFireTarget, liquidAssets = 0, fireAge, currency = "CNY" }) => {
+  const chartSym  = CURRENCY_SYMBOL[currency] || "¥";
+  const chartRate = FX[currency] || 1;
+  const toD = (cny) => cny / chartRate;
+
   const width = 800, height = 240;
   const padL = 50, padR = 16, padT = 16, padB = 30;
   const w = width - padL - padR, h = height - padT - padB;
-  const max = Math.max(fireNumber * 1.1, ...data.map(d => d.value));
+  const projMax = Math.max(...data.map(d => d.value));
+  const max = Math.max(projMax, fireNumber) * 1.08;
+  // Log scale: compresses exponential tail so early and late phases are both readable
+  const logFloor = Math.max((data[0]?.value || 1) * 0.3, 10_000);
+  const _sl = (v) => Math.log(Math.max(v, logFloor));
+  const _logMin = _sl(logFloor), _logMax = _sl(max);
   const xs = (i) => padL + (i / (data.length - 1)) * w;
-  const ys = (v) => padT + h - (v / max) * h;
-  const path = "M " + data.map((d, i) => `${xs(i).toFixed(1)},${ys(d.value).toFixed(1)}`).join(" L ");
-  const fill = path + ` L ${(padL + w).toFixed(1)},${(padT + h).toFixed(1)} L ${padL.toFixed(1)},${(padT + h).toFixed(1)} Z`;
+  const ys = (v) => padT + h - (_sl(v) - _logMin) / (_logMax - _logMin) * h;
+  const _fmtG = (cny) => { const v = toD(cny)/1e6; return v>=1000?`${chartSym}${(v/1e3).toFixed(1)}B`:`${chartSym}${v>=10?v.toFixed(0):v.toFixed(1)}M`; };
+  const _logGrids = (() => {
+    const e0 = Math.floor(Math.log10(logFloor)), e1 = Math.ceil(Math.log10(max)), vs = [];
+    for (let e = e0; e <= e1; e++) for (const m of [1, 2, 5]) { const v = m*10**e; if (v >= logFloor*0.8 && v <= max*1.05) vs.push(v); }
+    return [...new Set(vs)].sort((a,b) => a-b);
+  })();
+  // Split path at FIRE point: accumulation (solid) vs drawdown (dashed)
+  const fireIdx = data.findIndex(d => d.fired);
+  const accData  = fireIdx > 0 ? data.slice(0, fireIdx + 1) : (fireIdx < 0 ? data : []);
+  const drawData = fireIdx >= 0 ? data.slice(fireIdx) : [];
+  const mkPath = (pts, si) => pts.length < 2 ? null :
+    "M " + pts.map((d, i) => `${xs(si + i).toFixed(1)},${ys(d.value).toFixed(1)}`).join(" L ");
+  const accPath  = mkPath(accData, 0);
+  const drawPath = mkPath(drawData, Math.max(0, fireIdx));
+  const fullPath = "M " + data.map((d, i) => `${xs(i).toFixed(1)},${ys(d.value).toFixed(1)}`).join(" L ");
+  const fill = fullPath + ` L ${(padL + w).toFixed(1)},${(padT + h).toFixed(1)} L ${padL.toFixed(1)},${(padT + h).toFixed(1)} Z`;
+  // Show FIRE target line; if liquid assets exist, also show portfolio-only target
+  const hasLiquid = liquidAssets > 0;
   const fireY = ys(fireNumber);
-  const fireIdx = data.findIndex(d => d.age === fireAge);
+  const effY  = hasLiquid ? ys(effectiveFireTarget) : null;
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-      {[0, .25, .5, .75, 1].map((p, i) => (
+      {_logGrids.map((v, i) => { const y = ys(v); if (y < padT-4 || y > padT+h+4) return null; return (
         <g key={i}>
-          <line x1={padL} x2={padL+w} y1={padT + h - p*h} y2={padT + h - p*h} stroke="var(--line)" strokeDasharray="2 3"/>
-          <text x={padL - 8} y={padT + h - p*h + 3} fontSize="10" fill="var(--ink-4)" textAnchor="end" className="mono">¥{((max*p)/1000000).toFixed(1)}M</text>
+          <line x1={padL} x2={padL+w} y1={y} y2={y} stroke="var(--line)" strokeDasharray="2 3"/>
+          <text x={padL-8} y={y+3} fontSize="10" fill="var(--ink-4)" textAnchor="end" className="mono">{_fmtG(v)}</text>
         </g>
-      ))}
+      ); })}
+      <text x={padL-8} y={padT+h+13} fontSize="9" fill="var(--ink-5)" textAnchor="end">log</text>
+      {/* FIRE total target line */}
       <line x1={padL} x2={padL+w} y1={fireY} y2={fireY} stroke="var(--up)" strokeDasharray="4 3" strokeWidth="1.5"/>
-      <text x={padL+w-4} y={fireY-5} fontSize="10" fill="var(--up)" textAnchor="end" fontWeight="600">FIRE ¥{(fireNumber/1000000).toFixed(1)}M</text>
+      <text x={padL+w-4} y={fireY-5} fontSize="10" fill="var(--up)" textAnchor="end" fontWeight="600">FIRE {chartSym}{(toD(fireNumber)/1000000).toFixed(1)}M</text>
+      {/* Portfolio-only target line — label flips below the line when too close to FIRE label */}
+      {hasLiquid && effY != null && (
+        <>
+          <line x1={padL} x2={padL+w} y1={effY} y2={effY} stroke="var(--up)" strokeDasharray="2 5" strokeWidth="1" strokeOpacity=".45"/>
+          <text x={padL+w-4} y={Math.abs(effY - fireY) < 18 ? effY+11 : effY-5} fontSize="9.5" fill="var(--up)" fillOpacity=".7" textAnchor="end">投资组合目标 {chartSym}{(toD(effectiveFireTarget)/1000000).toFixed(1)}M</text>
+        </>
+      )}
       <path d={fill} fill="var(--ink)" fillOpacity=".06"/>
-      <path d={path} stroke="var(--ink)" strokeWidth="2" fill="none"/>
+      {accPath  && <path d={accPath}  stroke="var(--ink)" strokeWidth="2"   fill="none"/>}
+      {drawPath && <path d={drawPath} stroke="var(--ink)" strokeWidth="1.5" fill="none" strokeDasharray="5 3" strokeOpacity=".5"/>}
+      {/* Start point label */}
+      {data.length > 0 && (() => {
+        const sx = xs(0), sy = ys(data[0].value);
+        const label = `${chartSym}${(toD(data[0].value)/1000000).toFixed(2)}M`;
+        const labelW = label.length * 6 + 10;
+        // place label above the dot, shift right so it doesn't overlap y-axis
+        const lx = sx + 6, ly = sy - 8;
+        return (
+          <g>
+            <circle cx={sx} cy={sy} r="4" fill="var(--ink)" fillOpacity=".5"/>
+            <rect x={lx} y={ly - 11} width={labelW} height={15} rx="3" fill="var(--ink)" fillOpacity=".08"/>
+            <text x={lx + 5} y={ly} fontSize="10" fill="var(--ink-3)" className="mono" fontWeight="500">{label}</text>
+          </g>
+        );
+      })()}
       {fireIdx >= 0 && (
         <g>
           <line x1={xs(fireIdx)} x2={xs(fireIdx)} y1={padT} y2={padT+h} stroke="var(--up)" strokeWidth="1" strokeDasharray="2 3"/>
@@ -223,6 +787,80 @@ const FireChart = ({ data, fireNumber, fireAge }) => {
         const idx = data.indexOf(d);
         return <text key={i} x={xs(idx)} y={height-8} fontSize="10" fill="var(--ink-4)" textAnchor="middle" className="mono">{d.age}</text>;
       })}
+    </svg>
+  );
+};
+
+const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medFireAge }) => {
+  const chartSym  = CURRENCY_SYMBOL[currency] || "¥";
+  const chartRate = FX[currency] || 1;
+  const toD = (cny) => cny / chartRate;
+
+  const width = 800, height = 180;
+  const padL = 50, padR = 16, padT = 12, padB = 26;
+  const w = width - padL - padR, h = height - padT - padB;
+
+  const maxVal = Math.max(Math.max(...bands[4]), fireTarget) * 1.08;
+  const _mcFloor = Math.max((bands[0][0] || 1) * 0.3, 10_000);
+  const _slM = (v) => Math.log(Math.max(v, _mcFloor));
+  const _logMinM = _slM(_mcFloor), _logMaxM = _slM(maxVal);
+  const xs = (i) => padL + (i / (years - 1)) * w;
+  const ys = (v) => padT + h - (_slM(v) - _logMinM) / (_logMaxM - _logMinM) * h;
+  const _fmtGM = (cny) => { const v = toD(cny)/1e6; return v>=1000?`${chartSym}${(v/1e3).toFixed(1)}B`:`${chartSym}${v>=10?v.toFixed(0):v.toFixed(1)}M`; };
+  const _logGridsM = (() => {
+    const e0 = Math.floor(Math.log10(_mcFloor)), e1 = Math.ceil(Math.log10(maxVal)), vs = [];
+    for (let e = e0; e <= e1; e++) for (const m of [1, 2, 5]) { const v = m*10**e; if (v >= _mcFloor*0.8 && v <= maxVal*1.05) vs.push(v); }
+    return [...new Set(vs)].sort((a,b) => a-b);
+  })();
+
+  const areaPath = (upper, lower) =>
+    "M " + upper.map((v, i) => `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).join(" L ") +
+    " L " + [...lower].reverse().map((v, i) => `${xs(years - 1 - i).toFixed(1)},${ys(v).toFixed(1)}`).join(" L ") + " Z";
+  const linePath = (arr) =>
+    "M " + arr.map((v, i) => `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).join(" L ");
+
+  const fireY = ys(fireTarget);
+
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
+      {_logGridsM.map((v, i) => { const y = ys(v); if (y < padT-4 || y > padT+h+4) return null; return (
+        <g key={i}>
+          <line x1={padL} x2={padL+w} y1={y} y2={y} stroke="var(--line)" strokeDasharray="2 3"/>
+          <text x={padL-8} y={y+3} fontSize="10" fill="var(--ink-4)" textAnchor="end" className="mono">{_fmtGM(v)}</text>
+        </g>
+      ); })}
+      <text x={padL-8} y={padT+h+14} fontSize="9" fill="var(--ink-5)" textAnchor="end">log</text>
+      {/* FIRE target line */}
+      <line x1={padL} x2={padL+w} y1={fireY} y2={fireY} stroke="var(--up)" strokeDasharray="4 3" strokeWidth="1.5"/>
+      <text x={padL+w-4} y={fireY-5} fontSize="10" fill="var(--up)" textAnchor="end" fontWeight="600">
+        FIRE {chartSym}{(toD(fireTarget)/1_000_000).toFixed(1)}M
+      </text>
+      {/* P10–P90 band */}
+      <path d={areaPath(bands[4], bands[0])} fill="var(--ink)" fillOpacity=".08"/>
+      {/* P25–P75 band */}
+      <path d={areaPath(bands[3], bands[1])} fill="var(--ink)" fillOpacity=".15"/>
+      {/* P50 median line */}
+      <path d={linePath(bands[2])} stroke="var(--ink)" strokeWidth="1.5" fill="none" strokeOpacity=".75"/>
+      {/* Median FIRE age marker */}
+      {medFireAge != null && (() => {
+        const idx = medFireAge - age;
+        if (idx < 0 || idx >= years) return null;
+        const mx = xs(idx);
+        return (
+          <g>
+            <line x1={mx} x2={mx} y1={padT} y2={padT+h} stroke="var(--up)" strokeWidth="1" strokeDasharray="2 3" strokeOpacity=".6"/>
+            <rect x={mx-22} y={padT-2} width="44" height="17" rx="3" fill="var(--up)" fillOpacity=".85"/>
+            <text x={mx} y={padT+10} fontSize="10.5" fill="#fff" textAnchor="middle" fontWeight="600">Age {medFireAge}</text>
+          </g>
+        );
+      })()}
+      {/* X-axis labels */}
+      {Array.from({ length: years }, (_, i) => age + i)
+        .filter((_, i) => i % 5 === 0 || i === years - 1)
+        .map(a => {
+          const i = a - age;
+          return <text key={a} x={xs(i)} y={height - 8} fontSize="10" fill="var(--ink-4)" textAnchor="middle" className="mono">{a}</text>;
+        })}
     </svg>
   );
 };

@@ -23,6 +23,16 @@ class SettingsPayload(BaseModel):
     notify_email: str | None = None
     notify_enabled: bool | None = None
     timezone: str | None = None
+    birth_date: str | None = None
+    fire_monthly_exp: float | None = None
+    fire_cagr: float | None = None
+    fire_monthly: float | None = None
+    fire_swr: float | None = None
+    fire_manual_age: int | None = None
+    fire_inflation: float | None = None
+    fire_target_age: int | None = None
+    fire_mc_sigma: int | None = None
+    currency: str | None = None
 
 
 @router.get("/config")

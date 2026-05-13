@@ -9,6 +9,16 @@ _DEFAULTS = {
     "notify_enabled": True,
     "timezone": "America/Toronto",
     "rebalance": None,
+    "birth_date": "",
+    "fire_monthly_exp": None,
+    "fire_cagr": None,
+    "fire_monthly": 8000,
+    "fire_swr": 4.0,
+    "fire_manual_age": 32,
+    "fire_inflation": 3,
+    "fire_target_age": 50,
+    "fire_mc_sigma": 15,
+    "currency": "CNY",
 }
 
 
