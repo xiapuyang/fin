@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -399,3 +399,179 @@ async def import_income(
         "skipped": skipped,
         "income": [_income_response(i) for i in all_income],
     }
+
+
+_DIVIDEND_INFO_TTL_HOURS = 24  # ex_date / annual_rate refresh cadence
+_DIVIDEND_HIST_YEARS = 2  # how far back to pull on first fetch
+
+
+def _yf_parse_info(info: dict) -> tuple[str | None, str | None, float | None]:
+    """Extract (ex_date, pay_date, annual_rate) from a yfinance info dict."""
+    ex_ts = info.get("exDividendDate")
+    ex_date = datetime.utcfromtimestamp(ex_ts).strftime("%Y-%m-%d") if ex_ts else None
+    pay_ts = info.get("dividendDate")
+    pay_date = (
+        datetime.utcfromtimestamp(pay_ts).strftime("%Y-%m-%d") if pay_ts else None
+    )
+    return ex_date, pay_date, info.get("dividendRate")
+
+
+def _annual_rate_from_history(history: list[dict]) -> float | None:
+    """Sum of actual dividend payments in the last 365 days.
+
+    Used as a fallback when yfinance does not provide dividendRate (common for
+    bond ETFs and broad-market ETFs that pay monthly or irregularly).
+    """
+    if not history:
+        return None
+    one_year_ago = (datetime.utcnow() - timedelta(days=365)).strftime("%Y-%m-%d")
+    total = sum(h["amount"] for h in history if h["date"] >= one_year_ago)
+    return round(total, 4) if total > 0 else None
+
+
+def _yf_fetch_history(ticker, since: datetime) -> list[dict]:
+    """Return dividend history entries on or after *since* as [{date, amount}]."""
+    hist = ticker.dividends
+    if hist.empty:
+        return []
+    idx = hist.index.tz_localize(None) if hist.index.tz is not None else hist.index
+    return [
+        {"date": str(d.date()), "amount": round(float(a), 4)}
+        for d, a in zip(idx, hist.values)
+        if d >= since
+    ]
+
+
+@router.get("/dividends")
+def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
+    """Return dividend history and next ex-date for a comma-separated list of symbols.
+
+    Strategy:
+    - History (ticker.dividends): fetched once on first DB write, then only new
+      entries (last 90 days) are appended on each info refresh — avoids full
+      re-fetch of immutable historical data.
+    - Forward info (ex_date, pay_date, annual_rate): refreshed every 24 h via
+      ticker.info, which is much faster than a full history pull.
+    """
+    import json
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import yfinance as yf
+    from fin.models.dividend_history import DividendHistoryModel
+
+    codes = [
+        s.strip().upper()
+        for s in symbols.split(",")
+        if s.strip() and s.strip().upper() != "CASH"
+    ]
+    if not codes:
+        return {}
+
+    now = datetime.utcnow()
+    info_stale_threshold = now - timedelta(hours=_DIVIDEND_INFO_TTL_HOURS)
+
+    rows = {
+        r.symbol: r
+        for r in db.query(DividendHistoryModel)
+        .filter(DividendHistoryModel.symbol.in_(codes))
+        .all()
+    }
+
+    result = {}
+    stale_codes = []
+
+    # Serve fresh rows immediately from DB
+    for code in codes:
+        row = rows.get(code)
+        info_fresh = (
+            row
+            and row.fetched_at
+            and datetime.fromisoformat(row.fetched_at) >= info_stale_threshold
+        )
+        if info_fresh:
+            history = json.loads(row.history_json) if row.history_json else []
+            annual_rate = row.annual_rate or _annual_rate_from_history(history)
+            if row.ex_date or history:
+                result[code] = {
+                    "ex_date": row.ex_date,
+                    "pay_date": row.pay_date,
+                    "annual_rate": annual_rate,
+                    "history": history,
+                }
+        else:
+            stale_codes.append(code)
+
+    if not stale_codes:
+        return result
+
+    def _fetch_one(code: str) -> tuple[str, dict | None]:
+        """Fetch yfinance data for one symbol; returns (code, data_or_None)."""
+        try:
+            row = rows.get(code)
+            ticker = yf.Ticker(code)
+            ex_date, pay_date, annual_rate = _yf_parse_info(ticker.info)
+            if row:
+                existing: list[dict] = (
+                    json.loads(row.history_json) if row.history_json else []
+                )
+                last_date = max((e["date"] for e in existing), default=None)
+                since = (
+                    (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1))
+                    if last_date
+                    else (now - timedelta(days=90))
+                )
+                history = existing + _yf_fetch_history(ticker, since)
+            else:
+                history = _yf_fetch_history(
+                    ticker, now - timedelta(days=_DIVIDEND_HIST_YEARS * 365)
+                )
+            effective_rate = annual_rate or _annual_rate_from_history(history)
+            return code, {
+                "ex_date": ex_date,
+                "pay_date": pay_date,
+                "annual_rate": effective_rate,
+                "history": history,
+            }
+        except Exception as e:
+            logger.warning("dividend fetch failed for %s: %s", code, e)
+            return code, None
+
+    # Fetch stale/missing symbols in parallel (capped at 8 threads to avoid rate-limiting)
+    with ThreadPoolExecutor(max_workers=min(len(stale_codes), 8)) as pool:
+        futures = {pool.submit(_fetch_one, code): code for code in stale_codes}
+        for future in as_completed(futures):
+            code, data = future.result()
+            row = rows.get(code)
+            fetched_at = now.isoformat()
+            if row:
+                row.ex_date = data["ex_date"] if data else None
+                row.pay_date = data["pay_date"] if data else None
+                row.annual_rate = data["annual_rate"] if data else None
+                row.history_json = json.dumps(data["history"]) if data else "[]"
+                row.fetched_at = fetched_at
+            else:
+                db.add(
+                    DividendHistoryModel(
+                        symbol=code,
+                        ex_date=data["ex_date"] if data else None,
+                        pay_date=data["pay_date"] if data else None,
+                        annual_rate=data["annual_rate"] if data else None,
+                        history_json=json.dumps(data["history"]) if data else "[]",
+                        fetched_at=fetched_at,
+                    )
+                )
+            if data and (data["ex_date"] or data["history"]):
+                result[code] = data
+            elif row and not data:
+                # yfinance failed — return stale DB data rather than nothing
+                history = json.loads(row.history_json) if row.history_json else []
+                if row.ex_date or history:
+                    result[code] = {
+                        "ex_date": row.ex_date,
+                        "pay_date": row.pay_date,
+                        "annual_rate": row.annual_rate,
+                        "history": history,
+                    }
+
+    db.commit()
+
+    return result

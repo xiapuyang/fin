@@ -223,3 +223,17 @@ CREATE TABLE IF NOT EXISTS balance_items (
 -- COALESCE handles NULL account_id / sub_account_id (SQLite treats NULLs as distinct)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_balance_item
     ON balance_items (snapshot_id, side, COALESCE(account_id, -1), COALESCE(sub_account_id, -1), category);
+
+-- ── dividend_history (yfinance dividend data per symbol) ──────────────────────
+-- History is fetched once; ex_date / annual_rate refreshed every 24 h via ticker.info.
+CREATE TABLE IF NOT EXISTS dividend_history (
+    id            INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    symbol        VARCHAR  NOT NULL UNIQUE,
+    ex_date       VARCHAR,           -- next upcoming ex-dividend date (YYYY-MM-DD)
+    pay_date      VARCHAR,           -- next payment date
+    annual_rate   FLOAT,             -- per-share annual dividend in local currency
+    history_json  TEXT,              -- JSON: [{date: YYYY-MM-DD, amount: float}]
+    fetched_at    VARCHAR,           -- ISO UTC datetime of last yfinance fetch
+    create_time   DATETIME NOT NULL,
+    update_time   DATETIME NOT NULL
+);

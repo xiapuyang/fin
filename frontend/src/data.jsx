@@ -58,6 +58,7 @@ const _PUT  = body => ({ method: "PUT",  headers: { "Content-Type": "application
 const _DEL  = ()   => ({ method: "DELETE" });
 
 async function apiGetPrices(symbols)      { return _apiFetch(`/api/prices?symbols=${symbols.join(",")}`); }
+async function apiGetDividends(symbols)   { return _apiFetch(`/api/dividends?symbols=${symbols.join(",")}`); }
 
 async function apiGetHoldings()           { return _apiFetch("/api/holdings"); }
 async function apiCreateHolding(data)     { return _apiFetch("/api/holdings", _JSON(data)); }
@@ -190,7 +191,7 @@ Object.assign(window, {
   SYMBOLS, SYMBOL_INDEX, FX, INITIAL_ALERTS, TRIGGER_HISTORY,
   BS_CATEGORIES, BS_CAT_COLORS, BS_SNAPSHOTS, BS_ITEMS,
   LEDGER, GOALS, genSpark,
-  apiGetPrices,
+  apiGetPrices, apiGetDividends,
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
