@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import tempfile
 
 from fin.config import SETTINGS_PATH
 
@@ -39,5 +41,10 @@ def load() -> dict:
 def save(data: dict) -> dict:
     current = load()
     current.update({k: v for k, v in data.items() if k in _DEFAULTS})
-    SETTINGS_PATH.write_text(json.dumps(current, indent=2))
+    with tempfile.NamedTemporaryFile(
+        mode="w", dir=SETTINGS_PATH.parent, suffix=".tmp", delete=False
+    ) as f:
+        json.dump(current, f, indent=2)
+        tmp = f.name
+    os.replace(tmp, SETTINGS_PATH)
     return current
