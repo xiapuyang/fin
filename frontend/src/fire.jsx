@@ -507,6 +507,17 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             </div>
             <input type="range" min={3000} max={50000} step={500} value={monthlyExp}
               onChange={e => setMonthlyExpP(parseFloat(e.target.value))} style={{ width: "100%" }}/>
+            <div style={{
+              marginTop: 7, padding: "7px 10px", borderRadius: 6,
+              background: "#FFFBEB", border: "1px solid #FDE68A",
+              fontSize: 10.5, color: "#78350F", lineHeight: 1.55,
+            }}>
+              提前退休需自缴社保约 <span className="mono" style={{ fontWeight: 700 }}>{sym}{fmtNum(toDisp(2000), 0)}/月</span>（城镇职工医保 + 养老），约 10 年后至 60 岁可停缴并领养老金。此处按永久支出计算，FIRE 数字偏保守。
+              <button onClick={() => setMonthlyExpP(monthlyExp + 2000)} style={{
+                marginLeft: 7, fontSize: 9.5, padding: "1px 5px", borderRadius: 3,
+                border: "1px solid #D97706", background: "transparent", color: "#D97706", cursor: "pointer",
+              }}>+{sym}{fmtNum(toDisp(2000), 0)}</button>
+            </div>
           </div>
 
           {/* SWR — 3 compact cards */}
