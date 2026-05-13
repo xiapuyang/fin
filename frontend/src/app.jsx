@@ -22,7 +22,10 @@ const App = () => {
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(() => {});
-    fetch("/api/settings").then(r => r.json()).then(s => setSettings(prev => ({ ...prev, ...s }))).catch(() => {});
+    fetch("/api/settings").then(r => r.json()).then(s => {
+      setSettings(prev => ({ ...prev, ...s }));
+      if (s.currency && CURRENCIES.includes(s.currency)) setCurrency(s.currency);
+    }).catch(() => {});
     fetch("/api/symbols").then(r => r.json()).then(data => {
       Object.assign(SYMBOLS, data);
       _rebuildSymbolIndex();
@@ -54,17 +57,20 @@ const App = () => {
   const Page = {
     dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
-    holdings:  <Holdings currency={currency}/>,
+    holdings:  <Holdings currency={currency} birthDate={settings.birth_date || ""}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
     balance:   <BalanceSheet currency={currency}/>,
-    fire:      <Fire/>,
+    fire:      <Fire currency={currency} birthDate={settings.birth_date || ""}/>,
   }[route];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} onCurrencyChange={setCurrency} onOpenSettings={() => setShowSettings(true)}/>
+        <TopBar route={route} fxRates={fxRates} currency={currency} onCurrencyChange={c => {
+          setCurrency(c);
+          fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
+        }} onOpenSettings={() => setShowSettings(true)}/>
         <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
           {Page}
         </div>
@@ -186,8 +192,9 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
-  const [tz, setTz] = React.useState(settings.timezone || "America/Toronto");
-  const [saving, setSaving] = React.useState(false);
+  const [tz, setTz]              = React.useState(settings.timezone   || "America/Toronto");
+  const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
+  const [saving, setSaving]       = React.useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -195,9 +202,9 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone: tz }),
+        body: JSON.stringify({ timezone: tz, birth_date: birthDate }),
       });
-      if (res.ok) { onSaved({ timezone: tz }); onClose(); }
+      if (res.ok) { onSaved({ timezone: tz, birth_date: birthDate }); onClose(); }
     } finally { setSaving(false); }
   };
 
@@ -208,6 +215,20 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
           <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>影响日期显示和时间相关计算</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>出生日期 Birth Date</div>
+          <input
+            type="date"
+            value={birthDate}
+            onChange={e => setBirthDate(e.target.value)}
+            style={{
+              width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+              border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+              boxSizing: "border-box",
+            }}
+          />
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于 FIRE 退休计划自动计算当前年龄</div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
