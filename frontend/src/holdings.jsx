@@ -484,6 +484,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           { id: "positions",    label: "持仓 Positions",     count: acctPositions.length },
           { id: "transactions", label: "交易记录 Trades",    count: acctTxns.length },
           { id: "income",       label: "收入/转账 Income",   count: acctIncome.length },
+          { id: "dividends",    label: "分红日历 Calendar",  count: acctIncome.filter(i => i.category === "dividend").length || null },
         ]}/>
       </div>
 
@@ -507,6 +508,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onImportDone={all => setIncome(all)}
           defaultAccount={acctName}
         />}
+      {tab === "dividends"    && <DividendCalendar incomeItems={acctIncome} positions={acctPositions} acctCcy={acctCcy} acctFx={acctFx}/>}
 
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => { setHoldings(prev => editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h]); setShowHoldingModal(false); }}/>}
@@ -519,7 +521,6 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {editingAccount && <AccountEditModal account={editingAccount} onClose={() => setEditingAccount(null)}
           onSaved={a => { setAccounts(prev => prev.map(x => x.id === a.id ? a : x)); setEditingAccount(null); }}/>}
 
-      <ComingSoonBanner module="Holdings" features={["批量分配账户", "Auto-import 券商 CSV", "Tax-loss harvesting hints", "Dividend calendar"]} />
       </>)}
     </div>
   );
@@ -778,6 +779,238 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
             </>
           )}
       </Card>
+    </div>
+  );
+};
+
+// ── Dividend Calendar ─────────────────────────────────────────────────────────
+// incomeItems: manually-entered income records (category=dividend shown as confirmed)
+// positions: current account positions — used to query yfinance for dividend events
+
+const MONTH_NAMES = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
+const WEEK_HDR = ["一","二","三","四","五","六","日"];
+
+const divFreq = (hist) => {
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  return Math.max(hist.filter(h => new Date(h.date) >= oneYearAgo).length, 1);
+};
+
+const DivUpcomingStrip = ({ upcoming, posByCode, acctFx, sym }) => {
+  if (!upcoming.length) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>即将除权</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {upcoming.map(u => {
+          const pos = posByCode[u.code];
+          const shares = pos?.shares || 0;
+          const divFx = FX[pos?.currency || "USD"] || 1;
+          const perShare = u.per_payment;
+          const estPmt = perShare && shares ? perShare * shares * divFx / acctFx : null;
+          return (
+            <Card key={u.code} padding={14} style={{ minWidth: 120 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{u.code}</div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{u.ex_date}</div>
+              {perShare && <div className="mono" style={{ fontSize: 11, color: "var(--up)", marginTop: 2 }}>{ccySymbol(pos?.currency || "USD")}{perShare.toFixed(3)}/sh</div>}
+              {estPmt && <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--up)", marginTop: 3 }}>≈ {sym}{fmtNum(estPmt, 0)}</div>}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelectedDay, prevMonth, nextMonth }) => {
+  const firstDayMon = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [...Array(firstDayMon).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const selectedKey = selectedDay ? `${year}-${String(month).padStart(2,"0")}-${String(selectedDay).padStart(2,"0")}` : null;
+  const selectedEvents = selectedKey ? (eventsByDate[selectedKey] || []) : [];
+
+  return (
+    <Card padding={20}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <button onClick={prevMonth} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: "4px 10px", fontSize: 18 }}>‹</button>
+        <span className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{year} 年 {MONTH_NAMES[month - 1]}</span>
+        <button onClick={nextMonth} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: "4px 10px", fontSize: 18 }}>›</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 4 }}>
+        {WEEK_HDR.map(h => (
+          <div key={h} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", letterSpacing: ".1em", padding: "3px 0" }}>{h}</div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e${idx}`}/>;
+          const dk = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const events = eventsByDate[dk] || [];
+          const hasUpcoming = events.some(e => e.type === "upcoming");
+          const hasYf = events.some(e => e.type === "yf");
+          const hasIncome = events.some(e => e.type === "income");
+          const isToday = dk === today;
+          const isSel = day === selectedDay;
+          const hasAny = events.length > 0;
+          return (
+            <div key={day} onClick={() => hasAny ? setSelectedDay(day === selectedDay ? null : day) : null}
+              style={{
+                borderRadius: 6, padding: "6px 3px", textAlign: "center",
+                cursor: hasAny ? "pointer" : "default",
+                background: isSel ? "var(--up)" : hasIncome ? "rgba(31,138,76,0.12)" : hasYf ? "rgba(31,138,76,0.06)" : "transparent",
+                border: hasUpcoming ? "1.5px dashed var(--up)" : isToday ? "1.5px solid var(--ink-3)" : "1.5px solid transparent",
+              }}>
+              <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isSel ? "white" : dk > today ? "var(--ink-4)" : "var(--ink-3)" }}>{day}</div>
+              {hasAny && (
+                <div style={{ display: "flex", justifyContent: "center", gap: 2, marginTop: 3 }}>
+                  {hasIncome   && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isSel ? "white" : "var(--up)" }}/>}
+                  {hasYf       && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isSel ? "rgba(255,255,255,0.7)" : "rgba(31,138,76,0.5)" }}/>}
+                  {hasUpcoming && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isSel ? "rgba(255,255,255,0.7)" : "var(--up)", opacity: 0.6 }}/>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--up)", display: "inline-block" }}/>已录入收入</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(31,138,76,0.4)", display: "inline-block" }}/>历史除权日</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 10, height: 10, borderRadius: 2, border: "1.5px dashed var(--up)", display: "inline-block" }}/>即将除权</div>
+      </div>
+      {selectedEvents.length > 0 && (
+        <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", marginBottom: 8 }}>{selectedKey}</div>
+          {selectedEvents.map((e, idx) => (
+            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: idx < selectedEvents.length - 1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
+              <div>
+                <span style={{ fontWeight: 600, marginRight: 6 }}>{e.source || e.code || "—"}</span>
+                <Badge size="sm" tone={e.type === "income" ? "down" : "info"}>
+                  {e.type === "income" ? "已收" : e.type === "upcoming" ? "除权日" : "历史"}
+                </Badge>
+              </div>
+              <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>
+                {e.type === "income" ? `+${fmtMoney(e.amount, e.currency, 2)}` : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}/sh` : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    {Object.entries(divData).sort(([, dA], [, dB]) => {
+      const yA = dA.annual_rate || 0;
+      const yB = dB.annual_rate || 0;
+      return yB - yA;
+    }).map(([code, d]) => {
+      const pos = posByCode[code];
+      const shares = pos?.shares || 0;
+      const divFx = FX[pos?.currency || "USD"] || 1;
+      const estAnnual = d.annual_rate && shares ? d.annual_rate * shares * divFx / acctFx : null;
+      const price = pos?.sym?.price;
+      const yieldPct = d.annual_rate && price ? (d.annual_rate / price * 100) : null;
+      return (
+        <Card key={code} padding={14}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{code}</div>
+              {d.ex_date && <div style={{ fontSize: 11, color: d.ex_date >= today ? "var(--up)" : "var(--ink-4)", marginTop: 2 }}>除权 {d.ex_date}</div>}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}/sh/yr</div>}
+              {yieldPct && <div className="mono" style={{ fontSize: 12, color: "var(--up)", marginTop: 2 }}>{yieldPct.toFixed(2)}%</div>}
+            </div>
+          </div>
+          {estAnnual && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>≈ {sym}{fmtNum(estAnnual, 0)}/年</div>}
+        </Card>
+      );
+    })}
+  </div>
+);
+
+const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx = 1 }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const [year, setYear] = React.useState(now.getFullYear());
+  const [month, setMonth] = React.useState(now.getMonth() + 1);
+  const [selectedDay, setSelectedDay] = React.useState(null);
+  const [divData, setDivData] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+  const [fetchError, setFetchError] = React.useState(false);
+
+  const sym = ccySymbol(acctCcy);
+  const posByCode = React.useMemo(() => Object.fromEntries(positions.map(p => [p.code, p])), [positions]);
+  const codeKey = React.useMemo(
+    () => [...new Set(positions.map(p => p.code).filter(c => c && c !== "CASH"))].sort().join(","),
+    [positions]
+  );
+
+  React.useEffect(() => {
+    const codes = codeKey ? codeKey.split(",") : [];
+    setDivData({}); setSelectedDay(null); setFetchError(false);
+    if (!codes.length) return;
+    setLoading(true);
+    let cancelled = false;
+    apiGetDividends(codes)
+      .then(d => { if (!cancelled) setDivData(d); })
+      .catch(() => { if (!cancelled) setFetchError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [codeKey]);
+
+  const eventsByDate = React.useMemo(() => {
+    const m = {};
+    const add = (date, ev) => { if (!m[date]) m[date] = []; m[date].push(ev); };
+    Object.entries(divData).forEach(([code, d]) => {
+      const posCcy = posByCode[code]?.currency || "USD";
+      const hist = d.history || [];
+      hist.forEach(h => add(h.date, { type: "yf", code, amount: h.amount, currency: posCcy }));
+      if (d.ex_date) add(d.ex_date, { type: "upcoming", code, amount: d.annual_rate ? d.annual_rate / divFreq(hist) : null, currency: posCcy });
+    });
+    (incomeItems || []).filter(i => i.category === "dividend").forEach(i =>
+      add(i.date, { type: "income", code: i.code, amount: i.amount, currency: i.currency, source: i.source })
+    );
+    return m;
+  }, [divData, incomeItems, posByCode]);
+
+  const upcoming = React.useMemo(() => Object.entries(divData)
+    .filter(([, d]) => d.ex_date && d.ex_date >= today)
+    .map(([code, d]) => ({ code, ex_date: d.ex_date, annual_rate: d.annual_rate, per_payment: d.annual_rate ? d.annual_rate / divFreq(d.history || []) : null }))
+    .sort((a, b) => a.ex_date.localeCompare(b.ex_date))
+    .slice(0, 8), [divData, today]);
+
+  const totalEstAnnual = React.useMemo(() => Object.entries(divData).reduce((sum, [code, d]) => {
+    if (!d.annual_rate) return sum;
+    const pos = posByCode[code];
+    return sum + d.annual_rate * (pos?.shares || 0) * (FX[pos?.currency || "USD"] || 1) / acctFx;
+  }, 0), [divData, posByCode, acctFx]);
+
+  const prevMonth = () => { if (month === 1) { setYear(y => y - 1); setMonth(12); } else setMonth(m => m - 1); setSelectedDay(null); };
+  const nextMonth = () => { if (month === 12) { setYear(y => y + 1); setMonth(1); } else setMonth(m => m + 1); setSelectedDay(null); };
+  const hasAnyData = Object.keys(divData).length > 0 || (incomeItems || []).some(i => i.category === "dividend");
+
+  return (
+    <div>
+      {totalEstAnnual > 0 && (
+        <Card padding={16} style={{ marginBottom: 16, display: "inline-flex", alignItems: "baseline", gap: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>预估年度分红</span>
+          <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
+          <span style={{ fontSize: 12, color: "var(--ink-4)" }}>/ 年</span>
+        </Card>
+      )}
+      <DivUpcomingStrip upcoming={upcoming} posByCode={posByCode} acctFx={acctFx} sym={sym} />
+      {loading && !hasAnyData && <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-4)", fontSize: 13 }}>正在从 Yahoo Finance 获取分红数据…</div>}
+      {!loading && fetchError && <div style={{ textAlign: "center", padding: "20px 0", color: "var(--ink-3)", fontSize: 13 }}>获取分红数据失败，请稍后重试</div>}
+      {!loading && !fetchError && !hasAnyData && <Empty icon="spark" title="持仓中暂无分红记录" hint="只有付息股票（ETF、股票）才会显示分红日历，指数和无分红股票不会出现"/>}
+      {hasAnyData && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, alignItems: "start" }}>
+          <DivMonthGrid year={year} month={month} today={today} eventsByDate={eventsByDate} selectedDay={selectedDay} setSelectedDay={setSelectedDay} prevMonth={prevMonth} nextMonth={nextMonth} />
+          <DivStockList divData={divData} posByCode={posByCode} today={today} acctFx={acctFx} sym={sym} />
+        </div>
+      )}
     </div>
   );
 };
