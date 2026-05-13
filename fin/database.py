@@ -372,6 +372,7 @@ def init_db() -> None:
     import fin.models.balance_account  # noqa: F401
     import fin.models.balance_snapshot  # noqa: F401
     import fin.models.balance_item  # noqa: F401
+    import fin.models.dividend_history  # noqa: F401
 
     db: Session = SessionLocal()
     try:
