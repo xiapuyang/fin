@@ -512,7 +512,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               background: "#FFFBEB", border: "1px solid #FDE68A",
               fontSize: 10.5, color: "#78350F", lineHeight: 1.55,
             }}>
-              提前退休需自缴社保约 <span className="mono" style={{ fontWeight: 700 }}>{sym}{fmtNum(toDisp(2000), 0)}/月</span>（城镇职工医保 + 养老），约 10 年后至 60 岁可停缴并领养老金。此处按永久支出计算，FIRE 数字偏保守。
+              提前退休需自缴社保约 <span className="mono" style={{ fontWeight: 700 }}>{sym}{fmtNum(toDisp(2000), 0)}/月</span>（城镇职工医保 + 养老），约 10 年后至 60 岁可停缴并领养老金。当前计算暂不考虑养老金收入，社保按永久支出处理，FIRE 数字偏保守。
               <button onClick={() => setMonthlyExpP(monthlyExp + 2000)} style={{
                 marginLeft: 7, fontSize: 9.5, padding: "1px 5px", borderRadius: 3,
                 border: "1px solid #D97706", background: "transparent", color: "#D97706", cursor: "pointer",
