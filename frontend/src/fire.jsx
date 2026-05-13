@@ -226,7 +226,10 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     const ruinAges = paths.map(p => p.ruinAge);
     const sortedRuins = [...ruinAges].sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
     const pRuin = (pct) => sortedRuins[Math.min(Math.floor(pct / 100 * N), N - 1)];
-    const sustainability = { p25: pRuin(25), p50: pRuin(50), p90: pRuin(90) };
+    const sustainability = {
+      p25: pRuin(25), p50: pRuin(50), p90: pRuin(90),
+      survivalRate: ruinAges.filter(a => a == null).length / N,
+    };
 
     // Minimum nominal CAGR — same formula as dashboard
     let minNomCagr = fireNumber <= 0 || investable >= fireNumber ? 0 : null;
@@ -420,28 +423,29 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                 </div>
                 {/* Sustainability tile */}
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>退休金可持续至</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>撑过 {lifeExpectancy} 岁概率</div>
                   {(() => {
-                    const { p25, p50, p90 } = monteCarlo.sustainability;
-                    const fmt = (v) => v == null ? `>${lifeExpectancy}` : v;
+                    const { p25, p50, p90, survivalRate } = monteCarlo.sustainability;
+                    const fmt = (v) => v == null ? `>${lifeExpectancy}` : `${v}`;
+                    const sr = (survivalRate * 100).toFixed(0);
+                    const srColor = survivalRate >= 0.8 ? "#16A34A" : survivalRate >= 0.5 ? "#D97706" : "var(--down)";
                     return (
-                      <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-                        <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P25</div>
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "#D97706" }}>{fmt(p25)}<span style={{ fontSize: 9 }}>岁</span></div>
+                      <>
+                        <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: srColor, lineHeight: 1.1 }}>
+                          {sr}<span style={{ fontSize: 13 }}>%</span>
                         </div>
-                        <div style={{ textAlign: "center", flex: 1 }}>
-                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P50</div>
-                          <div className="mono" style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>{fmt(p50)}<span style={{ fontSize: 10 }}>岁</span></div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 5, alignItems: "baseline" }}>
+                          {[["P25", fmt(p25), "#D97706"], ["P50", fmt(p50), "var(--ink-3)"], ["P90", fmt(p90), "#16A34A"]].map(([label, val, color]) => (
+                            <div key={label} style={{ textAlign: "center" }}>
+                              <div style={{ fontSize: 9, color: "var(--ink-5)" }}>{label}</div>
+                              <div className="mono" style={{ fontSize: 11, fontWeight: 600, color }}>{val}<span style={{ fontSize: 8 }}>岁</span></div>
+                            </div>
+                          ))}
                         </div>
-                        <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 9.5, color: "var(--ink-4)" }}>P90</div>
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "#16A34A" }}>{fmt(p90)}<span style={{ fontSize: 9 }}>岁</span></div>
-                        </div>
-                      </div>
+                      </>
                     );
                   })()}
-                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 3 }}>提取阶段 · {targetRetireAge}岁退休后</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 4 }}>提取阶段 · {targetRetireAge}岁退休后</div>
                 </div>
               </div>
               <MonteCarloChart
