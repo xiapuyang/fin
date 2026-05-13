@@ -14,9 +14,6 @@ const MARKET_HOURS = (now = new Date()) => {
   const weekday = day >= 1 && day <= 5;
 
   // US: NYSE/NASDAQ (EDT = UTC-4)
-  // PRE  04:00-09:30 EDT = 08:00-13:30 UTC
-  // REG  09:30-16:00 EDT = 13:30-20:00 UTC
-  // POST 16:00-20:00 EDT = 20:00-00:00 UTC
   const usState = !weekday ? "CLOSED"
     : inRange(13 * 60 + 30, 20 * 60) ? "REGULAR"
     : inRange(20 * 60, 24 * 60)       ? "POST"
@@ -39,17 +36,19 @@ const MARKET_HOURS = (now = new Date()) => {
   return { US: mk(usState), HK: mk(hkState), CN: mk(cnState), CA: mk(caState) };
 };
 
+// Compute CNY value of a balance item
+const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
+
 const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }) => {
   const [now, setNow] = React.useState(new Date());
   const [serverStates, setServerStates] = React.useState({});
 
+  // ── Market state ────────────────────────────────────────────────────────────
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Fetch authoritative market states from check_market_state.py output.
-  // Falls back to time-based calculation if the file is missing or stale (>5min).
   React.useEffect(() => {
     const ctrl = new AbortController();
     const fetch_ = () =>
@@ -72,8 +71,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
     })
   );
 
-  const all = Object.values(SYMBOLS).flat();
-
+  // ── Watchlist ───────────────────────────────────────────────────────────────
   const [watchlist, setWatchlist] = React.useState([]);
   const [watchQuotes, setWatchQuotes] = React.useState({});
   const [alertQuotes, setAlertQuotes] = React.useState({});
@@ -82,7 +80,6 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
   }, []);
 
-  // Batch-fetch prices for watchlist + enabled alerts in one request
   React.useEffect(() => {
     const ctrl = new AbortController();
     const watchSyms = watchlist.map(w => w.symbol);
@@ -114,41 +111,189 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
     return q ? { ...base, price: q.price, prevClose: q.prev_close } : base;
   }).filter(s => s.price != null);
 
+  // ── Settings (for FIRE params + greeting) ───────────────────────────────────
+  const [fireSettings, setFireSettings] = React.useState(null);
+  React.useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then(setFireSettings).catch(() => {});
+  }, []);
+
+  // ── Holdings → portfolio value + allocation ─────────────────────────────────
+  const [positions, setPositions] = React.useState([]);
+  const [portfolioLoading, setPortfolioLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    Promise.all([apiGetHoldings(), apiGetTransactions()])
+      .then(([h, t]) => {
+        const codes = [...new Set(h.map(x => x.code).filter(c => c !== "CASH"))];
+        if (!codes.length) {
+          setPositions(computePositions(h, t, {}));
+          setPortfolioLoading(false);
+          return;
+        }
+        apiGetPrices(codes)
+          .then(prices => {
+            setPositions(computePositions(h, t, prices));
+            setPortfolioLoading(false);
+          })
+          .catch(() => {
+            setPositions(computePositions(h, t, {}));
+            setPortfolioLoading(false);
+          });
+      })
+      .catch(() => setPortfolioLoading(false));
+  }, []);
+
+  // ── Balance sheet → net worth history ───────────────────────────────────────
+  const [snapSeries, setSnapSeries] = React.useState([]);
+  const [snapCount, setSnapCount] = React.useState(0);
+  const [balLoading, setBalLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    Promise.all([apiGetBalanceSnapshots(), apiGetAllBalanceItems()])
+      .then(([snaps, allItems]) => {
+        const sorted = [...snaps].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+        const series = sorted.map(s => {
+          const its = allItems.filter(i => i.snapshot_id === s.id);
+          const assets = its.filter(i => i.side === "asset").reduce((sum, i) => sum + _bsCNY(i), 0);
+          const liabilities = its.filter(i => i.side === "liability").reduce((sum, i) => sum + _bsCNY(i), 0);
+          const liquid = its.filter(i => i.side === "asset" && ["现金", "理财", "投资"].includes(i.category))
+            .reduce((sum, i) => sum + _bsCNY(i), 0);
+          return { date: s.snapshot_date, net: assets - liabilities, liquid };
+        });
+        setSnapSeries(series);
+        setSnapCount(snaps.length);
+        setBalLoading(false);
+      })
+      .catch(() => setBalLoading(false));
+  }, []);
+
+  // ── Derived: allocation donut ────────────────────────────────────────────────
+  const isBond = (p) => p.sym?.asset_type === "bond";
+  const knownMarkets = ["US", "HK", "CN", "CA", "CRYPTO"];
+  const allTotal = positions.reduce((s, p) => s + p.value, 0);
+  const allCashValue = positions.filter(p => p.code === "CASH").reduce((s, p) => s + p.value, 0);
+  const allocation = [
+    ...knownMarkets.map(m => {
+      const v = positions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
+      return {
+        label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密" }[m] || m,
+        value: v,
+        color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m],
+      };
+    }),
+    { label: "美债", value: positions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
+    { label: "现金", value: allCashValue, color: "#888" },
+  ].filter(b => b.value > 0);
+
+  // ── Derived: net worth + history ─────────────────────────────────────────────
+  const latestSnap = snapSeries[snapSeries.length - 1] || null;
+  const netWorth = latestSnap ? latestSnap.net : allTotal;
+  const netWorthSeries = snapSeries.length > 1
+    ? snapSeries.map(s => ({ label: s.date.slice(5, 7) + "/" + s.date.slice(2, 4), value: s.net }))
+    : allTotal > 0
+      ? [{ label: "—", value: allTotal }]
+      : [];
+  const prevSnapValue = snapSeries.length > 1 ? snapSeries[snapSeries.length - 2].net : null;
+  const momPct = prevSnapValue != null && prevSnapValue > 0
+    ? (netWorth - prevSnapValue) / prevSnapValue * 100
+    : null;
+
+  // ── Derived: FIRE ────────────────────────────────────────────────────────────
+  const birthDate   = fireSettings?.birth_date   || "";
+  const manualAge   = fireSettings?.fire_manual_age ?? 32;
+  const age = birthDate
+    ? Math.max(1, Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000)))
+    : manualAge;
+
+  const fireMonthlyExp  = fireSettings?.fire_monthly_exp  ?? 0;
+  const fireSwr         = fireSettings?.fire_swr          ?? 4.0;
+  const fireInflation   = fireSettings?.fire_inflation    ?? 3;
+  const fireCagr        = fireSettings?.fire_cagr         ?? 10;
+  const fireMonthly     = fireSettings?.fire_monthly      ?? 0;
+  const fireTargetAge   = fireSettings?.fire_target_age   ?? 50;
+
+  const realCagr      = fireCagr - fireInflation;
+  const investable    = (latestSnap?.liquid > 0) ? latestSnap.liquid : allTotal;
+  const fireTarget    = fireMonthlyExp > 0 ? (fireMonthlyExp * 12) / (fireSwr / 100) : 0;
+  const fireProgress  = fireTarget > 0 ? Math.min(1, investable / fireTarget) : 0;
+
+  const yearsToFire = React.useMemo(() => {
+    if (fireTarget <= 0) return null;
+    if (investable >= fireTarget) return 0;
+    let v = investable, yr = 0;
+    while (yr < 60 && v < fireTarget) {
+      v = v * (1 + realCagr / 100) + fireMonthly * 12;
+      yr++;
+    }
+    return v >= fireTarget ? yr : null;
+  }, [investable, fireTarget, realCagr, fireMonthly]);
+
+  // Binary search for required nominal CAGR (deterministic) to hit fireTarget by fireTargetAge
+  const requiredCagr = React.useMemo(() => {
+    if (fireTarget <= 0 || investable >= fireTarget) return 0;
+    const targetYears = Math.max(1, fireTargetAge - age);
+    const test = (nomCagr) => {
+      const real = nomCagr - fireInflation;
+      let v = investable;
+      for (let i = 0; i < targetYears; i++) v = v * (1 + real / 100) + fireMonthly * 12;
+      return v >= fireTarget;
+    };
+    if (!test(40)) return null;
+    let lo = 0, hi = 40;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      test(mid) ? hi = mid : lo = mid;
+    }
+    return Math.round(hi * 10) / 10;
+  }, [investable, fireTarget, age, fireTargetAge, fireInflation, fireMonthly]);
+
+  // ── Alerts summary ───────────────────────────────────────────────────────────
   const activeAlerts = alerts.filter(a => a.enabled).length;
   const triggered = alerts.filter(a => a.triggered).length;
 
-  // Allocation (canonical net worth source — declared first so dashboard numbers reconcile)
-  const allocation = [
-    { label: "美股科技", value: 1340000, color: "#1F4FE0" },
-    { label: "美股 ETF", value: 280000, color: "#5C8AE6" },
-    { label: "港股", value: 220000, color: "#B8447B" },
-    { label: "A 股", value: 95000, color: "#C8460F" },
-    { label: "黄金", value: 78000, color: "#C8821F" },
-    { label: "现金", value: 250000, color: "#5C6270" },
-  ];
-
-  const netWorth = allocation.reduce((s, a) => s + a.value, 0); // ¥2.263M
-  const pnlPct = 24.3; // mock — coherent with display
-
+  // ── Modules meta ─────────────────────────────────────────────────────────────
   const modules = [
-    { id: "alerts",   icon: "bell",      kicker: "MODULE 01", title: "提醒",     en: "Alerts",       color: "var(--up)",     stat: `${activeAlerts} active · ${triggered} triggered`, blurb: "盘中价格 & 涨跌触发邮件" },
-    { id: "holdings", icon: "wallet",    kicker: "MODULE 02", title: "投资组合", en: "Portfolio",     color: "var(--info)",   stat: `Portfolio · ${fmtPct(pnlPct,1)}`, blurb: "成本 & 盈亏 & 年化 IRR" },
-    { id: "ledger",   icon: "book",      kicker: "MODULE 03", title: "记账",     en: "Ledger",       color: "var(--violet)", stat: `${LEDGER.length} entries this week`, blurb: "支出收入 & 月度报表" },
-    { id: "balance",  icon: "target",    kicker: "MODULE 04", title: "资产负债",  en: "Balance Sheet",color: "var(--warn)",   stat: `${BS_ITEMS.length} items · ${BS_SNAPSHOTS.length} 快照`, blurb: "净资产 & 历史快照" },
-    { id: "fire",     icon: "spark",     kicker: "MODULE 05", title: "退休计划",  en: "FIRE",         color: "var(--down)",   stat: "11.2y to 财务自由", blurb: "FIRE 数字 & 复利推演 & 里程碑" },
+    {
+      id: "alerts", icon: "bell", kicker: "MODULE 01", title: "提醒", en: "Alerts",
+      color: "var(--up)",
+      stat: `${activeAlerts} active · ${triggered} triggered`,
+      blurb: "盘中价格 & 涨跌触发邮件",
+    },
+    {
+      id: "holdings", icon: "wallet", kicker: "MODULE 02", title: "投资组合", en: "Portfolio",
+      color: "var(--info)",
+      stat: portfolioLoading ? "加载中…" : allTotal > 0 ? `¥${(allTotal / 1e6).toFixed(2)}M · ${allocation.length} 类` : "暂无持仓",
+      blurb: "成本 & 盈亏 & 年化 IRR",
+    },
+    {
+      id: "ledger", icon: "book", kicker: "MODULE 03", title: "记账", en: "Ledger",
+      color: "var(--violet)",
+      stat: `${LEDGER.length} entries this week`,
+      blurb: "支出收入 & 月度报表",
+    },
+    {
+      id: "balance", icon: "target", kicker: "MODULE 04", title: "资产负债", en: "Balance Sheet",
+      color: "var(--warn)",
+      stat: balLoading ? "加载中…" : `${snapCount} 快照 · ¥${(netWorth / 1e6).toFixed(2)}M`,
+      blurb: "净资产 & 历史快照",
+    },
+    {
+      id: "fire", icon: "spark", kicker: "MODULE 05", title: "退休计划", en: "FIRE",
+      color: "var(--down)",
+      stat: fireTarget > 0
+        ? yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
+        : yearsToFire != null ? `${yearsToFire}y to 财务自由`
+        : "目标不可达"
+        : "请先设置月支出",
+      blurb: "FIRE 数字 & 复利推演 & 里程碑",
+    },
   ];
 
-  // Net worth history (mock series, ends at canonical netWorth)
-  const netWorthSeries = [
-    { label: "Jun", value: 1820000 }, { label: "Jul", value: 1864000 },
-    { label: "Aug", value: 1942000 }, { label: "Sep", value: 1981000 },
-    { label: "Oct", value: 2014000 }, { label: "Nov", value: 2102000 },
-    { label: "Dec", value: 2154000 }, { label: "Jan", value: 2178000 },
-    { label: "Feb", value: 2201000 }, { label: "Mar", value: 2218000 },
-    { label: "Apr", value: 2231000 }, { label: "May", value: netWorth },
-  ];
-  const prevMonth = 2231000;
-  const momPct = (netWorth - prevMonth) / prevMonth * 100;
+  const fireSubtitle = fireTarget > 0 && yearsToFire != null && yearsToFire > 0
+    ? `Net worth tracking toward FIRE · ${yearsToFire}y to 财务自由`
+    : fireTarget > 0 && yearsToFire === 0
+    ? "FIRE 目标已达成 🎉"
+    : "Net worth tracking toward FIRE";
 
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
@@ -164,16 +309,14 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
             return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
           })()}</div>
           <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
-          <div style={{ fontSize: 14, color: "var(--ink-3)" }}>Net worth tracking toward FIRE · 11.2y to 财务自由</div>
+          <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
           {Object.entries(market).map(([k, v]) => (
             <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <MarketDot market={k} size={6}/>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".05em" }}>
-                  {k}
-                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".05em" }}>{k}</span>
                 <span className={"pulse-dot"} style={{
                   display: "inline-block", width: 6, height: 6, borderRadius: 3,
                   background: v.state === "REGULAR" ? "var(--up)"
@@ -189,67 +332,109 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
 
       {/* Top stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
+        {/* Net Worth */}
         <Card padding={20}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
-              <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
-                ¥{(netWorth / 1000000).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
-                <ChangeNum value={momPct} format="pct" size="sm"/>
-                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>since last month</span>
-              </div>
+              {balLoading && portfolioLoading ? (
+                <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 10 }}>加载中…</div>
+              ) : (
+                <>
+                  <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
+                    ¥{(netWorth / 1e6).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
+                    {momPct != null
+                      ? <><ChangeNum value={momPct} format="pct" size="sm"/><span style={{ fontSize: 12, color: "var(--ink-4)" }}>vs prev snapshot</span></>
+                      : <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{snapSeries.length > 0 ? "首个快照" : "来自持仓估值"}</span>
+                    }
+                  </div>
+                </>
+              )}
             </div>
-            <Sparkline data={netWorthSeries.map(d => d.value)} width={120} height={40} color="var(--up)" fill={true}/>
+            {netWorthSeries.length > 1 && (
+              <Sparkline data={netWorthSeries.map(d => d.value)} width={120} height={40} color="var(--up)" fill={true}/>
+            )}
           </div>
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
-            <AreaChart data={netWorthSeries} width={420} height={120} color="var(--ink)" fillOpacity={.06} yLabels={3}/>
-          </div>
+          {netWorthSeries.length > 1 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
+              <AreaChart data={netWorthSeries} width={420} height={120} color="var(--ink)" fillOpacity={.06} yLabels={3}/>
+            </div>
+          )}
         </Card>
 
+        {/* Allocation */}
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ALLOCATION · 仓位</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
-            <Donut
-              data={allocation} size={140} thickness={20}
-              centerValue={`${(allocation.reduce((s, d) => s + d.value, 0) / 1000000).toFixed(2)}M`}
-              centerSub="¥ CNY"
-            />
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11.5, flex: 1 }}>
-              {allocation.map(a => {
-                const pct = a.value / allocation.reduce((s, d) => s + d.value, 0) * 100;
-                return (
-                  <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
-                    <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
-                    <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
-                  </div>
-                );
-              })}
+          {portfolioLoading ? (
+            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>加载中…</div>
+          ) : allocation.length === 0 ? (
+            <Empty icon="wallet" title="暂无持仓" hint="在投资组合页面添加持仓"/>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
+              <Donut
+                data={allocation} size={140} thickness={20}
+                centerValue={`${(allTotal / 1e6).toFixed(2)}M`}
+                centerSub="¥ CNY"
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11.5, flex: 1 }}>
+                {allocation.map(a => {
+                  const pct = allTotal > 0 ? a.value / allTotal * 100 : 0;
+                  return (
+                    <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
+                      <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
+                      <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
+        {/* FIRE Target */}
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>FIRE TARGET · 财务自由</div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 12 }}>
-            <ProgressRing value={netWorth / 6000000} size={88} thickness={9} color="var(--down)"/>
-            <div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>{((netWorth / 6000000) * 100).toFixed(1)}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>%</span></div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>of ¥6M target</div>
+          {fireTarget <= 0 ? (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>请在退休计划页设置月支出以计算 FIRE 目标</div>
+              <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
             </div>
-          </div>
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Years to go</div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>11.2<span style={{ fontSize: 14, color: "var(--ink-3)" }}>y</span></div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Required CAGR</div>
-              <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>10.4<span style={{ fontSize: 14 }}>%</span></div>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 12 }}>
+                <ProgressRing value={fireProgress} size={88} thickness={9} color="var(--down)"/>
+                <div>
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
+                    {(fireProgress * 100).toFixed(1)}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>%</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                    of ¥{(fireTarget / 1e6).toFixed(1)}M target
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Years to go</div>
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
+                    {yearsToFire === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>已达成</span>
+                      : yearsToFire != null ? <>{yearsToFire}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>y</span></>
+                      : <span style={{ fontSize: 14, color: "var(--ink-4)" }}>—</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Required CAGR</div>
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: requiredCagr == null ? "var(--ink-4)" : requiredCagr <= 15 ? "var(--up)" : "var(--warn)" }}>
+                    {requiredCagr == null ? "—"
+                      : requiredCagr === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>已达成</span>
+                      : <>{requiredCagr.toFixed(1)}<span style={{ fontSize: 14 }}>%</span></>}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </Card>
       </div>
 
