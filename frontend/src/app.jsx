@@ -80,7 +80,7 @@ const App = () => {
   };
 
   const Page = {
-    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone}/>,
+    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone} currency={currency}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings currency={currency} birthDate={settings.birth_date || ""}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
