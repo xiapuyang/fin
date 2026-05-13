@@ -441,7 +441,9 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                     )}
                   </span>
                 )}
-                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{sym}{fmtNum(toDisp(monthlyExp), 0)}</span>
+                {(ledgerAvgExp == null || monthlyExp !== ledgerAvgExp) && (
+                  <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{sym}{fmtNum(toDisp(monthlyExp), 0)}</span>
+                )}
               </div>
             </div>
             <input type="range" min={3000} max={50000} step={500} value={monthlyExp}
