@@ -121,7 +121,11 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     _saveTimer.current = setTimeout(() => {
       const p = { ..._pendingPatch.current };
       _pendingPatch.current = {};
-      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch((err) => console.warn("Settings save failed:", err));
+      fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) })
+        .catch((err) => {
+          console.warn("Settings save failed:", err);
+          _pendingPatch.current = { ...p, ..._pendingPatch.current };
+        });
     }, 600);
   };
 
