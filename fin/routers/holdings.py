@@ -1,9 +1,12 @@
 import csv
 import io
+import json
 import logging
 import math
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 
+import yfinance as yf
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +15,7 @@ from fin.config import TS_FMT
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.holding import HoldingModel
+from fin.models.dividend_history import DividendHistoryModel
 from fin.models.income import IncomeModel
 from fin.models.transaction import TransactionModel
 from fin.models.user import MOCK_USER_ID
@@ -408,10 +412,16 @@ _DIVIDEND_HIST_YEARS = 2  # how far back to pull on first fetch
 def _yf_parse_info(info: dict) -> tuple[str | None, str | None, float | None]:
     """Extract (ex_date, pay_date, annual_rate) from a yfinance info dict."""
     ex_ts = info.get("exDividendDate")
-    ex_date = datetime.utcfromtimestamp(ex_ts).strftime("%Y-%m-%d") if ex_ts else None
+    ex_date = (
+        datetime.fromtimestamp(ex_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        if ex_ts
+        else None
+    )
     pay_ts = info.get("dividendDate")
     pay_date = (
-        datetime.utcfromtimestamp(pay_ts).strftime("%Y-%m-%d") if pay_ts else None
+        datetime.fromtimestamp(pay_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        if pay_ts
+        else None
     )
     return ex_date, pay_date, info.get("dividendRate")
 
@@ -424,7 +434,9 @@ def _annual_rate_from_history(history: list[dict]) -> float | None:
     """
     if not history:
         return None
-    one_year_ago = (datetime.utcnow() - timedelta(days=365)).strftime("%Y-%m-%d")
+    one_year_ago = (datetime.now(timezone.utc) - timedelta(days=365)).strftime(
+        "%Y-%m-%d"
+    )
     total = sum(h["amount"] for h in history if h["date"] >= one_year_ago)
     return round(total, 4) if total > 0 else None
 
@@ -435,10 +447,11 @@ def _yf_fetch_history(ticker, since: datetime) -> list[dict]:
     if hist.empty:
         return []
     idx = hist.index.tz_localize(None) if hist.index.tz is not None else hist.index
+    since_naive = since.replace(tzinfo=None)
     return [
         {"date": str(d.date()), "amount": round(float(a), 4)}
         for d, a in zip(idx, hist.values)
-        if d >= since
+        if d >= since_naive
     ]
 
 
@@ -453,11 +466,6 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
     - Forward info (ex_date, pay_date, annual_rate): refreshed every 24 h via
       ticker.info, which is much faster than a full history pull.
     """
-    import json
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import yfinance as yf
-    from fin.models.dividend_history import DividendHistoryModel
-
     codes = [
         s.strip().upper()
         for s in symbols.split(",")
@@ -466,7 +474,7 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
     if not codes:
         return {}
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     info_stale_threshold = now - timedelta(hours=_DIVIDEND_INFO_TTL_HOURS)
 
     rows = {
@@ -488,7 +496,10 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
             and datetime.fromisoformat(row.fetched_at) >= info_stale_threshold
         )
         if info_fresh:
-            history = json.loads(row.history_json) if row.history_json else []
+            try:
+                history = json.loads(row.history_json) if row.history_json else []
+            except (json.JSONDecodeError, TypeError):
+                history = []
             annual_rate = row.annual_rate or _annual_rate_from_history(history)
             if row.ex_date or history:
                 result[code] = {
@@ -503,16 +514,25 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
     if not stale_codes:
         return result
 
+    # Extract raw strings before the executor so worker threads never touch ORM objects
+    # (SQLAlchemy Session is not thread-safe; plain dicts are safe to read concurrently)
+    rows_data: dict[str, str | None] = {
+        code: rows[code].history_json if code in rows else None for code in stale_codes
+    }
+
     def _fetch_one(code: str) -> tuple[str, dict | None]:
         """Fetch yfinance data for one symbol; returns (code, data_or_None)."""
         try:
-            row = rows.get(code)
+            existing_json = rows_data.get(code)
             ticker = yf.Ticker(code)
             ex_date, pay_date, annual_rate = _yf_parse_info(ticker.info)
-            if row:
-                existing: list[dict] = (
-                    json.loads(row.history_json) if row.history_json else []
-                )
+            if existing_json is not None:
+                try:
+                    existing: list[dict] = (
+                        json.loads(existing_json) if existing_json else []
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    existing = []
                 last_date = max((e["date"] for e in existing), default=None)
                 since = (
                     (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1))
@@ -539,31 +559,40 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
     with ThreadPoolExecutor(max_workers=min(len(stale_codes), 8)) as pool:
         futures = {pool.submit(_fetch_one, code): code for code in stale_codes}
         for future in as_completed(futures):
-            code, data = future.result()
+            try:
+                code, data = future.result(timeout=15)
+            except TimeoutError:
+                code = futures[future]
+                logger.warning("dividend fetch timed out for %s", code)
+                data = None
             row = rows.get(code)
-            fetched_at = now.isoformat()
-            if row:
-                row.ex_date = data["ex_date"] if data else None
-                row.pay_date = data["pay_date"] if data else None
-                row.annual_rate = data["annual_rate"] if data else None
-                row.history_json = json.dumps(data["history"]) if data else "[]"
-                row.fetched_at = fetched_at
-            else:
-                db.add(
-                    DividendHistoryModel(
-                        symbol=code,
-                        ex_date=data["ex_date"] if data else None,
-                        pay_date=data["pay_date"] if data else None,
-                        annual_rate=data["annual_rate"] if data else None,
-                        history_json=json.dumps(data["history"]) if data else "[]",
-                        fetched_at=fetched_at,
+            if data:
+                if row:
+                    row.ex_date = data["ex_date"]
+                    row.pay_date = data["pay_date"]
+                    row.annual_rate = data["annual_rate"]
+                    row.history_json = json.dumps(data["history"])
+                    row.fetched_at = now.isoformat()
+                else:
+                    db.add(
+                        DividendHistoryModel(
+                            symbol=code,
+                            ex_date=data["ex_date"],
+                            pay_date=data["pay_date"],
+                            annual_rate=data["annual_rate"],
+                            history_json=json.dumps(data["history"]),
+                            fetched_at=now.isoformat(),
+                        )
                     )
-                )
-            if data and (data["ex_date"] or data["history"]):
-                result[code] = data
-            elif row and not data:
+                if data["ex_date"] or data["history"]:
+                    result[code] = data
+            elif row:
                 # yfinance failed — return stale DB data rather than nothing
-                history = json.loads(row.history_json) if row.history_json else []
+                # (fetched_at intentionally NOT updated so the symbol is retried next request)
+                try:
+                    history = json.loads(row.history_json) if row.history_json else []
+                except (json.JSONDecodeError, TypeError):
+                    history = []
                 if row.ex_date or history:
                     result[code] = {
                         "ex_date": row.ex_date,
@@ -572,6 +601,10 @@ def get_dividends(symbols: str = Query(""), db: Session = Depends(get_db)):
                         "history": history,
                     }
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent request already inserted the same symbol row; discard our duplicate
+        db.rollback()
 
     return result
