@@ -460,6 +460,9 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 20, height: 2, background: "var(--ink)", opacity: .7, display: "inline-block" }}/> 中位数 P50
                 </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 20, height: 7, background: "var(--ink)", opacity: .06, border: "1px dashed var(--ink-4)", display: "inline-block", borderRadius: 1 }}/> 提取阶段
+                </span>
               </div>
             </div>
           )}
