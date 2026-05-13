@@ -430,13 +430,15 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>月支出</span>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                {ledgerAvgExp != null && monthlyExp !== ledgerAvgExp && (
+                {ledgerAvgExp != null && (
                   <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
                     过去3年均 <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
-                    <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
-                      marginLeft: 6, fontSize: 9.5, padding: "1px 4px", borderRadius: 3, cursor: "pointer",
-                      border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
-                    }}>还原</button>
+                    {monthlyExp !== ledgerAvgExp && (
+                      <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
+                        marginLeft: 6, fontSize: 9.5, padding: "1px 4px", borderRadius: 3, cursor: "pointer",
+                        border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
+                      }}>还原</button>
+                    )}
                   </span>
                 )}
                 <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{sym}{fmtNum(toDisp(monthlyExp), 0)}</span>
