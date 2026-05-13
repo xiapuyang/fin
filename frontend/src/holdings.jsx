@@ -792,25 +792,36 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
   const [year, setYear] = React.useState(now.getFullYear());
   const [month, setMonth] = React.useState(now.getMonth() + 1);
   const [selectedDay, setSelectedDay] = React.useState(null);
-  const [divData, setDivData] = React.useState({});   // {CODE: {ex_date, history:[{date,amount}], annual_rate}}
+  const [divData, setDivData] = React.useState({});
   const [loading, setLoading] = React.useState(false);
+  const [fetchError, setFetchError] = React.useState(false);
 
   const sym = ccySymbol(acctCcy);
   const MONTH_NAMES = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
   const WEEK_HDR = ["一","二","三","四","五","六","日"];
 
+  // Precompute positions map to avoid O(n²) find() calls throughout this component
+  const posByCode = React.useMemo(
+    () => Object.fromEntries(positions.map(p => [p.code, p])),
+    [positions]
+  );
+
   // Fetch yfinance dividend data for all non-CASH positions
+  const codeKey = [...new Set(positions.map(p => p.code).filter(c => c && c !== "CASH"))].join(",");
   React.useEffect(() => {
-    const codes = [...new Set(positions.map(p => p.code).filter(c => c && c !== "CASH"))];
+    const codes = codeKey ? codeKey.split(",") : [];
     setDivData({});
     setSelectedDay(null);
+    setFetchError(false);
     if (codes.length === 0) return;
     setLoading(true);
+    let cancelled = false;
     apiGetDividends(codes)
-      .then(d => setDivData(d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [positions.map(p => p.code).join(",")]);
+      .then(d => { if (!cancelled) setDivData(d); })
+      .catch(() => { if (!cancelled) setFetchError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [codeKey]);
 
   // Build a unified event map: date → [{type:"yf"|"income", code, amount, currency, source}]
   const eventsByDate = React.useMemo(() => {
@@ -819,8 +830,15 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
 
     // yfinance history (ex-dividend dates, per-share amount)
     Object.entries(divData).forEach(([code, d]) => {
-      (d.history || []).forEach(h => add(h.date, { type: "yf", code, amount: h.amount, currency: "USD" }));
-      if (d.ex_date) add(d.ex_date, { type: "upcoming", code, amount: d.annual_rate ? d.annual_rate / 4 : null, currency: "USD" });
+      const posCcy = posByCode[code]?.currency || "USD";
+      const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const hist = d.history || [];
+      const freq = Math.max(hist.filter(h => new Date(h.date) >= oneYearAgo).length, 1);
+      hist.forEach(h => add(h.date, { type: "yf", code, amount: h.amount, currency: posCcy }));
+      if (d.ex_date) {
+        const perPayment = d.annual_rate ? d.annual_rate / freq : null;
+        add(d.ex_date, { type: "upcoming", code, amount: perPayment, currency: posCcy });
+      }
     });
 
     // Manually recorded income (confirmed received)
@@ -829,7 +847,7 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
     );
 
     return m;
-  }, [divData, incomeItems]);
+  }, [divData, incomeItems, posByCode]);
 
   // Upcoming ex-dates sorted ascending
   const upcoming = React.useMemo(() => {
@@ -860,13 +878,13 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
 
   const hasAnyData = Object.keys(divData).length > 0 || (incomeItems || []).some(i => i.category === "dividend");
 
-  const totalEstAnnual = Object.entries(divData).reduce((sum, [code, d]) => {
+  const totalEstAnnual = React.useMemo(() => Object.entries(divData).reduce((sum, [code, d]) => {
     if (!d.annual_rate) return sum;
-    const pos = positions.find(p => p.code === code);
+    const pos = posByCode[code];
     const shares = pos?.shares || 0;
     const divFx = FX[pos?.currency || "USD"] || 1;
     return sum + d.annual_rate * shares * divFx / acctFx;
-  }, 0);
+  }, 0), [divData, posByCode, acctFx]);
 
   return (
     <div>
@@ -885,7 +903,7 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>即将除权</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {upcoming.map(u => {
-              const pos = positions.find(p => p.code === u.code);
+              const pos = posByCode[u.code];
               const shares = pos?.shares || 0;
               const divFx = FX[pos?.currency || "USD"] || 1;
               const perShare = u.per_payment;
@@ -907,7 +925,11 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
         <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-4)", fontSize: 13 }}>正在从 Yahoo Finance 获取分红数据…</div>
       )}
 
-      {!loading && !hasAnyData && (
+      {!loading && fetchError && (
+        <div style={{ textAlign: "center", padding: "20px 0", color: "var(--ink-3)", fontSize: 13 }}>获取分红数据失败，请稍后重试</div>
+      )}
+
+      {!loading && !fetchError && !hasAnyData && (
         <Empty icon="spark" title="持仓中暂无分红记录" hint="只有付息股票（ETF、股票）才会显示分红日历，指数和无分红股票不会出现"/>
       )}
 
@@ -989,7 +1011,7 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
                     <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>
                       {e.type === "income"
                         ? `+${fmtMoney(e.amount, e.currency, 2)}`
-                        : e.amount ? `$${e.amount.toFixed(3)}/sh` : "—"}
+                        : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}/sh` : "—"}
                     </span>
                   </div>
                 ))}
@@ -1000,13 +1022,13 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
           {/* Per-stock dividend info */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {Object.entries(divData).sort(([codeA, dA], [codeB, dB]) => {
-              const posA = positions.find(p => p.code === codeA);
-              const posB = positions.find(p => p.code === codeB);
+              const posA = posByCode[codeA];
+              const posB = posByCode[codeB];
               const yA = dA.annual_rate && posA?.sym?.price ? dA.annual_rate / posA.sym.price : 0;
               const yB = dB.annual_rate && posB?.sym?.price ? dB.annual_rate / posB.sym.price : 0;
               return yB - yA;
             }).map(([code, d]) => {
-              const pos = positions.find(p => p.code === code);
+              const pos = posByCode[code];
               const shares = pos?.shares || 0;
               const divFx = FX[pos?.currency || "USD"] || 1;
               const estAnnual = d.annual_rate && shares ? d.annual_rate * shares * divFx / acctFx : null;
