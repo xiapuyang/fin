@@ -265,23 +265,24 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         title="FIRE 退休计划"
         subtitle={`Financial Independence, Retire Early · 月投入 + 复利 · ${multiplier}× 年支出法则（SWR ${swr}%）· 投资数据取自投资组合页面`}
         right={
-          <div style={{ display: "flex", gap: 2, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
+          <div style={{ display: "flex", gap: 4, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
             {[
-              { id: "conservative", label: "保守",  cagr: 6,  monthly: 6000,  swr: 3 },
-              { id: "base",         label: "基准",  cagr: 10, monthly: 8000,  swr: 4 },
-              { id: "aggressive",   label: "激进",  cagr: 13, monthly: 12000, swr: 5 },
+              { id: "conservative", label: "保守", cagr: 6,  monthly: 6000,  swr: 3, color: "#2563EB" },
+              { id: "base",         label: "基准", cagr: 10, monthly: 8000,  swr: 4, color: "#16A34A" },
+              { id: "aggressive",   label: "激进", cagr: 13, monthly: 12000, swr: 5, color: "#D97706" },
             ].map(s => {
               const active = activeScenario === s.id;
               return (
                 <button key={s.id} onClick={() => applyScenario(s.id)} style={{
-                  padding: "5px 10px 6px", border: "none", borderRadius: 6, cursor: "pointer",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "#fff" : "var(--ink-3)",
-                  textAlign: "center",
+                  padding: "5px 10px 6px", borderRadius: 6, cursor: "pointer",
+                  border: active ? "none" : `1.5px solid ${s.color}33`,
+                  background: active ? s.color : `${s.color}12`,
+                  color: active ? "#fff" : s.color,
+                  textAlign: "center", transition: "all .15s",
                 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1 }}>{s.label} {s.cagr}%</div>
-                  <div style={{ fontSize: 9.5, opacity: .55, marginTop: 2, letterSpacing: ".01em" }}>
-                    CAGR {s.cagr}% · 月投 ¥{(s.monthly/1000).toFixed(0)}k · SWR {s.swr}%
+                  <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1 }}>{s.label}</div>
+                  <div style={{ fontSize: 9.5, opacity: active ? .75 : .8, marginTop: 2, letterSpacing: ".01em" }}>
+                    {s.cagr}% · ¥{(s.monthly/1000).toFixed(0)}k · {s.swr}%
                   </div>
                 </button>
               );
@@ -424,19 +425,28 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             <FireSlider label="当前年龄" value={manualAge} onChange={setManualAgeP} min={20} max={60} suffix="岁"/>
           )}
 
-          {/* Monthly expense */}
-          <FireSlider label="月支出" value={monthlyExp} onChange={setMonthlyExpP} min={3000} max={50000} step={500} suffix="¥"/>
-          {ledgerAvgExp != null && (
-            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: -8, marginBottom: 10 }}>
-              过去 3 年月均支出 <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
-              {monthlyExp !== ledgerAvgExp && (
-                <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
-                  marginLeft: 8, fontSize: 10, padding: "1px 5px", borderRadius: 3, cursor: "pointer",
-                  border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
-                }}>还原</button>
-              )}
+          {/* Monthly expense — label row: [月支出] [3yr avg hint] [current value] */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>月支出</span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                {ledgerAvgExp != null && (
+                  <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+                    过去3年均 <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
+                    {monthlyExp !== ledgerAvgExp && (
+                      <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
+                        marginLeft: 6, fontSize: 9.5, padding: "1px 4px", borderRadius: 3, cursor: "pointer",
+                        border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
+                      }}>还原</button>
+                    )}
+                  </span>
+                )}
+                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{sym}{fmtNum(toDisp(monthlyExp), 0)}</span>
+              </div>
             </div>
-          )}
+            <input type="range" min={3000} max={50000} step={500} value={monthlyExp}
+              onChange={e => setMonthlyExpP(parseFloat(e.target.value))} style={{ width: "100%" }}/>
+          </div>
 
           {/* SWR — 3 compact cards */}
           <div style={{ marginBottom: 14 }}>

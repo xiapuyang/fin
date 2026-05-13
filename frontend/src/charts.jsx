@@ -67,7 +67,8 @@ const AreaChart = ({ data, width = 560, height = 200, color = "var(--ink)", fill
       {showAxis && xLabels.map((d, i) => {
         const idx = data.indexOf(d);
         const x = padL + idx * step;
-        return <text key={i} x={x} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="middle" className="mono">{d.label}</text>;
+        const isLast = idx === data.length - 1;
+        return <text key={i} x={x} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor={isLast ? "end" : "middle"} className="mono">{d.label}</text>;
       })}
     </svg>
   );

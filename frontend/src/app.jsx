@@ -18,6 +18,8 @@ const App = () => {
   const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
   const [showSettings, setShowSettings] = React.useState(false);
+  const [marketNow, setMarketNow] = React.useState(new Date());
+  const [serverMarket, setServerMarket] = React.useState({});
 
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
@@ -44,6 +46,29 @@ const App = () => {
     return () => clearInterval(t);
   }, []);
 
+  // Market state — drives TopBar indicator dots, refreshed every minute
+  React.useEffect(() => {
+    const t = setInterval(() => setMarketNow(new Date()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+  React.useEffect(() => {
+    const ctrl = new AbortController();
+    const poll = () => fetch("/api/market-states", { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null).then(d => d && setServerMarket(d)).catch(() => {});
+    poll();
+    const t = setInterval(poll, 60 * 1000);
+    return () => { clearInterval(t); ctrl.abort(); };
+  }, []);
+  const _timeBased = MARKET_HOURS(marketNow);
+  const _serverFresh = serverMarket.updated_at &&
+    (Date.now() - new Date(serverMarket.updated_at).getTime()) < 5 * 60 * 1000;
+  const market = Object.fromEntries(
+    Object.entries(_timeBased).map(([k, v]) => {
+      const state = _serverFresh ? (serverMarket[k] || v.state) : v.state;
+      return [k, { state, label: STATE_LABEL[state] || v.label }];
+    })
+  );
+
   const navigate = (target) => {
     if (typeof target === "object") {
       setRoute(target.route);
@@ -67,7 +92,7 @@ const App = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} onCurrencyChange={c => {
+        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} onCurrencyChange={c => {
           setCurrency(c);
           fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
         }} onOpenSettings={() => setShowSettings(true)}/>
@@ -145,7 +170,7 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, currency = "CNY", onCurrencyChange, onOpenSettings }) => {
+const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrencyChange, onOpenSettings }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
@@ -160,6 +185,23 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", onCurrencyChange, onOpe
         <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{cur?.cn} {cur?.label}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Market status dots */}
+        {Object.keys(market).length > 0 && (
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            {Object.entries(market).map(([k, v]) => (
+              <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }} title={`${k}: ${v.label}`}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: v.state === "REGULAR" ? "var(--up)"
+                    : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
+                    : "var(--ink-5)",
+                }}/>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".03em" }}>{k}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)} · CAD ¥{cad.toFixed(2)}</span>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <div style={{ display: "flex", gap: 2 }}>
