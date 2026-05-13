@@ -41,35 +41,11 @@ const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
 
 const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }) => {
   const [now, setNow] = React.useState(new Date());
-  const [serverStates, setServerStates] = React.useState({});
 
-  // ── Market state ────────────────────────────────────────────────────────────
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(t);
   }, []);
-
-  React.useEffect(() => {
-    const ctrl = new AbortController();
-    const fetch_ = () =>
-      fetch("/api/market-states", { signal: ctrl.signal })
-        .then(r => r.ok ? r.json() : null)
-        .then(d => d && setServerStates(d))
-        .catch(() => {});
-    fetch_();
-    const t = setInterval(fetch_, 60 * 1000);
-    return () => { clearInterval(t); ctrl.abort(); };
-  }, []);
-
-  const timeBased = MARKET_HOURS(now);
-  const serverFresh = serverStates.updated_at &&
-    (Date.now() - new Date(serverStates.updated_at).getTime()) < 5 * 60 * 1000;
-  const market = Object.fromEntries(
-    Object.entries(timeBased).map(([k, v]) => {
-      const state = serverFresh ? (serverStates[k] || v.state) : v.state;
-      return [k, { state, label: STATE_LABEL[state] || v.label }];
-    })
-  );
 
   // ── Watchlist ───────────────────────────────────────────────────────────────
   const [watchlist, setWatchlist] = React.useState([]);
@@ -311,36 +287,17 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto" }
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       {/* Welcome */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, gap: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--ink-4)" }}>{(() => {
-            const tzDate = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
-            const y = tzDate.getFullYear();
-            const start = new Date(y, 0, 1);
-            const week = Math.ceil(((tzDate - start) / 86400000 + start.getDay() + 1) / 7);
-            const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-            return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
-          })()}</div>
-          <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
-          <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
-        </div>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          {Object.entries(market).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <MarketDot market={k} size={6}/>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".05em" }}>{k}</span>
-                <span className={"pulse-dot"} style={{
-                  display: "inline-block", width: 6, height: 6, borderRadius: 3,
-                  background: v.state === "REGULAR" ? "var(--up)"
-                    : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
-                    : "var(--ink-5)",
-                }}/>
-              </div>
-              <div style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{v.label}</div>
-            </div>
-          ))}
-        </div>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--ink-4)" }}>{(() => {
+          const tzDate = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+          const y = tzDate.getFullYear();
+          const start = new Date(y, 0, 1);
+          const week = Math.ceil(((tzDate - start) / 86400000 + start.getDay() + 1) / 7);
+          const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+          return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
+        })()}</div>
+        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
+        <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
       </div>
 
       {/* Top stats row */}
