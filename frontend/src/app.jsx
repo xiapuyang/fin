@@ -187,16 +187,19 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrency
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Market status dots */}
         {Object.keys(market).length > 0 && (
-          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
             {Object.entries(market).map(([k, v]) => (
-              <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }} title={`${k}: ${v.label}`}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                  background: v.state === "REGULAR" ? "var(--up)"
-                    : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
-                    : "var(--ink-5)",
-                }}/>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".03em" }}>{k}</span>
+              <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: v.state === "REGULAR" ? "var(--up)"
+                      : (v.state === "PRE" || v.state === "POST") ? "var(--warn)"
+                      : "var(--ink-5)",
+                  }}/>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".03em" }}>{k}</span>
+                </div>
+                <span style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: ".02em" }}>{v.label.split(" ")[0]}</span>
               </div>
             ))}
           </div>
