@@ -32,6 +32,7 @@ class SettingsPayload(BaseModel):
     fire_inflation: float | None = None
     fire_target_age: int | None = None
     fire_mc_sigma: int | None = None
+    fire_life_expectancy: int | None = None
     currency: str | None = None
 
 
@@ -64,11 +65,13 @@ def get_fx(db: Session = Depends(get_db)):
 
 @router.get("/rebalance")
 def get_rebalance():
+    """Return the stored rebalance configuration."""
     return settings_store.load().get("rebalance") or {}
 
 
 @router.put("/rebalance")
 def put_rebalance(data: Any = Body(...)):
+    """Persist rebalance configuration and return it."""
     settings_store.save({"rebalance": data})
     return data
 
