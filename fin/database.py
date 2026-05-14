@@ -120,6 +120,11 @@ def _migrate_columns(db: "Session") -> None:
         ("stocks", "asset_type", "ALTER TABLE stocks ADD COLUMN asset_type TEXT"),
         ("stocks", "regular_close", "ALTER TABLE stocks ADD COLUMN regular_close REAL"),
         ("accounts", "cutoff_date", "ALTER TABLE accounts ADD COLUMN cutoff_date TEXT"),
+        (
+            "accounts",
+            "symbol_markets",
+            "ALTER TABLE accounts ADD COLUMN symbol_markets TEXT",
+        ),
         ("watchlist", "user_id", "ALTER TABLE watchlist ADD COLUMN user_id BIGINT"),
         (
             "balance_items",

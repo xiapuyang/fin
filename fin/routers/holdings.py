@@ -45,6 +45,12 @@ _VALID_SYMBOL = re.compile(r"^[A-Z0-9.\-\^]{1,10}$")
 
 
 def _account_response(a: AccountModel) -> AccountResponse:
+    sm = None
+    if a.symbol_markets:
+        try:
+            sm = json.loads(a.symbol_markets)
+        except (json.JSONDecodeError, TypeError):
+            sm = None
     return AccountResponse(
         id=a.id,
         name=a.name,
@@ -53,6 +59,7 @@ def _account_response(a: AccountModel) -> AccountResponse:
         cutoff_date=a.cutoff_date,
         balance_account_id=a.balance_account_id,
         balance_sub_account_id=a.balance_sub_account_id,
+        symbol_markets=sm,
         create_time=a.create_time.strftime(TS_FMT),
         update_time=a.update_time.strftime(TS_FMT),
     )
