@@ -44,7 +44,8 @@ const computePositions = (holdings, transactions, prices = {}) => {
   const virtualHoldings = txnOnlyCodes.map(code => {
     const ref = sorted.find(t => t.code === code);
     return { id: `virtual_${code}`, code, name: code, shares: 0, avg_cost: 0,
-             as_of_date: null, account: ref.account, currency: ref.currency || "USD" };
+             as_of_date: null, account: ref.account, currency: ref.currency || "USD",
+             market: SYMBOL_INDEX[code]?.market || null };
   });
   const allHoldings = virtualHoldings.length ? [...holdings, ...virtualHoldings] : holdings;
 
@@ -636,6 +637,8 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
 };
 
 // ── Transactions table ────────────────────────────────────────────────────────
+const TXN_PAGE_SIZE = 30;
+
 const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
   const fileRef = React.useRef(null);
   const [importMsg, setImportMsg] = React.useState(null);
@@ -643,15 +646,16 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
   const [page, setPage] = React.useState(1);
   const [data, setData] = React.useState({ items: [], total: 0 });
 
-  const totalPages = Math.max(1, Math.ceil(data.total / 30));
+  const totalPages = Math.max(1, Math.ceil(data.total / TXN_PAGE_SIZE));
 
   const fetchPage = React.useCallback((pg, sym) => {
-    apiGetTransactionsPaged({ page: pg, pageSize: 30, symbol: sym, account: account || "" })
+    apiGetTransactionsPaged({ page: pg, pageSize: TXN_PAGE_SIZE, symbol: sym, account: account || "" })
       .then(setData)
       .catch(console.error);
   }, [account]);
 
   React.useEffect(() => { fetchPage(page, symFilter); }, [page, symFilter, fetchPage, refreshKey]);
+  React.useEffect(() => { setPage(1); }, [account]);
 
   const handleSymFilter = (v) => { setSymFilter(v); setPage(1); };
 

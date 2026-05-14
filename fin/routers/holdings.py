@@ -29,6 +29,7 @@ from fin.schemas.account import AccountCreate, AccountResponse, AccountUpdate
 from fin.schemas.holding import HoldingCreate, HoldingResponse, HoldingUpdate
 from fin.schemas.income import IncomeCreate, IncomeResponse, IncomeUpdate
 from fin.schemas.transaction import (
+    PagedTransactionResponse,
     TransactionCreate,
     TransactionResponse,
     TransactionUpdate,
@@ -45,11 +46,20 @@ _VALID_SYMBOL = re.compile(r"^[A-Z0-9.\-\^]{1,10}$")
 
 
 def _account_response(a: AccountModel) -> AccountResponse:
+    """Build an AccountResponse from an ORM model, deserializing JSON fields.
+
+    Args:
+        a: The AccountModel instance to convert.
+
+    Returns:
+        An AccountResponse with symbol_markets deserialized from JSON, or None
+        if the column is absent or malformed.
+    """
     sm = None
     if a.symbol_markets:
         try:
             sm = json.loads(a.symbol_markets)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError:
             sm = None
     return AccountResponse(
         id=a.id,
@@ -280,7 +290,7 @@ def list_transactions(db: Session = Depends(get_db)):
     return [_tx_response(t) for t in repo.get_all(MOCK_USER_ID)]
 
 
-@router.get("/transactions/paged")
+@router.get("/transactions/paged", response_model=PagedTransactionResponse)
 def list_transactions_paged(
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
@@ -288,6 +298,18 @@ def list_transactions_paged(
     account: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    """Return a paginated page of transactions for the current user.
+
+    Args:
+        page: 1-based page number.
+        page_size: Number of rows per page (1-200, default 30).
+        symbol: Optional ticker code filter (exact match).
+        account: Optional account name filter (exact match).
+        db: Database session (injected).
+
+    Returns:
+        PagedTransactionResponse with items and total count.
+    """
     repo = TransactionSQLiteRepository(db)
     items, total = repo.get_page(MOCK_USER_ID, page, page_size, symbol, account)
     return {"items": [_tx_response(t) for t in items], "total": total}
