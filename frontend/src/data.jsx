@@ -66,6 +66,12 @@ async function apiUpdateHolding(id, data) { return _apiFetch(`/api/holdings/${id
 async function apiDeleteHolding(id)       { return _apiFetch(`/api/holdings/${id}`, _DEL()); }
 
 async function apiGetTransactions()           { return _apiFetch("/api/transactions"); }
+async function apiGetTransactionsPaged({ page = 1, pageSize = 30, symbol = "", account = "" } = {}) {
+  const p = new URLSearchParams({ page, page_size: pageSize });
+  if (symbol)  p.set("symbol", symbol);
+  if (account) p.set("account", account);
+  return _apiFetch(`/api/transactions/paged?${p}`);
+}
 async function apiCreateTransaction(data)     { return _apiFetch("/api/transactions", _JSON(data)); }
 async function apiUpdateTransaction(id, data) { return _apiFetch(`/api/transactions/${id}`, _PUT(data)); }
 async function apiDeleteTransaction(id)       { return _apiFetch(`/api/transactions/${id}`, _DEL()); }
@@ -193,7 +199,7 @@ Object.assign(window, {
   LEDGER, GOALS, genSpark,
   apiGetPrices, apiGetDividends,
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
-  apiGetTransactions, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
+  apiGetTransactions, apiGetTransactionsPaged, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
   apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,

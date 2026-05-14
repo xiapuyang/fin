@@ -17,6 +17,7 @@ class AccountModel(Base):
     cutoff_date = Column(String, nullable=True)
     balance_account_id = Column(Integer, nullable=True)
     balance_sub_account_id = Column(Integer, nullable=True)
+    symbol_markets = Column(String, nullable=True)  # JSON: {"013308": "HK"}
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

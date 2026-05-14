@@ -97,6 +97,7 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):
                 "after_hours_change_pct": q.get("after_hours_change_pct"),
                 "market_state": q.get("market_state"),
                 "asset_type": q.get("asset_type"),
+                "name": q.get("name"),
             }
     return result
 

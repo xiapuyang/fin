@@ -34,14 +34,29 @@ const xirr = (cashFlows) => {
 const computePositions = (holdings, transactions, prices = {}) => {
   const today = new Date().toISOString().slice(0, 10);
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
-  return holdings.map(h => {
+
+  // Synthesize virtual anchor rows for codes that have transactions but no holding snapshot.
+  // Without this, a first-ever buy creates no visible position (the buy only deducts cash).
+  const holdingCodes = new Set(holdings.map(h => h.code));
+  const txnOnlyCodes = [...new Set(
+    sorted.filter(t => t.code && t.code !== "CASH" && !holdingCodes.has(t.code)).map(t => t.code)
+  )];
+  const virtualHoldings = txnOnlyCodes.map(code => {
+    const ref = sorted.find(t => t.code === code);
+    return { id: `virtual_${code}`, code, name: code, shares: 0, avg_cost: 0,
+             as_of_date: null, account: ref.account, currency: ref.currency || "USD",
+             market: SYMBOL_INDEX[code]?.market || null };
+  });
+  const allHoldings = virtualHoldings.length ? [...holdings, ...virtualHoldings] : holdings;
+
+  return allHoldings.map(h => {
     const dbPrice = prices[h.code] || {};
     const symFallback = SYMBOL_INDEX[h.code] || {};
     const sym = {
       price: dbPrice.price ?? symFallback.price ?? 0,
       prevClose: dbPrice.prev_close ?? symFallback.prevClose ?? 0,
       afterHoursChangePct: (dbPrice.market_state === "POST" || dbPrice.market_state === "PRE") ? (dbPrice.after_hours_change_pct ?? null) : null,
-      name: symFallback.name || h.name || h.code,
+      name: symFallback.name || dbPrice.name || h.name || h.code,
       asset_type: dbPrice.asset_type ?? null,
     };
     const currency = h.currency || "USD";
@@ -89,7 +104,7 @@ const computePositions = (holdings, transactions, prices = {}) => {
     const afterHoursChangePct = sym.afterHoursChangePct ?? null;
     const realizedCNY = realized * fx;
     return { ...h, sym, currency, fx, shares: totalShares, avgCost, value, cost, pnl, pnlPct, dayChange, afterHoursChangePct, realizedCNY, txnCount: relevantTxns.length };
-  });
+  }).filter(p => !String(p.id).startsWith("virtual_") || p.shares > 0);
 };
 
 // ── Compute XIRR for an account using income cash flows ───────────────────────
@@ -125,6 +140,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const [editingHolding, setEditingHolding] = React.useState(null);
   const [showTxnModal, setShowTxnModal] = React.useState(false);
   const [editingTxn, setEditingTxn] = React.useState(null);
+  const [txnRefresh, setTxnRefresh] = React.useState(0);
   const [showIncomeModal, setShowIncomeModal] = React.useState(false);
   const [editingIncome, setEditingIncome] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
@@ -239,14 +255,19 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const summarySym = ccySymbol(currency);
 
   const isBond = (p) => p.sym?.asset_type === "bond";
+  // Resolve effective market, honouring per-account symbol_markets overrides.
+  const effectiveMarket = (p) => {
+    const acct = accounts.find(a => a.name === p.account);
+    return acct?.symbol_markets?.[p.code] || p.market;
+  };
   const knownMarkets = ["US", "HK", "CN", "CA", "CRYPTO"];
   const byMarket = [
     ...knownMarkets.map(m => {
-      const v = allPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
+      const v = allPositions.filter(p => effectiveMarket(p) === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
       return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
     { label: "美债", value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
-    { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
+    { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
     { label: "现金", value: allCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
@@ -255,11 +276,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const acctDayPnl = acctPositions.reduce((s, p) => s + p.value / acctFx * p.dayChange / 100, 0);
   const acctByMarket = [
     ...knownMarkets.map(m => {
-      const v = acctPositions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0);
+      const v = acctPositions.filter(p => effectiveMarket(p) === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0);
       return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
     { label: "美债", value: acctPositions.filter(isBond).reduce((s, p) => s + p.value / acctFx, 0), color: "#7C3AED" },
-    { label: "其他", value: acctPositions.filter(p => !knownMarkets.includes(p.market) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
+    { label: "其他", value: acctPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
     { label: "现金", value: acctCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
@@ -494,7 +515,10 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onEditHolding={h => { setEditingHolding(h); setShowHoldingModal(true); }}
           onDeleteHolding={id => apiDeleteHolding(id).then(() => setHoldings(p => p.filter(h => h.id !== id))).catch(console.error)}
         />}
-      {tab === "transactions" && <TransactionsTable txns={acctTxns}
+      {tab === "transactions" && <TransactionsTable
+          account={acctName}
+          refreshKey={txnRefresh}
+          allSymbols={[...new Set(acctTxns.map(t => t.code))].sort()}
           assetTypeOf={code => (prices[code] || {}).asset_type ?? null}
           onAdd={() => { setEditingTxn(null); setShowTxnModal(true); }}
           onEdit={t => { setEditingTxn(t); setShowTxnModal(true); }}
@@ -513,7 +537,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => { setHoldings(prev => editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h]); setShowHoldingModal(false); }}/>}
       {showTxnModal && <TransactionModal editing={editingTxn} accounts={accounts} defaultAccount={acctName} onClose={() => setShowTxnModal(false)}
-          onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setShowTxnModal(false); }}/>}
+          onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setTxnRefresh(r => r + 1); setShowTxnModal(false); }}/>}
       {showIncomeModal && <IncomeModal editing={editingIncome} accounts={accounts} defaultAccount={acctName} onClose={() => setShowIncomeModal(false)}
           onSaved={i => { setIncome(prev => editingIncome ? prev.map(x => x.id === i.id ? i : x) : [i, ...prev]); setShowIncomeModal(false); }}/>}
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
@@ -613,10 +637,27 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
 };
 
 // ── Transactions table ────────────────────────────────────────────────────────
-const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
-  const sorted = [...txns].sort((a,b) => b.date.localeCompare(a.date));
+const TXN_PAGE_SIZE = 30;
+
+const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
   const fileRef = React.useRef(null);
   const [importMsg, setImportMsg] = React.useState(null);
+  const [symFilter, setSymFilter] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const [data, setData] = React.useState({ items: [], total: 0 });
+
+  const totalPages = Math.max(1, Math.ceil(data.total / TXN_PAGE_SIZE));
+
+  const fetchPage = React.useCallback((pg, sym) => {
+    apiGetTransactionsPaged({ page: pg, pageSize: TXN_PAGE_SIZE, symbol: sym, account: account || "" })
+      .then(setData)
+      .catch(console.error);
+  }, [account]);
+
+  React.useEffect(() => { fetchPage(page, symFilter); }, [page, symFilter, fetchPage, refreshKey]);
+  React.useEffect(() => { setPage(1); }, [account]);
+
+  const handleSymFilter = (v) => { setSymFilter(v); setPage(1); };
 
   const handleImport = async (e) => {
     const file = e.target.files[0];
@@ -626,6 +667,8 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
       const result = await apiImportTransactions(file);
       const all = await apiGetTransactions();
       onImportDone(all);
+      fetchPage(1, symFilter);
+      setPage(1);
       setImportMsg(`导入 ${result.imported} 条，跳过 ${result.skipped.length} 条`);
       setTimeout(() => setImportMsg(null), 4000);
     } catch (err) {
@@ -643,12 +686,17 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
+          <select value={symFilter} onChange={e => handleSymFilter(e.target.value)}
+            style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
+            <option value="">全部 Symbol</option>
+            {allSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport}/>
           <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 CSV</Button>
           <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>新增记录</Button>
         </div>
       </div>
-      {sorted.length === 0
+      {data.total === 0
         ? <Empty icon="book" title="暂无交易记录" hint="点击「新增记录」手动添加，或「导入 CSV」批量导入 Notion 数据"/>
         : (
           <>
@@ -658,10 +706,10 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
               <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>REALIZED</span>
               <span style={{paddingLeft:24}}>NOTE</span><span/>
             </div>
-            {sorted.map((t, i) => {
+            {data.items.map((t, i) => {
               const amt = t.shares * t.price;
               return (
-                <div key={t.id} style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < sorted.length-1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
+                <div key={t.id} style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < data.items.length-1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
                   <span className="mono" style={{color:"var(--ink-3)"}}>{t.date}</span>
                   <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? "买入" : "卖出"}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
@@ -674,11 +722,20 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
                   <span style={{color:"var(--ink-3)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:24}}>{t.note || ""}</span>
                   <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                     <button style={iconBtn} title="编辑" onClick={() => onEdit(t)}><Icon name="edit" size={13}/></button>
-                    <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此交易记录？`)) onDelete(t.id); }}><Icon name="x" size={13}/></button>
+                    <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此交易记录？`)) onDelete(t.id).then(() => fetchPage(page, symFilter)); }}><Icon name="x" size={13}/></button>
                   </div>
                 </div>
               );
             })}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", borderTop: "1px solid var(--line)" }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  style={{ ...iconBtn, opacity: page === 1 ? 0.3 : 1 }}><Icon name="arrow-left" size={14}/></button>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{page} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  style={{ ...iconBtn, opacity: page === totalPages ? 0.3 : 1 }}><Icon name="arrow-right" size={14}/></button>
+              </div>
+            )}
           </>
         )}
     </Card>
@@ -900,7 +957,7 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
 };
 
 const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+  <>
     {Object.entries(divData).sort(([, dA], [, dB]) => {
       const yA = dA.annual_rate || 0;
       const yB = dB.annual_rate || 0;
@@ -928,7 +985,7 @@ const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
         </Card>
       );
     })}
-  </div>
+  </>
 );
 
 const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx = 1 }) => {
@@ -994,21 +1051,40 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
 
   return (
     <div>
-      {totalEstAnnual > 0 && (
-        <Card padding={16} style={{ marginBottom: 16, display: "inline-flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>预估年度分红</span>
-          <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
-          <span style={{ fontSize: 12, color: "var(--ink-4)" }}>/ 年</span>
-        </Card>
-      )}
       <DivUpcomingStrip upcoming={upcoming} posByCode={posByCode} acctFx={acctFx} sym={sym} />
       {loading && !hasAnyData && <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-4)", fontSize: 13 }}>正在从 Yahoo Finance 获取分红数据…</div>}
       {!loading && fetchError && <div style={{ textAlign: "center", padding: "20px 0", color: "var(--ink-3)", fontSize: 13 }}>获取分红数据失败，请稍后重试</div>}
       {!loading && !fetchError && !hasAnyData && <Empty icon="spark" title="持仓中暂无分红记录" hint="只有付息股票（ETF、股票）才会显示分红日历，指数和无分红股票不会出现"/>}
       {hasAnyData && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, alignItems: "start" }}>
+        <div style={{ maxWidth: 1120, display: "grid", gridTemplateColumns: "1fr 440px", gap: 16, alignItems: "start" }}>
           <DivMonthGrid year={year} month={month} today={today} eventsByDate={eventsByDate} selectedDay={selectedDay} setSelectedDay={setSelectedDay} prevMonth={prevMonth} nextMonth={nextMonth} />
-          <DivStockList divData={divData} posByCode={posByCode} today={today} acctFx={acctFx} sym={sym} />
+          {Object.keys(divData).length === 1 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "calc((100% - 10px) / 2)" }}>
+              {totalEstAnnual > 0 && (
+                <Card padding={14}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
+                  </div>
+                </Card>
+              )}
+              <DivStockList divData={divData} posByCode={posByCode} today={today} acctFx={acctFx} sym={sym} />
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {totalEstAnnual > 0 && (
+                <Card padding={14} style={{ gridColumn: "1 / -1" }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
+                  </div>
+                </Card>
+              )}
+              <DivStockList divData={divData} posByCode={posByCode} today={today} acctFx={acctFx} sym={sym} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1710,6 +1786,10 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     balance_account_id: account.balance_account_id ? String(account.balance_account_id) : "",
     balance_sub_account_id: account.balance_sub_account_id ? String(account.balance_sub_account_id) : "",
   });
+  // symbol_markets edited as [{code, market}] rows for convenience
+  const [smRows, setSmRows] = React.useState(() =>
+    Object.entries(account.symbol_markets || {}).map(([code, market]) => ({ code, market }))
+  );
   const [balAccounts, setBalAccounts] = React.useState([]);
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
@@ -1728,6 +1808,8 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     if (!form.name.trim()) { setErr("账户名不能为空"); return; }
     setSaving(true); setErr(null);
     try {
+      const sm = {};
+      smRows.forEach(r => { if (r.code.trim()) sm[r.code.trim().toUpperCase()] = r.market; });
       const saved = await apiUpdateAccount(account.id, {
         name: form.name.trim(),
         currency: form.currency,
@@ -1735,6 +1817,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
         cutoff_date: form.cutoff_date.trim() || null,
         balance_account_id: form.balance_account_id ? Number(form.balance_account_id) : null,
         balance_sub_account_id: form.balance_sub_account_id ? Number(form.balance_sub_account_id) : null,
+        symbol_markets: Object.keys(sm).length ? sm : null,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -1764,6 +1847,42 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
             style={{ opacity: balSubs.length === 0 ? 0.5 : 1, pointerEvents: balSubs.length === 0 ? "none" : "auto" }}/>
         </FormRow>
         <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+
+        {/* Symbol market overrides */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
+            市场分类覆盖
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, lineHeight: 1.5 }}>
+            将指定 symbol 归入特定市场（用于持仓汇总饼图），不影响货币和价格。
+          </div>
+          {smRows.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 28px", gap: 6, marginBottom: 6 }}>
+              {smRows.map((r, i) => (
+                <React.Fragment key={i}>
+                  <input value={r.code} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, code: e.target.value } : x))}
+                    placeholder="symbol（如 013308）"
+                    style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}/>
+                  <select value={r.market} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, market: e.target.value } : x))}
+                    style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
+                    <option value="US">美股 US</option>
+                    <option value="HK">港股 HK</option>
+                    <option value="CN">A股 CN</option>
+                    <option value="CA">加股 CA</option>
+                    <option value="CRYPTO">加密</option>
+                  </select>
+                  <button type="button" onClick={() => setSmRows(rows => rows.filter((_, j) => j !== i))}
+                    style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: "pointer", fontSize: 15, padding: 0 }}>✕</button>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={() => setSmRows(rows => [...rows, { code: "", market: "HK" }])}
+            style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
+            + 添加映射
+          </button>
+        </div>
+
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
