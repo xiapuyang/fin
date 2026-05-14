@@ -21,6 +21,29 @@ class TransactionSQLiteRepository:
             .all()
         )
 
+    def get_page(
+        self,
+        user_id: int,
+        page: int,
+        page_size: int,
+        symbol: str | None = None,
+        account: str | None = None,
+    ) -> tuple[list[TransactionModel], int]:
+        """Return one page of transactions plus the total matching count."""
+        q = self._db.query(TransactionModel).filter(TransactionModel.user_id == user_id)
+        if symbol:
+            q = q.filter(TransactionModel.code == symbol)
+        if account:
+            q = q.filter(TransactionModel.account == account)
+        total = q.count()
+        items = (
+            q.order_by(TransactionModel.date.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return items, total
+
     def get_by_id(self, id: int, user_id: int) -> TransactionModel | None:
         """Return a single transaction by primary key, or None if not found."""
         return (
