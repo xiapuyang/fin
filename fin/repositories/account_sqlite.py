@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -60,7 +61,10 @@ class AccountSQLiteRepository:
         for field, val in data.model_dump(exclude_unset=True).items():
             if val is None and field in non_null_fields:
                 continue
-            setattr(account, field, val)
+            if field == "symbol_markets":
+                setattr(account, field, json.dumps(val) if val is not None else None)
+            else:
+                setattr(account, field, val)
         account.update_time = datetime.now(timezone.utc)
         self._db.commit()
         self._db.refresh(account)

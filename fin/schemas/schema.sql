@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     cutoff_date             TEXT,
     balance_account_id      INTEGER,
     balance_sub_account_id  INTEGER,
+    symbol_markets          TEXT,      -- JSON: {"013308": "HK"} — per-symbol market classification overrides
     create_time  DATETIME NOT NULL,
     update_time  DATETIME NOT NULL
 );
