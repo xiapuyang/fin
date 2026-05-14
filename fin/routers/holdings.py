@@ -210,7 +210,7 @@ def create_account(data: AccountCreate, db: Session = Depends(get_db)):
 @router.put("/accounts/{account_id}", response_model=AccountResponse)
 def update_account(account_id: int, data: AccountUpdate, db: Session = Depends(get_db)):
     try:
-        updated = AccountSQLiteRepository(db).update(account_id, data)
+        updated = AccountSQLiteRepository(db).update(account_id, data, MOCK_USER_ID)
     except IntegrityError:
         raise HTTPException(status_code=409, detail="Account name already exists")
     if updated is None:
@@ -220,7 +220,7 @@ def update_account(account_id: int, data: AccountUpdate, db: Session = Depends(g
 
 @router.delete("/accounts/{account_id}", status_code=204)
 def delete_account(account_id: int, db: Session = Depends(get_db)):
-    AccountSQLiteRepository(db).delete(account_id)
+    AccountSQLiteRepository(db).delete(account_id, MOCK_USER_ID)
     return Response(status_code=204)
 
 
