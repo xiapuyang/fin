@@ -59,3 +59,8 @@ class TransactionResponse(BaseModel):
     note: Optional[str]
     create_time: str
     update_time: str
+
+
+class PagedTransactionResponse(BaseModel):
+    items: list[TransactionResponse]
+    total: int

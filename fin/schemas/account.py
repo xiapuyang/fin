@@ -17,7 +17,7 @@ class AccountUpdate(BaseModel):
     cutoff_date: Optional[str] = None
     balance_account_id: Optional[int] = None
     balance_sub_account_id: Optional[int] = None
-    symbol_markets: Optional[dict] = None
+    symbol_markets: Optional[dict[str, str]] = None
 
 
 class AccountResponse(BaseModel):
