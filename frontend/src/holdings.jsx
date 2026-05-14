@@ -139,6 +139,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const [editingHolding, setEditingHolding] = React.useState(null);
   const [showTxnModal, setShowTxnModal] = React.useState(false);
   const [editingTxn, setEditingTxn] = React.useState(null);
+  const [txnRefresh, setTxnRefresh] = React.useState(0);
   const [showIncomeModal, setShowIncomeModal] = React.useState(false);
   const [editingIncome, setEditingIncome] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
@@ -513,7 +514,10 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onEditHolding={h => { setEditingHolding(h); setShowHoldingModal(true); }}
           onDeleteHolding={id => apiDeleteHolding(id).then(() => setHoldings(p => p.filter(h => h.id !== id))).catch(console.error)}
         />}
-      {tab === "transactions" && <TransactionsTable txns={acctTxns}
+      {tab === "transactions" && <TransactionsTable
+          account={acctName}
+          refreshKey={txnRefresh}
+          allSymbols={[...new Set(acctTxns.map(t => t.code))].sort()}
           assetTypeOf={code => (prices[code] || {}).asset_type ?? null}
           onAdd={() => { setEditingTxn(null); setShowTxnModal(true); }}
           onEdit={t => { setEditingTxn(t); setShowTxnModal(true); }}
@@ -532,7 +536,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => { setHoldings(prev => editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h]); setShowHoldingModal(false); }}/>}
       {showTxnModal && <TransactionModal editing={editingTxn} accounts={accounts} defaultAccount={acctName} onClose={() => setShowTxnModal(false)}
-          onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setShowTxnModal(false); }}/>}
+          onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setTxnRefresh(r => r + 1); setShowTxnModal(false); }}/>}
       {showIncomeModal && <IncomeModal editing={editingIncome} accounts={accounts} defaultAccount={acctName} onClose={() => setShowIncomeModal(false)}
           onSaved={i => { setIncome(prev => editingIncome ? prev.map(x => x.id === i.id ? i : x) : [i, ...prev]); setShowIncomeModal(false); }}/>}
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
@@ -632,10 +636,24 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
 };
 
 // ── Transactions table ────────────────────────────────────────────────────────
-const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
-  const sorted = [...txns].sort((a,b) => b.date.localeCompare(a.date));
+const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetTypeOf = () => null, onAdd, onEdit, onDelete, onImportDone }) => {
   const fileRef = React.useRef(null);
   const [importMsg, setImportMsg] = React.useState(null);
+  const [symFilter, setSymFilter] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const [data, setData] = React.useState({ items: [], total: 0 });
+
+  const totalPages = Math.max(1, Math.ceil(data.total / 30));
+
+  const fetchPage = React.useCallback((pg, sym) => {
+    apiGetTransactionsPaged({ page: pg, pageSize: 30, symbol: sym, account: account || "" })
+      .then(setData)
+      .catch(console.error);
+  }, [account]);
+
+  React.useEffect(() => { fetchPage(page, symFilter); }, [page, symFilter, fetchPage, refreshKey]);
+
+  const handleSymFilter = (v) => { setSymFilter(v); setPage(1); };
 
   const handleImport = async (e) => {
     const file = e.target.files[0];
@@ -645,6 +663,8 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
       const result = await apiImportTransactions(file);
       const all = await apiGetTransactions();
       onImportDone(all);
+      fetchPage(1, symFilter);
+      setPage(1);
       setImportMsg(`导入 ${result.imported} 条，跳过 ${result.skipped.length} 条`);
       setTimeout(() => setImportMsg(null), 4000);
     } catch (err) {
@@ -662,12 +682,17 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
+          <select value={symFilter} onChange={e => handleSymFilter(e.target.value)}
+            style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
+            <option value="">全部 Symbol</option>
+            {allSymbols.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport}/>
           <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 CSV</Button>
           <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>新增记录</Button>
         </div>
       </div>
-      {sorted.length === 0
+      {data.total === 0
         ? <Empty icon="book" title="暂无交易记录" hint="点击「新增记录」手动添加，或「导入 CSV」批量导入 Notion 数据"/>
         : (
           <>
@@ -677,10 +702,10 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
               <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>REALIZED</span>
               <span style={{paddingLeft:24}}>NOTE</span><span/>
             </div>
-            {sorted.map((t, i) => {
+            {data.items.map((t, i) => {
               const amt = t.shares * t.price;
               return (
-                <div key={t.id} style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < sorted.length-1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
+                <div key={t.id} style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < data.items.length-1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
                   <span className="mono" style={{color:"var(--ink-3)"}}>{t.date}</span>
                   <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? "买入" : "卖出"}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
@@ -693,11 +718,20 @@ const TransactionsTable = ({ txns, assetTypeOf = () => null, onAdd, onEdit, onDe
                   <span style={{color:"var(--ink-3)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:24}}>{t.note || ""}</span>
                   <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                     <button style={iconBtn} title="编辑" onClick={() => onEdit(t)}><Icon name="edit" size={13}/></button>
-                    <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此交易记录？`)) onDelete(t.id); }}><Icon name="x" size={13}/></button>
+                    <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此交易记录？`)) onDelete(t.id).then(() => fetchPage(page, symFilter)); }}><Icon name="x" size={13}/></button>
                   </div>
                 </div>
               );
             })}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", borderTop: "1px solid var(--line)" }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  style={{ ...iconBtn, opacity: page === 1 ? 0.3 : 1 }}><Icon name="arrow-left" size={14}/></button>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{page} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  style={{ ...iconBtn, opacity: page === totalPages ? 0.3 : 1 }}><Icon name="arrow-right" size={14}/></button>
+              </div>
+            )}
           </>
         )}
     </Card>

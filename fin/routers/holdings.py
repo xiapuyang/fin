@@ -280,6 +280,19 @@ def list_transactions(db: Session = Depends(get_db)):
     return [_tx_response(t) for t in repo.get_all(MOCK_USER_ID)]
 
 
+@router.get("/transactions/paged")
+def list_transactions_paged(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(30, ge=1, le=200),
+    symbol: str | None = Query(None),
+    account: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    repo = TransactionSQLiteRepository(db)
+    items, total = repo.get_page(MOCK_USER_ID, page, page_size, symbol, account)
+    return {"items": [_tx_response(t) for t in items], "total": total}
+
+
 @router.post("/transactions", response_model=TransactionResponse, status_code=201)
 def create_transaction(data: TransactionCreate, db: Session = Depends(get_db)):
     repo = TransactionSQLiteRepository(db)
