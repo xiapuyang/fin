@@ -45,6 +45,7 @@ const _calcAge = (birthDate) => {
 const _LIQUID_CATS = new Set(["现金", "存款", "理财", "期权", "社保"]);
 
 const Fire = ({ currency = "CNY", birthDate = "" }) => {
+  usePrivacyMasked(); // re-render KPI tiles + chart amounts on privacy toggle
   const [loading, setLoading] = React.useState(true);
 
   const [manualAge,       setManualAge]       = React.useState(32);
@@ -145,7 +146,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
 
   const sym    = CURRENCY_SYMBOL[currency] || "¥";
   const toDisp = (cny) => cny / (FX[currency] || 1);
-  const fmtM   = (cny, dp = 1) => `${sym}${(toDisp(cny) / 1_000_000).toFixed(dp)}M`;
+  const fmtM   = (cny, dp = 1) => PRIVACY.masked ? `${sym}•.•M` : `${sym}${(toDisp(cny) / 1_000_000).toFixed(dp)}M`;
 
   const derivedAge = _calcAge(birthDate);
   const age = derivedAge ?? manualAge;
@@ -949,7 +950,7 @@ const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medF
       {/* FIRE target line */}
       <line x1={padL} x2={padL+w} y1={fireY} y2={fireY} stroke="var(--up)" strokeDasharray="4 3" strokeWidth="1.5"/>
       <text x={padL+w-4} y={fireY-5} fontSize="10" fill="var(--up)" textAnchor="end" fontWeight="600">
-        FIRE {chartSym}{(toD(fireTarget)/1_000_000).toFixed(1)}M
+        FIRE {PRIVACY.masked ? `${chartSym}•.•M` : `${chartSym}${(toD(fireTarget)/1_000_000).toFixed(1)}M`}
       </text>
       {/* P10–P90 band */}
       <path d={areaPath(bands[4], bands[0])} fill="var(--ink)" fillOpacity=".08"/>

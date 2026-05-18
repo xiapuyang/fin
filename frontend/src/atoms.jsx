@@ -16,6 +16,39 @@ const fmtPct = (n, dp = 2) => {
 };
 const toCNY = (amount, ccy) => amount * (FX[ccy] || 1);
 
+// === Privacy mask ==========================================================
+// Global toggle so we can hide sensitive totals when demoing the app.
+// Components wrap their value in <Private>...</Private>; when masked, every
+// digit in the rendered tree is replaced with a bullet, preserving currency
+// symbols / decimals / M·K suffixes so the layout doesn't jump.
+const PRIVACY = { masked: false, subs: new Set() };
+const setPrivacyMasked = (v) => {
+  const next = !!v;
+  if (PRIVACY.masked === next) return;
+  PRIVACY.masked = next;
+  PRIVACY.subs.forEach(fn => fn(next));
+};
+const usePrivacyMasked = () => {
+  const [m, setM] = React.useState(PRIVACY.masked);
+  React.useEffect(() => { PRIVACY.subs.add(setM); return () => PRIVACY.subs.delete(setM); }, []);
+  return m;
+};
+const _maskDigits = (node) => {
+  if (node == null || typeof node === "boolean") return node;
+  if (typeof node === "string" || typeof node === "number") return String(node).replace(/\d/g, "•");
+  if (Array.isArray(node)) return node.map((c, i) => {
+    const m = _maskDigits(c);
+    // React requires keys on array children that are elements; inject one if missing.
+    return React.isValidElement(m) && m.key == null ? React.cloneElement(m, { key: i }) : m;
+  });
+  if (React.isValidElement(node)) return React.cloneElement(node, {}, _maskDigits(node.props.children));
+  return node;
+};
+const Private = ({ children }) => {
+  const masked = usePrivacyMasked();
+  return masked ? <>{_maskDigits(children)}</> : <>{children}</>;
+};
+
 // === Market dot ============================================================
 const MarketDot = ({ market, size = 8 }) => {
   const c = { US: "var(--us)", HK: "var(--hk)", CN: "var(--cn)", CA: "#C8531C" }[market] || "#999";
@@ -329,4 +362,5 @@ Object.assign(window, {
   fmtNum, fmtMoney, fmtPct, toCNY,
   MarketDot, MarketLabel, Badge, Button, Card, SectionHeader, Tabs,
   Input, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal,
+  PRIVACY, setPrivacyMasked, usePrivacyMasked, Private,
 });
