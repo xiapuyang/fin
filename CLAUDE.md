@@ -69,6 +69,57 @@ Past bugs and fixes organized by category (`logic-errors/`, `ui-bugs/`, etc.) wi
 
 Standalone cron script. Reads enabled alerts from the DB, fetches live prices via yfinance, fires matching alerts (records `AlertFireModel`, disables the alert, sends Gmail email). Email is sent via AgentMail. Requires `AGENTMAIL_API_KEY` env var and `notify_email` in `data/settings.json`.
 
+## Common operations
+
+### Account models — which is which
+
+Two distinct account tables exist; pick the right one:
+
+- `accounts` (`fin/models/account.py`) — flat list tied to **holdings / transactions** (broker / wallet accounts). Has `currency`, `cutoff_date`, `symbol_markets`, and `balance_account_id` / `balance_sub_account_id` pointers into the balance hierarchy.
+- `balance_accounts` (`fin/models/balance_account.py`) — self-referencing **parent/child hierarchy** for the balance sheet. No `currency` column (currency lives on `balance_items` per snapshot).
+
+When the user says "add account" without context, they usually mean the **balance sheet hierarchy** (`balance_accounts`).
+
+### Add balance accounts (parent + sub) via DB
+
+Use the repository directly — fastest, no server required. The frontend reads from `/api/balance/accounts` on next page load.
+
+```python
+uv run python -c "
+from fin.database import SessionLocal
+from fin.repositories.balance_account_sqlite import BalanceAccountSQLiteRepository
+from fin.schemas.balance_account import BalanceAccountCreate
+from fin.models.user import MOCK_USER_ID
+
+db = SessionLocal()
+repo = BalanceAccountSQLiteRepository(db)
+
+# parent → list of sub-account names
+PLAN = {
+    'WealthSimple': ['现金'],
+    'Simplii':      ['现金'],
+}
+existing = {a.name for a in repo.get_all(MOCK_USER_ID) if a.parent_id is None}
+for parent_name, subs in PLAN.items():
+    if parent_name in existing:
+        print(f'skip: {parent_name}'); continue
+    p = repo.create(BalanceAccountCreate(name=parent_name), MOCK_USER_ID)
+    for sub in subs:
+        repo.create(BalanceAccountCreate(name=sub, parent_id=p.id), MOCK_USER_ID)
+    print(f'+ {p.name} ({len(subs)} subs)')
+"
+```
+
+Naming conventions in the existing hierarchy (mixed — pick what matches the parent's style):
+
+- **Currency labels**: `人民币`, `加元`, `美元`, `港币` — common for bank accounts holding multiple currencies (招商银行, 汇丰银行).
+- **Product types**: `Checking`, `Savings`, `GIC`, `股票账户`, `信用卡分期消费` — used when the bank/broker offers distinct product lines.
+- **Generic**: `现金`, `零钱` — used for single-purpose wallets.
+
+### Add a brokerage / wallet account (`accounts` table)
+
+Use the holdings router's `POST /api/accounts` endpoint (or `AccountSQLiteRepository` directly). Required: `name`. Common: `currency` (defaults to `CNY`), `note`, `balance_account_id` to link this broker into the balance hierarchy.
+
 ## Color convention
 
 The UI uses **Chinese market convention**: red (`--up`) = price rising, green (`--down`) = price falling. This is intentional and opposite to Western convention — do not change it.
