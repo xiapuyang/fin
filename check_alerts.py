@@ -221,7 +221,9 @@ def main() -> None:
             fired.append((alert, price, change_pct))
 
             try:
-                fire_repo.create(alert.id, price, change_pct)
+                fire_repo.create(
+                    alert.id, price, change_pct, alert.condition, alert.value
+                )
                 alert_repo.disable(alert.id)
                 logger.info("Alert %s disabled after fire", alert.id)
             except Exception:

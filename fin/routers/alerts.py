@@ -223,8 +223,12 @@ def get_history(limit: int = 50, db: Session = Depends(get_db)):
             time=f.fired_at.strftime("%Y-%m-%d %H:%M"),
             code=f.alert.symbol if f.alert else "",
             name=f.alert.name if f.alert else "",
-            cond=f.alert.condition if f.alert else "",
-            threshold=f.alert.value if f.alert else 0.0,
+            cond=f.condition
+            if f.condition is not None
+            else (f.alert.condition if f.alert else ""),
+            threshold=f.value
+            if f.value is not None
+            else (f.alert.value if f.alert else 0.0),
             actual=f.price,
             change_pct=f.change_pct,
         )
