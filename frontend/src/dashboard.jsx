@@ -38,6 +38,7 @@ const MARKET_HOURS = (now = new Date()) => {
 const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
 
 const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", currency = "CNY" }) => {
+  usePrivacyMasked(); // re-render on toggle so chart Y-labels refresh
   const [now, setNow] = React.useState(new Date());
 
   React.useEffect(() => {
@@ -48,6 +49,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
   const curSym = { CNY: "¥", USD: "$", HKD: "HK$", CAD: "C$" }[currency] || "¥";
   const toCur = (cnyVal) => cnyVal / (FX[currency] || 1);
   const fmtM = (cnyVal) => {
+    if (PRIVACY.masked) return `${curSym}•••`;
     const v = toCur(cnyVal);
     return Math.abs(v) >= 1e6
       ? `${curSym}${(v / 1e6).toFixed(2)}M`
@@ -320,7 +322,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
             ) : (
               <>
                 <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
-                  {curSym}{(toCur(netWorth) / 1e6).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span>
+                  <Private>{curSym}{(toCur(netWorth) / 1e6).toFixed(2)}<span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>M</span></Private>
                 </div>
                 <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
                   {momPct != null
@@ -337,6 +339,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
                 data={netWorthSeries} width={380} height={120}
                 color="var(--ink)" fillOpacity={.06} yLabels={3}
                 yFormat={v => {
+                  if (PRIVACY.masked) return "•••";
                   const cv = toCur(v);
                   if (Math.abs(cv) >= 1e6) return `${(cv / 1e6).toFixed(1)}M`;
                   if (Math.abs(cv) >= 1e3) return `${(cv / 1e3).toFixed(0)}K`;
@@ -360,7 +363,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
                 <Donut
                   data={assetBreakdown} size={110} thickness={18}
-                  centerValue={`${curSym}${(toCur(totalAssets) / 1e6).toFixed(1)}M`}
+                  centerValue={PRIVACY.masked ? `${curSym}•.•M` : `${curSym}${(toCur(totalAssets) / 1e6).toFixed(1)}M`}
                   centerSub="总资产"
                 />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
@@ -392,7 +395,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
                 <Donut
                   data={allocation} size={110} thickness={18}
-                  centerValue={`${curSym}${(toCur(allTotal) / 1e6).toFixed(1)}M`}
+                  centerValue={PRIVACY.masked ? `${curSym}•.•M` : `${curSym}${(toCur(allTotal) / 1e6).toFixed(1)}M`}
                   centerSub="投资组合"
                 />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
@@ -429,7 +432,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
                     {(fireProgress * 100).toFixed(1)}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>%</span>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                    of {curSym}{(toCur(fireTarget) / 1e6).toFixed(1)}M target
+                    of <Private>{curSym}{(toCur(fireTarget) / 1e6).toFixed(1)}M</Private> target
                   </div>
                 </div>
               </div>

@@ -222,7 +222,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
           <div className="mono" style={{ fontSize: 38, fontWeight: 700, marginTop: 6 }}>
-            {symFor(currency)}{fmtNum(toDisplay(netWorth, "CNY", currency), 0)}
+            <Private>{symFor(currency)}{fmtNum(toDisplay(netWorth, "CNY", currency), 0)}</Private>
           </div>
           {prevSnap && (
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
@@ -237,14 +237,14 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL ASSETS · 资产</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: "var(--down)" }}>
-            +{symFor(currency)}{fmtNum(toDisplay(totalAssets, "CNY", currency), 0)}
+            <Private>+{symFor(currency)}{fmtNum(toDisplay(totalAssets, "CNY", currency), 0)}</Private>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>{assetItems.length} 项 · {assetCats.length} 类</div>
         </Card>
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL LIABILITIES · 负债</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: "var(--up)" }}>
-            −{symFor(currency)}{fmtNum(toDisplay(totalLiabilities, "CNY", currency), 0)}
+            <Private>−{symFor(currency)}{fmtNum(toDisplay(totalLiabilities, "CNY", currency), 0)}</Private>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
             {items.filter(i=>i.side==="liability").length} 项 · 负债率 {totalAssets ? (totalLiabilities/totalAssets*100).toFixed(0) : 0}%
@@ -253,7 +253,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>LIQUIDITY · 流动性</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6 }}>
-            {symFor(currency)}{fmtNum(toDisplay(liquidAssets, "CNY", currency), 0)}
+            <Private>{symFor(currency)}{fmtNum(toDisplay(liquidAssets, "CNY", currency), 0)}</Private>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
             现金+理财+投资 · {totalAssets ? (liquidAssets/totalAssets*100).toFixed(0) : 0}% of assets
@@ -489,7 +489,7 @@ const CatBreakdownCard = ({ title, cats, total, currency }) => (
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 500 }}>{c.label}</div>
               <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                {symFor(currency)}{fmtNum(toDisplay(c.value,"CNY",currency),0)} · {pct.toFixed(0)}%
+                <Private>{symFor(currency)}{fmtNum(toDisplay(c.value,"CNY",currency),0)}</Private> · {pct.toFixed(0)}%
               </div>
             </div>
           </div>
@@ -615,7 +615,7 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }}/>
                 <span style={{ fontSize: 12, fontWeight: isSel ? 700 : 500, flex: 1 }}>{r.name}</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                  {symFor(currency)}{fmtNum(toDisplay(r.total,"CNY",currency),0)}
+                  <Private>{symFor(currency)}{fmtNum(toDisplay(r.total,"CNY",currency),0)}</Private>
                 </span>
                 <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 26, textAlign: "right" }}>
                   {pct.toFixed(0)}%
@@ -641,7 +641,7 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
                     <span style={{ width: 7, height: 7, borderRadius: 2, background: selected.subColors[i], flexShrink: 0 }}/>
                     <span style={{ fontSize: 11.5, color: "var(--ink-2)", flex: 1 }}>{subName}</span>
                     <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-                      {symFor(currency)}{fmtNum(toDisplay(subAmt,"CNY",currency),0)}
+                      <Private>{symFor(currency)}{fmtNum(toDisplay(subAmt,"CNY",currency),0)}</Private>
                     </span>
                     <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", width: 28, textAlign: "right" }}>
                       {subPct.toFixed(0)}%
@@ -687,10 +687,10 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete, onCopy }
       </span>
       <span><Badge tone={it.side === "asset" ? "down" : "up"} size="sm">{it.side === "asset" ? "资产" : "负债"}</Badge></span>
       <span className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
-        {fmtMoney(it.amount, it.currency, 2)}
+        <Private>{fmtMoney(it.amount, it.currency, 2)}</Private>
       </span>
       <span className="mono" style={{ textAlign: "right", color: currency === "CNY" ? "var(--ink-3)" : "var(--ink)" }}>
-        {currency !== it.currency ? `${symFor(currency)}${fmtNum(dispAmt, 0)}` : <span style={{ color: "var(--ink-4)" }}>—</span>}
+        {currency !== it.currency ? <Private>{symFor(currency)}{fmtNum(dispAmt, 0)}</Private> : <span style={{ color: "var(--ink-4)" }}>—</span>}
       </span>
       <span style={{ color: "var(--ink-3)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.note || "—"}</span>
       <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
@@ -705,6 +705,7 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete, onCopy }
 // ── Net worth trend ───────────────────────────────────────────────────────────
 
 const NetWorthTrend = ({ series, highlightId }) => {
+  usePrivacyMasked(); // re-render so chart labels refresh on toggle
   const W = 380, padX = 12, padTop = 20, padBottom = 18, chartH = 70;
   const H = padTop + chartH + padBottom;
   const nets = series.map(s => s.net);
@@ -718,6 +719,7 @@ const NetWorthTrend = ({ series, highlightId }) => {
   const fill = netPath + ` L ${x(n-1).toFixed(1)},${y(0).toFixed(1)} L ${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
   const hi = series.findIndex(s => s.id === highlightId);
   const fmtVal = (v) => {
+    if (PRIVACY.masked) return "•••";
     const abs = Math.abs(v);
     if (abs >= 1e6) return (v / 1e6).toFixed(2) + "M";
     if (abs >= 1e3) return (v / 1e3).toFixed(0) + "K";
@@ -800,10 +802,10 @@ const HistoryModal = ({ item, allItems, snapshots, currency, onClose }) => {
                 </td>
                 <td style={{ padding: "8px 8px", borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>{h.snap.label}</td>
                 <td className="mono" style={{ textAlign: "right", padding: "8px 0", fontWeight: 600, borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>
-                  {fmtMoney(h.amount, h.currency, 0)}
+                  <Private>{fmtMoney(h.amount, h.currency, 0)}</Private>
                 </td>
                 <td className="mono" style={{ textAlign: "right", padding: "8px 0", color: "var(--ink-3)", borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>
-                  {symFor(currency)}{fmtNum(toDisplay(h.amount, h.currency, currency), 0)}
+                  <Private>{symFor(currency)}{fmtNum(toDisplay(h.amount, h.currency, currency), 0)}</Private>
                 </td>
               </tr>
             ))}
