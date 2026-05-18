@@ -187,14 +187,18 @@ def _backfill_alert_fire_snapshot(db: "Session") -> None:
         text(
             "UPDATE alert_fires SET condition = ("
             "  SELECT condition FROM alerts WHERE alerts.id = alert_fires.alert_id"
-            ") WHERE condition IS NULL"
+            ") WHERE condition IS NULL AND EXISTS ("
+            "  SELECT 1 FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ")"
         )
     )
     db.execute(
         text(
             "UPDATE alert_fires SET value = ("
             "  SELECT value FROM alerts WHERE alerts.id = alert_fires.alert_id"
-            ") WHERE value IS NULL"
+            ") WHERE value IS NULL AND EXISTS ("
+            "  SELECT 1 FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ")"
         )
     )
     db.commit()
