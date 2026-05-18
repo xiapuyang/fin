@@ -3,7 +3,7 @@
 Uses exchange_calendars (authoritative holiday + session data) rather than
 yfinance market_state, which is unreliable and a side-effect of price fetching.
 
-US extended-hours windows (PRE/POST) are not exchange-defined; the offsets
+US/CA extended-hours windows (PRE/POST) are not exchange-defined; the offsets
 below match standard brokerage extended-hours windows.
 """
 
@@ -35,13 +35,14 @@ def _get_calendars() -> dict:
             "US": xcals.get_calendar("XNYS"),
             "HK": xcals.get_calendar("XHKG"),
             "CN": xcals.get_calendar("XSHG"),
+            "CA": xcals.get_calendar("XTSE"),
         }
     return _CALENDARS
 
 
-def _us_state(now: pd.Timestamp) -> str:
-    """Return US market state (CLOSED/PRE/REGULAR/POST) for the given UTC timestamp."""
-    cal = _get_calendars()["US"]
+def _et_state(market: str, now: pd.Timestamp) -> str:
+    """Return ET-style market state (CLOSED/PRE/REGULAR/POST) for an Eastern Time exchange."""
+    cal = _get_calendars()[market]
     try:
         if not cal.is_session(now.date()):
             return "CLOSED"
@@ -73,16 +74,21 @@ def compute_and_write() -> None:
     """Compute current market states and write them atomically to MARKET_STATE_PATH."""
     now = pd.Timestamp.now(tz="UTC")
     states = {
-        "US": _us_state(now),
+        "US": _et_state("US", now),
         "HK": _simple_state("HK", now),
         "CN": _simple_state("CN", now),
+        "CA": _et_state("CA", now),
         "updated_at": now.isoformat(),
     }
     tmp = MARKET_STATE_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(states))
     tmp.replace(MARKET_STATE_PATH)
     logger.info(
-        "market states: US=%s HK=%s CN=%s", states["US"], states["HK"], states["CN"]
+        "market states: US=%s HK=%s CN=%s CA=%s",
+        states["US"],
+        states["HK"],
+        states["CN"],
+        states["CA"],
     )
 
 
