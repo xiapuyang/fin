@@ -25,6 +25,7 @@ _DEFAULTS = {
     "fire_mc_sigma": 15,
     "fire_life_expectancy": 80,
     "currency": "CNY",
+    "privacy_mask": False,
 }
 
 
