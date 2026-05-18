@@ -76,7 +76,7 @@ def test_get_quote_returns_none_when_no_data_and_live_fails(db):
 
 
 def test_get_quote_reads_from_db_when_fresh(db):
-    _seed_stock(db, "AAPL", price=150.0, age_seconds=60)
+    _seed_stock(db, "AAPL", price=150.0, age_seconds=10)
     provider = _mock_provider()
     result = QuoteService(db, [provider]).get_quote("AAPL")
     provider.fetch_live.assert_not_called()
@@ -107,14 +107,14 @@ def test_get_quote_falls_back_to_stale_db_when_live_fails(db):
 
 
 def test_get_quote_returns_change_pct(db):
-    _seed_stock(db, "AAPL", price=150.0, prev_close=100.0, age_seconds=60)
+    _seed_stock(db, "AAPL", price=150.0, prev_close=100.0, age_seconds=10)
     provider = _mock_provider()
     result = QuoteService(db, [provider]).get_quote("AAPL")
     assert result["change_pct"] == pytest.approx(50.0)
 
 
 def test_get_quote_normalizes_symbol(db):
-    _seed_stock(db, "^GSPC", price=5000.0, age_seconds=60)
+    _seed_stock(db, "^GSPC", price=5000.0, age_seconds=10)
     provider = _mock_provider()
     result = QuoteService(db, [provider]).get_quote(".SPX")
     assert result["price"] == 5000.0
