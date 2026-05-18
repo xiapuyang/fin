@@ -82,6 +82,10 @@ const Icon = ({ name, size = 16, className = "", style = {} }) => {
       <svg {...common}><circle cx="12" cy="12" r="9"/></svg>);
     case "dot": return (
       <svg width={s} height={s} viewBox="0 0 24 24" className={className} style={style}><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>);
+    case "eye": return (
+      <svg {...common}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>);
+    case "eye-off": return (
+      <svg {...common}><path d="M3 3l18 18"/><path d="M10.6 6.1A10 10 0 0 1 12 6c6.5 0 10 7 10 7a18 18 0 0 1-3.1 3.9"/><path d="M6.1 6.1C3.3 7.9 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.5-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>);
     case "logo": return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" className={className} style={style}>
         <rect x="2" y="2" width="20" height="20" rx="5" fill="#14161B"/>

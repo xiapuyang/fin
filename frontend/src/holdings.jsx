@@ -1,6 +1,9 @@
 /* Module 02 — Holdings: positions + transactions + income, per-account */
 
 const ccySymbol = (ccy) => CURRENCY_SYMBOL[ccy] || "¥";
+// Mask digits in a precomputed string when global privacy is on. Used for
+// prop strings (e.g. StatTile.value) that JSX wrapping can't reach.
+const maskDigits = (s) => PRIVACY.masked ? String(s).replace(/\d/g, "•") : s;
 
 // ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
 // cashFlows: [{date:"YYYY-MM-DD", amount:float}]
@@ -160,6 +163,7 @@ const computeAccountXIRR = (incomeItems, positions) => {
 
 // ── Holdings root component ───────────────────────────────────────────────────
 const Holdings = ({ currency = "CNY", birthDate = "" }) => {
+  usePrivacyMasked(); // re-render whole module on privacy toggle so totals refresh
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
   const [viewMode, setViewMode] = React.useState("portfolio");
@@ -419,16 +423,16 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
-            {pricesReady ? `${summarySym}${fmtNum(allTotal/summaryFx, 0)}` : "—"}
+            {pricesReady ? <Private>{summarySym}{fmtNum(allTotal/summaryFx, 0)}</Private> : "—"}
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
             <div>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${summarySym}${fmtNum(allMarketValue/summaryFx, 2)}` : "—"}</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allMarketValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${summarySym}${fmtNum(allCashValue/summaryFx, 2)}` : "—"}</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allCashValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
@@ -436,7 +440,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
                 ? <><ChangeNum value={allTotal ? allDayPnl/allTotal*100 : 0} size="sm"/>
                     {allDayPnl !== 0 && (
                       <span className="mono" style={{ fontSize: 11, color: allDayPnl >= 0 ? "var(--up)" : "var(--down)" }}>
-                        {allDayPnl >= 0 ? "+" : "−"}{summarySym}{fmtNum(Math.abs(allDayPnl/summaryFx), 0)}
+                        {allDayPnl >= 0 ? "+" : "−"}<Private>{summarySym}{fmtNum(Math.abs(allDayPnl/summaryFx), 0)}</Private>
                       </span>
                     )}</>
                 : <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>—</span>
@@ -454,8 +458,8 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
             </div>
           )}
         </Card>
-        <StatTile label="UNREALIZED P&L · 未实现盈亏" value={pricesReady ? `${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}` : "—"} tone={!pricesReady ? "neutral" : allUnrealized >= 0 ? "up" : "down"} pct={pricesReady && allCost ? (allUnrealized/allCost)*100 : null} sub={pricesReady ? `总成本 ${summarySym}${fmtNum(allCost/summaryFx, 0)}（持仓均价 × 股数）` : "加载价格中…"}/>
-        <StatTile label="REALIZED + 收入 · 已实现" value={`+${summarySym}${fmtNum((allRealized+allIncomeTotal)/summaryFx, 0)}`} tone="up" sub={`已实现 ${summarySym}${fmtNum(allRealized/summaryFx, 0)} · 收入 ${summarySym}${fmtNum(allIncomeTotal/summaryFx, 0)}`}/>
+        <StatTile label="UNREALIZED P&L · 未实现盈亏" value={pricesReady ? maskDigits(`${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}`) : "—"} tone={!pricesReady ? "neutral" : allUnrealized >= 0 ? "up" : "down"} pct={pricesReady && allCost ? (allUnrealized/allCost)*100 : null} sub={pricesReady ? maskDigits(`总成本 ${summarySym}${fmtNum(allCost/summaryFx, 0)}（持仓均价 × 股数）`) : "加载价格中…"}/>
+        <StatTile label="REALIZED + 收入 · 已实现" value={maskDigits(`+${summarySym}${fmtNum((allRealized+allIncomeTotal)/summaryFx, 0)}`)} tone="up" sub={maskDigits(`已实现 ${summarySym}${fmtNum(allRealized/summaryFx, 0)} · 收入 ${summarySym}${fmtNum(allIncomeTotal/summaryFx, 0)}`)}/>
         {!pricesReady
           ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
           : allXIRR != null
@@ -507,16 +511,16 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
                 ACCOUNT · {selectedAccount.name}
               </div>
               <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
-                {pricesReady ? `${sym}${fmtNum(acctTotal, 0)}` : "—"}
+                {pricesReady ? <Private>{sym}{fmtNum(acctTotal, 0)}</Private> : "—"}
               </div>
               <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${sym}${fmtNum(acctMarketValue, 2)}` : "—"}</span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctMarketValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? `${sym}${fmtNum(acctCashValue, 2)}` : "—"}</span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctCashValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
@@ -524,7 +528,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
                     ? <><ChangeNum value={acctTotal ? acctDayPnl / acctTotal * 100 : 0} size="sm"/>
                         {acctDayPnl !== 0 && (
                           <span className="mono" style={{ fontSize: 11, color: acctDayPnl >= 0 ? "var(--up)" : "var(--down)" }}>
-                            {acctDayPnl >= 0 ? "+" : "−"}{sym}{fmtNum(Math.abs(acctDayPnl), 0)}
+                            {acctDayPnl >= 0 ? "+" : "−"}<Private>{sym}{fmtNum(Math.abs(acctDayPnl), 0)}</Private>
                           </span>
                         )}</>
                     : <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>—</span>
@@ -548,12 +552,12 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
             </Card>
             <StatTile
               label="UNREALIZED P&L · 持有收益"
-              value={pricesReady ? `${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}` : "—"}
+              value={pricesReady ? maskDigits(`${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}`) : "—"}
               tone={!pricesReady ? "neutral" : acctUnrealized >= 0 ? "up" : "down"}
               pct={hpr}
-              sub={pricesReady ? `持有收益率 ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · 净转入 ${sym}${fmtNum(acctDeposits, 0)}` : "加载价格中…"}
+              sub={pricesReady ? `持有收益率 ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · 净转入 ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : "加载价格中…"}
             />
-            <StatTile label="REALIZED + 收入 · 已实现" value={`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`} tone="up" sub={`已实现 ${sym}${fmtNum(acctRealized, 0)} · 收入 ${sym}${fmtNum(acctIncomeTotal, 0)}`}/>
+            <StatTile label="REALIZED + 收入 · 已实现" value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(`已实现 ${sym}${fmtNum(acctRealized, 0)} · 收入 ${sym}${fmtNum(acctIncomeTotal, 0)}`)}/>
             {!pricesReady
               ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
               : acctXIRR != null
@@ -673,13 +677,13 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
               <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
-              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{sym}{fmtNum(p.value / acctFx, 0)}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}><Private>{sym}{fmtNum(p.value / acctFx, 0)}</Private></span>
               <div style={{textAlign:"right"}}>
                 {cash ? "—" : (
                   <>
                     <ChangeNum value={p.dayChange} size="sm"/>
                     <div className="mono" style={{ fontSize: 10.5, color: p.dayChange >= 0 ? "var(--up)" : "var(--down)", marginTop: 1 }}>
-                      {p.dayChange >= 0 ? "+" : "−"}{sym}{fmtNum(Math.abs(p.value / acctFx * p.dayChange / 100), 0)}
+                      {p.dayChange >= 0 ? "+" : "−"}<Private>{sym}{fmtNum(Math.abs(p.value / acctFx * p.dayChange / 100), 0)}</Private>
                     </div>
                   </>
                 )}
@@ -694,7 +698,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                   <>
                     <ChangeNum value={p.pnlPct} size="sm"/>
                     <div className="mono" style={{ fontSize: 10.5, color: p.pnl >= 0 ? "var(--up)" : "var(--down)", marginTop: 1 }}>
-                      {p.pnl >= 0 ? "+" : "−"}{sym}{fmtNum(Math.abs(p.pnl / acctFx), 0)}
+                      {p.pnl >= 0 ? "+" : "−"}<Private>{sym}{fmtNum(Math.abs(p.pnl / acctFx), 0)}</Private>
                     </div>
                   </>
                 )}
@@ -855,7 +859,7 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)" }}>{catLabels[cat] || cat}</span>
               </div>
               <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "var(--up)" }}>
-                {cat === "deposit" ? "-" : "+"}{sym}{fmtNum(v, 0)}
+                {cat === "deposit" ? "-" : "+"}<Private>{sym}{fmtNum(v, 0)}</Private>
               </div>
               <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>累计 {items.filter(i => i.category === cat).length} 笔</div>
             </Card>
@@ -866,7 +870,7 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>收入 & 转账</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>分红 / 利息 / 期权权利金 / 账户转入转出 — 收入合计 {sym}{fmtNum(total, 0)}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>分红 / 利息 / 期权权利金 / 账户转入转出 — 收入合计 <Private>{sym}{fmtNum(total, 0)}</Private></div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
@@ -1138,7 +1142,7 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
                 <Card padding={14}>
                   <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
+                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}><Private>{sym}{fmtNum(totalEstAnnual, 0)}</Private></span>
                     <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
                   </div>
                 </Card>
@@ -1151,7 +1155,7 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
                 <Card padding={14} style={{ gridColumn: "1 / -1" }}>
                   <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}>{sym}{fmtNum(totalEstAnnual, 0)}</span>
+                    <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}><Private>{sym}{fmtNum(totalEstAnnual, 0)}</Private></span>
                     <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
                   </div>
                 </Card>
@@ -1568,7 +1572,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                     <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
                   </button>
                   <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
-                    {dispSym}{fmtNum(b.current / dispFx / 1000, 1)}k
+                    <Private>{dispSym}{fmtNum(b.current / dispFx / 1000, 1)}k</Private>
                     <span style={{ color: "var(--ink-5)", margin: "0 5px" }}>·</span>
                     <span style={{ color: b.drift > 0 ? "var(--up)" : b.drift < 0 ? "var(--down)" : "var(--ink-3)", fontWeight: 600 }}>{b.curPct.toFixed(1)}%</span>
                     <span style={{ color: "var(--ink-4)" }}> → {b.pct}%</span>
@@ -1601,7 +1605,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                     {fires && " ⚠"}
                   </span>
                   <span className="mono" style={{ color: "var(--ink-4)" }}>
-                    建议 {b.delta >= 0 ? "买入" : "卖出"} {dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k
+                    建议 {b.delta >= 0 ? "买入" : "卖出"} <Private>{dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k</Private>
                   </span>
                 </div>
 
@@ -1621,7 +1625,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                           <div key={j} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "3px 12px", fontSize: 11.5, padding: "3px 0", borderTop: j > 0 ? "1px solid var(--line)" : "none", alignItems: "center" }}>
                             <span style={{ fontWeight: 600, color: "var(--ink-2)" }}>{p.code}</span>
                             <span style={{ color: "var(--ink-4)", fontSize: 11 }}>{p.account}</span>
-                            <span className="mono" style={{ color: "var(--ink-2)", textAlign: "right" }}>{dispSym}{fmtNum(p.value / dispFx / 1000, 1)}k</span>
+                            <span className="mono" style={{ color: "var(--ink-2)", textAlign: "right" }}><Private>{dispSym}{fmtNum(p.value / dispFx / 1000, 1)}k</Private></span>
                             <span className="mono" style={{ color: "var(--ink-4)", textAlign: "right" }}>{totalCNY ? (p.value / totalCNY * 100).toFixed(1) : 0}%</span>
                           </div>
                         ))}

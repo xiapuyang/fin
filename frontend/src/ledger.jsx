@@ -176,6 +176,7 @@ function nextPaymentDate(dateStr, recurringType) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
+  usePrivacyMasked(); // re-render summary tiles on privacy toggle
   const currentYear = new Date().getFullYear();
 
   const [years, setYears] = React.useState([]);
@@ -425,11 +426,11 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
           : summary.expense / 12;
         return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
-            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={dispStat(summary.income, 0, "+")}                                       tone="up" />
-            <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={dispStat(summary.expense, 0, "−")}                                      tone="up" />
-            <LedgerTile label="净结余 NET"                                        value={dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone="up" />
-            <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={dispStat(avgVal)}                                                     tone="neutral" />
-            <LedgerTile label="最大单笔 MAX TXN"                                  value={dispStat(summary.max_expense)}                                        tone="neutral"
+            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={PRIVACY.masked ? "•••" : dispStat(summary.income, 0, "+")}                                       tone="up" />
+            <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={PRIVACY.masked ? "•••" : dispStat(summary.expense, 0, "−")}                                      tone="up" />
+            <LedgerTile label="净结余 NET"                                        value={PRIVACY.masked ? "•••" : dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone="up" />
+            <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={PRIVACY.masked ? "•••" : dispStat(avgVal)}                                                     tone="neutral" />
+            <LedgerTile label="最大单笔 MAX TXN"                                  value={PRIVACY.masked ? "•••" : dispStat(summary.max_expense)}                                        tone="neutral"
               sub={summary.max_expense_date ? `${summary.max_expense_date} · ${summary.max_expense_name || ""}` : undefined}
             />
           </div>
