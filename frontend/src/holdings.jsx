@@ -31,7 +31,7 @@ const xirr = (cashFlows) => {
 };
 
 // ── Compute positions from holdings + transactions ────────────────────────────
-const computePositions = (holdings, transactions, prices = {}) => {
+const computePositions = (holdings, transactions, prices = {}, accounts = []) => {
   const today = new Date().toISOString().slice(0, 10);
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -48,6 +48,25 @@ const computePositions = (holdings, transactions, prices = {}) => {
              market: SYMBOL_INDEX[code]?.market || null };
   });
   const allHoldings = virtualHoldings.length ? [...holdings, ...virtualHoldings] : holdings;
+
+  // Per-account cash analysis for auto-FX deduction (IBKR-style).
+  // A cross-currency trade is attributed to ONE cash position to avoid double-counting:
+  // prefer cash matching the account's base currency; otherwise the alphabetically
+  // first cash currency in the account. Conversion goes through CNY pivot via FX.
+  const accountBaseCcy = {};
+  accounts.forEach(a => { if (a.currency) accountBaseCcy[a.name] = a.currency; });
+  const cashByAccount = {};
+  allHoldings.filter(h => h.code === "CASH").forEach(h => {
+    if (!cashByAccount[h.account]) cashByAccount[h.account] = new Set();
+    cashByAccount[h.account].add(h.currency);
+  });
+  const crossCurrencySink = (account) => {
+    const present = cashByAccount[account];
+    if (!present || present.size === 0) return null;
+    const base = accountBaseCcy[account];
+    if (base && present.has(base)) return base;
+    return [...present].sort()[0];
+  };
 
   return allHoldings.map(h => {
     const dbPrice = prices[h.code] || {};
@@ -67,21 +86,34 @@ const computePositions = (holdings, transactions, prices = {}) => {
     let dShares = 0, dCost = 0, realized = 0;
     const relevantTxns = isCash ? [] : sorted.filter(t => t.code === h.code && (!cutoff || t.date > cutoff));
     if (isCash) {
-      // transactions in the same account+currency affect cash balance
+      // Same-currency trades hit this cash directly. Cross-currency trades hit it only
+      // if no matching-currency cash exists in the account AND this cash is the chosen
+      // FX sink — converted via the CNY pivot to avoid double-deducting from siblings.
+      const sink = crossCurrencySink(h.account);
+      const cashPresent = cashByAccount[h.account] || new Set();
       sorted
-        .filter(t => t.account === h.account && t.currency === h.currency && (!cutoff || t.date > cutoff))
+        .filter(t => t.account === h.account && (!cutoff || t.date > cutoff))
         .forEach(t => {
-          if (t.side === "buy") dShares -= t.shares * t.price;
-          else                  dShares += t.shares * t.price;
+          const sameCcy = t.currency === h.currency;
+          const handlesCross = !cashPresent.has(t.currency) && h.currency === sink;
+          if (!sameCcy && !handlesCross) return;
+          let amt = t.shares * t.price;
+          if (!sameCcy) amt = amt * (FX[t.currency] || 1) / (FX[h.currency] || 1);
+          if (t.side === "buy") dShares -= amt;
+          else                  dShares += amt;
         });
     } else {
+      const snapShares = h.shares || 0;
+      const snapCost = (h.avg_cost || 0) * snapShares;
       relevantTxns.forEach(t => {
         if (t.side === "buy") {
           dCost += t.shares * t.price;
           dShares += t.shares;
         } else {
-          // When no post-snapshot buys exist yet, fall back to snapshot avg_cost as basis
-          const avg = dShares ? dCost / dShares : (h.avg_cost || 0);
+          // Weighted average over snapshot lot + post-snapshot buys at the time of the sell
+          const liveShares = snapShares + dShares;
+          const liveCost = snapCost + dCost;
+          const avg = liveShares > 0 ? liveCost / liveShares : (h.avg_cost || 0);
           realized += (t.price - avg) * t.shares;
           dCost -= avg * t.shares;
           dShares -= t.shares;
@@ -97,7 +129,10 @@ const computePositions = (holdings, transactions, prices = {}) => {
     const price = isCash ? (h.avg_cost || 1) : (sym.price || 0);
     const prevClose = isCash ? price : (sym.prevClose || 0);
     const value = price * totalShares * fx;
-    const cost = avgCost * totalShares * fx;
+    // Cash carries no unrealized P&L. Cross-currency trades reduce dShares without
+    // a matching dCost adjustment, which would otherwise leave a phantom loss on
+    // the funding cash position.
+    const cost = isCash ? value : avgCost * totalShares * fx;
     const pnl = value - cost;
     const pnlPct = cost ? (pnl / cost) * 100 : 0;
     const dayChange = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
@@ -153,16 +188,46 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         if (accts.length > 0) setSelectedAccountId(accts[0].id);
         setHoldings(h); setTransactions(t); setIncome(i);
         setLoading(false);
-        // Fetch prices in background — stat tiles show "—" until prices arrive
-        const codes = [...new Set([...h, ...t].map(r => r.code).filter(Boolean))];
-        if (codes.length > 0) {
-          apiGetPrices(codes).then(p => { setPrices(p); setPricesReady(true); }).catch(() => setPricesReady(true));
-        } else {
-          setPricesReady(true);
-        }
       })
       .catch(err => { console.error(err); setLoading(false); setPricesReady(true); });
   }, []);
+
+  // Price polling — fetch on initial load and every 60s while page is open.
+  // Re-runs when the symbol set changes. Includes only codes with positive net
+  // shares: snapshot shares + post-snapshot transactions per (account, code).
+  // Excludes fully-exited tickers regardless of whether they're in holdings or
+  // only in transactions.
+  const codesKey = (() => {
+    const net = {};
+    const cutoff = {};
+    holdings.forEach(h => {
+      if (!h.code || h.code === "CASH") return;
+      const key = `${h.account}|${h.code}`;
+      net[key] = (net[key] || 0) + (h.shares || 0);
+      if (h.as_of_date && (!cutoff[key] || h.as_of_date > cutoff[key])) cutoff[key] = h.as_of_date;
+    });
+    transactions.forEach(t => {
+      if (!t.code || t.code === "CASH") return;
+      const key = `${t.account}|${t.code}`;
+      if (cutoff[key] && t.date <= cutoff[key]) return;
+      net[key] = (net[key] || 0) + (t.side === "buy" ? (t.shares || 0) : -(t.shares || 0));
+    });
+    const codes = new Set();
+    Object.entries(net).forEach(([key, n]) => { if (n > 0) codes.add(key.split("|")[1]); });
+    return [...codes].sort().join(",");
+  })();
+  React.useEffect(() => {
+    if (loading) return;
+    if (!codesKey) { setPricesReady(true); return; }
+    const codes = codesKey.split(",");
+    let cancelled = false;
+    const fetchPrices = () => apiGetPrices(codes)
+      .then(p => { if (!cancelled) { setPrices(p); setPricesReady(true); } })
+      .catch(() => { if (!cancelled) setPricesReady(true); });
+    fetchPrices();
+    const timer = setInterval(fetchPrices, 60_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [loading, codesKey]);
 
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) || null;
   const acctName = selectedAccount?.name || null;
@@ -217,7 +282,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     transactions.filter(t => !accountCutoffs[t.account] || t.date >= accountCutoffs[t.account]),
     [transactions, accountCutoffs]
   );
-  const allPositions = React.useMemo(() => computePositions(latestHoldings, txnsForAllCalc, prices), [latestHoldings, txnsForAllCalc, prices]);
+  const allPositions = React.useMemo(() => computePositions(latestHoldings, txnsForAllCalc, prices, accounts), [latestHoldings, txnsForAllCalc, prices, accounts]);
   const allTotal = allPositions.reduce((s, p) => s + p.value, 0);
   const allCost = allPositions.reduce((s, p) => s + p.cost, 0);
   const allUnrealized = allTotal - allCost;
@@ -235,7 +300,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   // Per-account view — uses snapshot-filtered holdings
   const acctCcy = selectedAccount?.currency || "CNY";
   const acctFx = FX[acctCcy] || 1; // CNY rate for converting to account native currency
-  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxnsForCalc, prices), [snapshotHoldings, acctTxnsForCalc, prices]);
+  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxnsForCalc, prices, accounts), [snapshotHoldings, acctTxnsForCalc, prices, accounts]);
   // acctTotal/cost/unrealized in account's native currency (divide out CNY FX, apply account FX)
   const acctTotal = acctPositions.reduce((s, p) => s + p.value / acctFx, 0);
   const acctCost = acctPositions.reduce((s, p) => s + p.cost / acctFx, 0);
@@ -343,7 +408,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       />
 
       {viewMode === "rebalance" && (() => {
-        const allPos = computePositions(holdings, transactions, prices);
+        const allPos = computePositions(holdings, transactions, prices, accounts);
         const allCNY = allPos.reduce((s, p) => s + p.value, 0);
         return <RebalancePanel positions={allPos} total={allCNY} currency={currency} birthDate={birthDate}/>;
       })()}
@@ -584,17 +649,17 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
       ? <Empty icon="wallet" title="暂无持仓" hint="点击「添加持仓」手动录入，或先添加交易记录"/>
       : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 80px 100px 110px 56px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 100px 100px 110px 56px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
             <span/><span>POSITION</span>
             <span style={{textAlign:"right"}}>SHARES</span><span style={{textAlign:"right"}}>AVG COST</span>
-            <span style={{textAlign:"right"}}>PRICE</span><span style={{textAlign:"right"}}>DAY</span>
-            <span style={{textAlign:"right"}}>VALUE ({acctCcy})</span><span style={{textAlign:"right"}}>未实现 P&L</span>
+            <span style={{textAlign:"right"}}>PRICE</span><span style={{textAlign:"right"}}>VALUE ({acctCcy})</span>
+            <span style={{textAlign:"right"}}>DAY CHANGE</span><span style={{textAlign:"right"}}>UNREALIZED P&L</span>
             <span/>
           </div>
           {[...positions].sort((a,b) => b.value - a.value).map((p, i, arr) => {
             const cash = p.code === "CASH";
             return (
-            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 80px 100px 110px 56px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < arr.length-1 ? "1px solid var(--line)" : "none" }}>
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 100px 100px 110px 56px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < arr.length-1 ? "1px solid var(--line)" : "none" }}>
               <MarketDot market={p.market}/>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -606,15 +671,22 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
               <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{sym}{fmtNum(p.value / acctFx, 0)}</span>
               <div style={{textAlign:"right"}}>
-                {cash ? "—" : <ChangeNum value={p.dayChange} size="sm"/>}
+                {cash ? "—" : (
+                  <>
+                    <ChangeNum value={p.dayChange} size="sm"/>
+                    <div className="mono" style={{ fontSize: 10.5, color: p.dayChange >= 0 ? "var(--up)" : "var(--down)", marginTop: 1 }}>
+                      {p.dayChange >= 0 ? "+" : "−"}{sym}{fmtNum(Math.abs(p.value / acctFx * p.dayChange / 100), 0)}
+                    </div>
+                  </>
+                )}
                 {!cash && p.afterHoursChangePct != null && (
                   <div style={{fontSize:10,color:"var(--ink-4)",marginTop:1}}>
                     盘后 <ChangeNum value={p.afterHoursChangePct} size="sm"/>
                   </div>
                 )}
               </div>
-              <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{sym}{fmtNum(p.value / acctFx, 0)}</span>
               <div style={{textAlign:"right"}}>
                 {cash ? <span style={{fontSize:12,color:"var(--ink-4)"}}>现金</span> : (
                   <>
@@ -2024,6 +2096,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
     price: editing?.price ?? "",
     currency: editing?.currency || (editing?.code ? ccyFromCode(editing.code) : null) || acctCcy || "USD",
     account: editing?.account || defaultAccount || "",
+    realized: editing?.realized ?? "",
     note: editing?.note || "",
   });
   const [err, setErr] = React.useState(null);
@@ -2041,6 +2114,8 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
     if (!form.code.trim())                            { setErr("代码不能为空"); return; }
     if (!form.shares || parseFloat(form.shares) <= 0) { setErr("股数须大于 0"); return; }
     if (form.price === "" || parseFloat(form.price) < 0) { setErr("价格不能为空"); return; }
+    const realizedStr = String(form.realized).trim();
+    if (realizedStr !== "" && Number.isNaN(parseFloat(realizedStr))) { setErr("已实现盈亏必须是数字"); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -2049,6 +2124,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
         shares: parseFloat(form.shares),
         price: parseFloat(form.price),
         account: form.account || null,
+        realized: realizedStr === "" ? null : parseFloat(realizedStr),
       };
       const saved = editing ? await apiUpdateTransaction(editing.id, payload) : await apiCreateTransaction(payload);
       onSaved(saved);
@@ -2067,6 +2143,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
         <FormRow label="股数 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
         <FormRow label="价格 *"><Input value={form.price} onChange={v => set("price", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
         <FormRow label="账户"><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
+        <FormRow label="已实现盈亏"><Input value={form.realized} onChange={v => set("realized", v)} inputMode="decimal" placeholder="（可选，卖出时填写，可为负）" suffix={form.currency}/></FormRow>
         <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
