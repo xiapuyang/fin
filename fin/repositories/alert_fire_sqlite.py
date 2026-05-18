@@ -31,6 +31,7 @@ class AlertFireSQLiteRepository(AlertFireRepository):
     def get_by_alert(self, alert_id: int) -> list[AlertFireModel]:
         return (
             self._db.query(AlertFireModel)
+            .options(selectinload(AlertFireModel.alert))
             .filter(AlertFireModel.alert_id == alert_id)
             .order_by(AlertFireModel.fired_at.desc())
             .all()

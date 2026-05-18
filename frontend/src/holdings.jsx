@@ -630,6 +630,8 @@ const StatTile = ({ label, value, sub, tone, pct }) => (
 // ── Positions table ───────────────────────────────────────────────────────────
 const priceDp = (p) => p.sym?.asset_type === "mutualfund" ? 4 : 2;
 
+const POSITIONS_GRID_COLS = "24px 1fr 70px 95px 90px 100px 100px 110px 56px";
+
 const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapshots, selectedSnapshot, onSnapshotChange, onAddHolding, onEditHolding, onDeleteHolding }) => {
   const sym = ccySymbol(acctCcy);
   return <Card padding={0}>
@@ -649,7 +651,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
       ? <Empty icon="wallet" title="暂无持仓" hint="点击「添加持仓」手动录入，或先添加交易记录"/>
       : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 100px 100px 110px 56px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
+          <div style={{ display: "grid", gridTemplateColumns: POSITIONS_GRID_COLS, gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
             <span/><span>POSITION</span>
             <span style={{textAlign:"right"}}>SHARES</span><span style={{textAlign:"right"}}>AVG COST</span>
             <span style={{textAlign:"right"}}>PRICE</span><span style={{textAlign:"right"}}>VALUE ({acctCcy})</span>
@@ -659,7 +661,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
           {[...positions].sort((a,b) => b.value - a.value).map((p, i, arr) => {
             const cash = p.code === "CASH";
             return (
-            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "24px 1fr 70px 95px 90px 100px 100px 110px 56px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < arr.length-1 ? "1px solid var(--line)" : "none" }}>
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: POSITIONS_GRID_COLS, gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < arr.length-1 ? "1px solid var(--line)" : "none" }}>
               <MarketDot market={p.market}/>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

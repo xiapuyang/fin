@@ -110,9 +110,9 @@ def _run_main_with_quote(db, quote, alert_condition="price_lte", alert_value=200
     fired_ids = []
     original_create = fire_repo.create
 
-    def track_create(alert_id, price, change_pct):
-        fired_ids.append(alert_id)
-        return original_create(alert_id, price, change_pct)
+    def track_create(*args, **kwargs):
+        fired_ids.append(args[0])
+        return original_create(*args, **kwargs)
 
     fire_repo.create = track_create
 
@@ -218,9 +218,9 @@ def test_force_flag_bypasses_market_state_gate(db):
     fired_ids = []
     original_create = fire_repo.create
 
-    def track_create(alert_id, price, change_pct):
-        fired_ids.append(alert_id)
-        return original_create(alert_id, price, change_pct)
+    def track_create(*args, **kwargs):
+        fired_ids.append(args[0])
+        return original_create(*args, **kwargs)
 
     fire_repo.create = track_create
 
