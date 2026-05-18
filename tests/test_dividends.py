@@ -33,9 +33,27 @@ _AAPL_INFO = {
     "dividendDate": 1710892800,  # 2024-03-20 UTC
     "dividendRate": 0.96,
 }
+
+# Dividend dates are computed relative to "today" at module load so the lookback
+# window in _yf_fetch_history (~2 years) never times them out.
+_TODAY = datetime.now(timezone.utc).date()
+
+
+def _days_ago(n: int) -> str:
+    return (_TODAY - timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+_AAPL_HISTORY_DATES = [
+    _days_ago(360),
+    _days_ago(270),
+    _days_ago(180),
+    _days_ago(90),
+]
+_AAPL_NEW_DATE = _days_ago(7)
+
 _AAPL_DIVIDENDS = pd.Series(
     [0.24, 0.24, 0.24, 0.24],
-    index=pd.DatetimeIndex(["2024-05-15", "2024-08-15", "2024-11-15", "2025-02-15"]),
+    index=pd.DatetimeIndex(_AAPL_HISTORY_DATES),
 )
 
 
@@ -343,9 +361,7 @@ def test_dividends_incremental_history_append(div_env):
     # Ticker now has one additional entry at the end
     updated = pd.Series(
         [0.24, 0.24, 0.24, 0.24, 0.25],
-        index=pd.DatetimeIndex(
-            ["2024-05-15", "2024-08-15", "2024-11-15", "2025-02-15", "2025-05-15"]
-        ),
+        index=pd.DatetimeIndex([*_AAPL_HISTORY_DATES, _AAPL_NEW_DATE]),
     )
     updated_ticker = _mock_ticker(info=_AAPL_INFO, dividends=updated)
     with patch("fin.routers.holdings.yf.Ticker", return_value=updated_ticker):
@@ -354,5 +370,5 @@ def test_dividends_incremental_history_append(div_env):
     # Should have 4 original + 1 new = 5, no duplicates
     assert len(second["AAPL"]["history"]) == 5
     dates = [h["date"] for h in second["AAPL"]["history"]]
-    assert "2025-05-15" in dates
-    assert dates.count("2024-05-15") == 1
+    assert _AAPL_NEW_DATE in dates
+    assert dates.count(_AAPL_HISTORY_DATES[0]) == 1

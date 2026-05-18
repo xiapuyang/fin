@@ -105,7 +105,9 @@ CREATE TABLE IF NOT EXISTS alert_fires (
     alert_id   INTEGER NOT NULL,
     fired_at   DATETIME NOT NULL,
     price      FLOAT NOT NULL,
-    change_pct FLOAT NOT NULL
+    change_pct FLOAT NOT NULL,
+    condition  VARCHAR,
+    value      FLOAT
 );
 
 -- ── stocks (price cache) ──────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ data/import/
 fin.pid
 data/market_state.json
 screenshot/
+data/*.tgz
 
 # Logs
 logs/

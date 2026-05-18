@@ -91,6 +91,7 @@ _KNOWN_TABLES = {
     "transactions",
     "accounts",
     "alerts",
+    "alert_fires",
     "stocks",
     "balance_accounts",
     "balance_snapshots",
@@ -136,6 +137,16 @@ def _migrate_columns(db: "Session") -> None:
             "sub_account_id",
             "ALTER TABLE balance_items ADD COLUMN sub_account_id INTEGER",
         ),
+        (
+            "alert_fires",
+            "condition",
+            "ALTER TABLE alert_fires ADD COLUMN condition VARCHAR",
+        ),
+        (
+            "alert_fires",
+            "value",
+            "ALTER TABLE alert_fires ADD COLUMN value FLOAT",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:
@@ -158,6 +169,39 @@ def _backfill_watchlist_user_id(db: "Session") -> None:
             {"uid": MOCK_USER_ID},
         )
         db.commit()
+
+
+def _backfill_alert_fire_snapshot(db: "Session") -> None:
+    """Backfill condition/value on pre-snapshot fires using the parent alert's current values.
+
+    Best-effort only: if the alert's threshold was edited between fire and now, the
+    backfilled value will not match the historical truth. New fires (post-migration)
+    write their own snapshot at creation time.
+    """
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(alert_fires)"))]
+    if "condition" not in cols or "value" not in cols:
+        return
+    db.execute(
+        text(
+            "UPDATE alert_fires SET condition = ("
+            "  SELECT condition FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ") WHERE condition IS NULL AND EXISTS ("
+            "  SELECT 1 FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ")"
+        )
+    )
+    db.execute(
+        text(
+            "UPDATE alert_fires SET value = ("
+            "  SELECT value FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ") WHERE value IS NULL AND EXISTS ("
+            "  SELECT 1 FROM alerts WHERE alerts.id = alert_fires.alert_id"
+            ")"
+        )
+    )
+    db.commit()
 
 
 def _migrate_ledger_schema(db: "Session") -> None:
@@ -396,6 +440,7 @@ def init_db() -> None:
         _migrate_category_ids(db)
         _backfill_recurring_subcategory(db)
         _backfill_watchlist_user_id(db)
+        _backfill_alert_fire_snapshot(db)
         _migrate_indexes(db)
         _migrate_balance_indexes(db)
     finally:

@@ -218,11 +218,12 @@ def main() -> None:
                 price,
                 change_pct,
             )
-            fired.append((alert, price, change_pct))
-
             try:
-                fire_repo.create(alert.id, price, change_pct)
+                fire_repo.create(
+                    alert.id, price, change_pct, alert.condition, alert.value
+                )
                 alert_repo.disable(alert.id)
+                fired.append((alert, price, change_pct))
                 logger.info("Alert %s disabled after fire", alert.id)
             except Exception:
                 logger.exception("Failed to record fire for alert %s", alert.id)

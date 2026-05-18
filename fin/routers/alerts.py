@@ -213,6 +213,17 @@ def reset_alert(alert_id: int, db: Session = Depends(get_db)):
     return _to_response(alert)
 
 
+def _fire_snapshot(fire: AlertFireModel, field: str, default):
+    """Return the fire's frozen snapshot for `field`, falling back to the parent alert if NULL.
+
+    Used by /history to render historical fires that pre-date the snapshot columns.
+    """
+    val = getattr(fire, field)
+    if val is not None:
+        return val
+    return getattr(fire.alert, field) if fire.alert else default
+
+
 @router.get("/history", response_model=list[HistoryResponse])
 def get_history(limit: int = 50, db: Session = Depends(get_db)):
     repo = AlertFireSQLiteRepository(db)
@@ -223,8 +234,8 @@ def get_history(limit: int = 50, db: Session = Depends(get_db)):
             time=f.fired_at.strftime("%Y-%m-%d %H:%M"),
             code=f.alert.symbol if f.alert else "",
             name=f.alert.name if f.alert else "",
-            cond=f.alert.condition if f.alert else "",
-            threshold=f.alert.value if f.alert else 0.0,
+            cond=_fire_snapshot(f, "condition", ""),
+            threshold=_fire_snapshot(f, "value", 0.0),
             actual=f.price,
             change_pct=f.change_pct,
         )
