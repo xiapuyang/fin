@@ -8,8 +8,21 @@ class AlertFireSQLiteRepository(AlertFireRepository):
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def create(self, alert_id: int, price: float, change_pct: float) -> AlertFireModel:
-        fire = AlertFireModel(alert_id=alert_id, price=price, change_pct=change_pct)
+    def create(
+        self,
+        alert_id: int,
+        price: float,
+        change_pct: float,
+        condition: str,
+        value: float,
+    ) -> AlertFireModel:
+        fire = AlertFireModel(
+            alert_id=alert_id,
+            price=price,
+            change_pct=change_pct,
+            condition=condition,
+            value=value,
+        )
         self._db.add(fire)
         self._db.commit()
         self._db.refresh(fire)
@@ -18,6 +31,7 @@ class AlertFireSQLiteRepository(AlertFireRepository):
     def get_by_alert(self, alert_id: int) -> list[AlertFireModel]:
         return (
             self._db.query(AlertFireModel)
+            .options(selectinload(AlertFireModel.alert))
             .filter(AlertFireModel.alert_id == alert_id)
             .order_by(AlertFireModel.fired_at.desc())
             .all()

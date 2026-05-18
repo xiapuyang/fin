@@ -50,5 +50,9 @@ class AlertFireModel(Base):
     fired_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     price = Column(Float, nullable=False)
     change_pct = Column(Float, nullable=False)
+    # Snapshot of parent alert's condition and threshold at fire time.
+    # Frozen so later edits to the alert don't rewrite history. Nullable for legacy rows.
+    condition = Column(String, nullable=True)
+    value = Column(Float, nullable=True)
 
     alert = relationship("AlertModel", back_populates="fires")
