@@ -11,7 +11,7 @@ from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
-STALE_SECONDS = 300
+STALE_SECONDS = 60
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
