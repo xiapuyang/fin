@@ -604,7 +604,14 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {tab === "dividends"    && <DividendCalendar incomeItems={acctIncome} positions={acctPositions} acctCcy={acctCcy} acctFx={acctFx}/>}
 
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
-          onSaved={h => { setHoldings(prev => editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h]); setShowHoldingModal(false); }}/>}
+          onSaved={h => {
+            const wasVirtual = editingHolding && String(editingHolding.id).startsWith("virtual_");
+            setHoldings(prev => {
+              if (wasVirtual) return [...prev, h];
+              return editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h];
+            });
+            setShowHoldingModal(false);
+          }}/>}
       {showTxnModal && <TransactionModal editing={editingTxn} accounts={accounts} defaultAccount={acctName} onClose={() => setShowTxnModal(false)}
           onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setTxnRefresh(r => r + 1); setShowTxnModal(false); }}/>}
       {showIncomeModal && <IncomeModal editing={editingIncome} accounts={accounts} defaultAccount={acctName} onClose={() => setShowIncomeModal(false)}
@@ -2040,7 +2047,8 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
         account: form.account || null,
         snapshot_name: form.as_of_date.trim(),
       };
-      const saved = editing ? await apiUpdateHolding(editing.id, payload) : await apiCreateHolding(payload);
+      const isVirtual = editing && String(editing.id).startsWith("virtual_");
+      const saved = (editing && !isVirtual) ? await apiUpdateHolding(editing.id, payload) : await apiCreateHolding(payload);
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }

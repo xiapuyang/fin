@@ -50,6 +50,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
   const [showEditSnap, setShowEditSnap]       = React.useState(false);
   const [showImport, setShowImport]           = React.useState(false);
   const [showInjectHoldings, setShowInjectHoldings] = React.useState(false);
+  const [showManageAccounts, setShowManageAccounts] = React.useState(false);
   const [deleteTarget, setDeleteTarget]       = React.useState(null);
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -195,6 +196,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         subtitle="Net Worth Tracker · 快照管理 · FX 换算"
         right={
           <div style={{ display: "flex", gap: 8 }}>
+            <Button variant="secondary" icon="settings" onClick={() => setShowManageAccounts(true)}>账户</Button>
             <Button variant="secondary" icon="upload" onClick={() => setShowImport(true)}>导入</Button>
             {snap && <Button variant="secondary" icon="copy" onClick={() => setShowCopySnap(true)}>复制快照</Button>}
             <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>新增条目</Button>
@@ -386,6 +388,13 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       )}
       {showImport && (
         <ImportModal onClose={() => setShowImport(false)} onDone={loadAll}/>
+      )}
+      {showManageAccounts && (
+        <BalanceAccountManagerModal
+          accounts={accounts}
+          onClose={() => setShowManageAccounts(false)}
+          onDone={async (updated) => { setAccounts(updated); }}
+        />
       )}
       {deleteTarget && (
         <ConfirmDeleteModal
@@ -1427,5 +1436,182 @@ const ConfirmDeleteModal = ({ message, onClose, onConfirm }) => (
     </div>
   </Modal>
 );
+
+// ── Balance account manager modal ────────────────────────────────────────────
+
+const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone }) => {
+  const [accts, setAccts] = React.useState(initialAccounts);
+  const [selectedParentId, setSelectedParentId] = React.useState(
+    () => initialAccounts.find(a => !a.parent_id)?.id ?? null
+  );
+  const [form, setForm] = React.useState(null); // { mode, id?, parentId?, value }
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+  const [err, setErr] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+
+  const parents = accts.filter(a => !a.parent_id);
+  const selectedParent = parents.find(p => p.id === selectedParentId) || null;
+  const children = accts.filter(a => a.parent_id === selectedParentId);
+
+  const reload = async (keepParent) => {
+    const updated = await apiGetBalanceAccounts();
+    setAccts(updated);
+    onDone(updated);
+    if (keepParent) setSelectedParentId(keepParent);
+  };
+
+  const submitForm = async () => {
+    const name = (form.value || "").trim();
+    if (!name) { setErr("名称不能为空"); return; }
+    setSaving(true); setErr(null);
+    try {
+      if (form.mode === "add_parent") {
+        const created = await apiCreateBalanceAccount({ name });
+        setForm(null);
+        await reload(created.id);
+      } else if (form.mode === "add_child") {
+        await apiCreateBalanceAccount({ name, parent_id: form.parentId });
+        setForm(null);
+        await reload(form.parentId);
+      } else {
+        await apiUpdateBalanceAccount(form.id, { name });
+        setForm(null);
+        await reload(selectedParentId);
+      }
+    } catch (ex) { setErr(ex.message); }
+    finally { setSaving(false); }
+  };
+
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    setSaving(true); setErr(null);
+    try {
+      await apiDeleteBalanceAccount(confirmDelete.id);
+      setConfirmDelete(null);
+      const isParent = !accts.find(a => a.id === confirmDelete.id)?.parent_id;
+      if (isParent) {
+        const remaining = accts.filter(a => !a.parent_id && a.id !== confirmDelete.id);
+        await reload(remaining[0]?.id ?? null);
+      } else {
+        await reload(selectedParentId);
+      }
+    } catch (ex) { setErr(ex.message); }
+    finally { setSaving(false); }
+  };
+
+  const cancelForm = () => { setForm(null); setErr(null); };
+
+  const nameForm = (label) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0 10px" }}>
+      <div style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em" }}>{label}</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <Input value={form.value} onChange={v => setForm(f => ({ ...f, value: v }))} style={{ flex: 1 }} />
+        <Button variant="primary" icon="check" onClick={submitForm} disabled={saving} />
+        <Button variant="secondary" icon="x" onClick={cancelForm} />
+      </div>
+    </div>
+  );
+
+  const iBtn = { background: "none", border: "none", cursor: "pointer", color: "var(--ink-4)", padding: "3px 5px", borderRadius: 4, lineHeight: 1 };
+
+  return (
+    <Modal open title="管理资产负债账户" onClose={onClose} width={460}>
+      <div style={{ padding: "16px 20px 20px" }}>
+        {err && <div style={{ color: "var(--up)", fontSize: 12, marginBottom: 10 }}>{err}</div>}
+
+        {/* Parent selector row */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 18 }}>
+          <Select
+            value={selectedParentId ? String(selectedParentId) : ""}
+            onChange={v => { setSelectedParentId(v ? Number(v) : null); setForm(null); setErr(null); }}
+            options={parents.map(p => ({ value: String(p.id), label: p.name }))}
+            style={{ flex: 1 }}
+          />
+          {form?.mode === "add_parent" ? null : (
+            <Button variant="secondary" icon="plus" onClick={() => setForm({ mode: "add_parent", value: "" })}>
+              新增
+            </Button>
+          )}
+        </div>
+
+        {/* Add parent form */}
+        {form?.mode === "add_parent" && nameForm("新父账户名称")}
+
+        {selectedParent && form?.mode !== "add_parent" && (
+          <>
+            {/* Parent name row */}
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>父账户</div>
+            <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", background: "var(--surface)", borderRadius: 8, marginBottom: 14, border: "1px solid var(--line)" }}>
+              {form?.mode === "edit" && form.id === selectedParent.id ? (
+                nameForm("修改名称")
+              ) : (
+                <>
+                  <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{selectedParent.name}</span>
+                  {!form && <>
+                    <button style={iBtn} title="重命名" onClick={() => setForm({ mode: "edit", id: selectedParent.id, value: selectedParent.name })}>
+                      <Icon name="edit" size={14} />
+                    </button>
+                    {children.length === 0
+                      ? <button style={{ ...iBtn, color: "var(--up)" }} title="删除" onClick={() => setConfirmDelete({ id: selectedParent.id, name: selectedParent.name })}>
+                          <Icon name="trash" size={14} />
+                        </button>
+                      : <span style={{ fontSize: 11, color: "var(--ink-4)", paddingLeft: 6 }}>先删子账户</span>
+                    }
+                  </>}
+                </>
+              )}
+            </div>
+
+            {/* Children */}
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>子账户</div>
+            <div style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+              {children.map((child, i) => {
+                const isEditingChild = form?.mode === "edit" && form.id === child.id;
+                return (
+                  <div key={child.id} style={{ padding: "8px 12px", borderBottom: i < children.length - 1 ? "1px solid var(--line)" : "none" }}>
+                    {isEditingChild ? nameForm("修改名称") : (
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, flex: 1 }}>{child.name}</span>
+                        {!form && <>
+                          <button style={iBtn} title="重命名" onClick={() => setForm({ mode: "edit", id: child.id, value: child.name })}>
+                            <Icon name="edit" size={13} />
+                          </button>
+                          <button style={{ ...iBtn, color: "var(--up)" }} title="删除" onClick={() => setConfirmDelete({ id: child.id, name: child.name })}>
+                            <Icon name="trash" size={13} />
+                          </button>
+                        </>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Add child row */}
+              {form?.mode === "add_child" && form.parentId === selectedParentId ? (
+                <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>
+                  {nameForm("新子账户名称")}
+                </div>
+              ) : !form && (
+                <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>
+                  <button style={{ ...iBtn, color: "var(--ink-3)", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+                    onClick={() => setForm({ mode: "add_child", parentId: selectedParentId, value: "" })}>
+                    <Icon name="plus" size={12} /> 添加子账户
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          message={`确认删除「${confirmDelete.name}」？已关联的条目将失去账户引用。`}
+          onClose={() => setConfirmDelete(null)}
+          onConfirm={doDelete}
+        />
+      )}
+    </Modal>
+  );
+};
 
 window.BalanceSheet = BalanceSheet;
