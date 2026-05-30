@@ -607,7 +607,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onSaved={h => {
             const wasVirtual = editingHolding && String(editingHolding.id).startsWith("virtual_");
             setHoldings(prev => {
-              if (wasVirtual) return [...prev, h];
+              if (wasVirtual) return [...prev.filter(x => x.id !== editingHolding.id), h];
               return editingHolding ? prev.map(x => x.id === h.id ? h : x) : [...prev, h];
             });
             setShowHoldingModal(false);
