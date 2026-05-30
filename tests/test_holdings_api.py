@@ -386,3 +386,25 @@ def test_import_realized_only_row(client):
     txns = client.get("/api/transactions").json()
     assert txns[0]["shares"] == 0.0
     assert "5,496" in (txns[0]["note"] or "")
+
+
+def test_create_holding_for_code_with_existing_transactions(client):
+    # Virtual holdings (transaction-only positions) must be convertible to real holdings via POST.
+    # This is the invariant the frontend's virtual-holding edit fix relies on.
+    client.post(
+        "/api/transactions",
+        json={
+            "date": "2024-01-01",
+            "code": "013308",
+            "side": "buy",
+            "shares": 100,
+            "price": 1.0,
+        },
+    )
+    r = client.post(
+        "/api/holdings",
+        json={"code": "013308", "market": "CN", "shares": 100.0, "avg_cost": 1.0},
+    )
+    assert r.status_code == 201
+    assert r.json()["code"] == "013308"
+    assert len(client.get("/api/holdings").json()) == 1
