@@ -53,6 +53,18 @@ class BalanceAccountSQLiteRepository:
         """Delete account; nullify account_id/sub_account_id refs on balance_items."""
         from fin.models.balance_item import BalanceItemModel
 
+        row = self.get_by_id(account_id, user_id)
+        children = (
+            self._db.query(BalanceAccountModel)
+            .filter(
+                BalanceAccountModel.parent_id == account_id,
+                BalanceAccountModel.user_id == user_id,
+            )
+            .count()
+        )
+        if children:
+            raise ValueError(f"account {account_id} has child accounts")
+
         self._db.query(BalanceItemModel).filter(
             BalanceItemModel.account_id == account_id,
             BalanceItemModel.user_id == user_id,
@@ -61,6 +73,5 @@ class BalanceAccountSQLiteRepository:
             BalanceItemModel.sub_account_id == account_id,
             BalanceItemModel.user_id == user_id,
         ).update({"sub_account_id": None})
-        row = self.get_by_id(account_id, user_id)
         self._db.delete(row)
         self._db.commit()
