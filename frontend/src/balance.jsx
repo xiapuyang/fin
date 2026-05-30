@@ -393,7 +393,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         <BalanceAccountManagerModal
           accounts={accounts}
           onClose={() => setShowManageAccounts(false)}
-          onDone={async (updated) => { setAccounts(updated); }}
+          onDone={async (updated) => { setAccounts(updated); if (updated.length < accounts.length) loadItems(snapId); }}
         />
       )}
       {deleteTarget && (
@@ -1439,6 +1439,17 @@ const ConfirmDeleteModal = ({ message, onClose, onConfirm }) => (
 
 // ── Balance account manager modal ────────────────────────────────────────────
 
+const NameForm = ({ label, value, onChange, onConfirm, onCancel, saving }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0 10px" }}>
+    <div style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em" }}>{label}</div>
+    <div style={{ display: "flex", gap: 6 }}>
+      <Input value={value} onChange={onChange} style={{ flex: 1 }} />
+      <Button variant="primary" icon="check" onClick={onConfirm} disabled={saving} />
+      <Button variant="secondary" icon="x" onClick={onCancel} />
+    </div>
+  </div>
+);
+
 const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone }) => {
   const [accts, setAccts] = React.useState(initialAccounts);
   const [selectedParentId, setSelectedParentId] = React.useState(
@@ -1457,7 +1468,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
     const updated = await apiGetBalanceAccounts();
     setAccts(updated);
     onDone(updated);
-    if (keepParent) setSelectedParentId(keepParent);
+    setSelectedParentId(keepParent);
   };
 
   const submitForm = async () => {
@@ -1474,43 +1485,41 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
         setForm(null);
         await reload(form.parentId);
       } else {
+        const parentToKeep = selectedParentId;
         await apiUpdateBalanceAccount(form.id, { name });
         setForm(null);
-        await reload(selectedParentId);
+        await reload(parentToKeep);
       }
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }
   };
 
   const doDelete = async () => {
-    if (!confirmDelete) return;
+    if (!confirmDelete || saving) return;
+    // Capture stale-closure values synchronously before any await
+    const targetId = confirmDelete.id;
+    const targetIsParent = !accts.find(a => a.id === targetId)?.parent_id;
+    const nextParent = targetIsParent
+      ? accts.filter(a => !a.parent_id && a.id !== targetId)[0]?.id ?? null
+      : selectedParentId;
     setSaving(true); setErr(null);
     try {
-      await apiDeleteBalanceAccount(confirmDelete.id);
+      await apiDeleteBalanceAccount(targetId);
+      await reload(nextParent);
       setConfirmDelete(null);
-      const isParent = !accts.find(a => a.id === confirmDelete.id)?.parent_id;
-      if (isParent) {
-        const remaining = accts.filter(a => !a.parent_id && a.id !== confirmDelete.id);
-        await reload(remaining[0]?.id ?? null);
-      } else {
-        await reload(selectedParentId);
-      }
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }
   };
 
   const cancelForm = () => { setForm(null); setErr(null); };
 
-  const nameForm = (label) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0 10px" }}>
-      <div style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em" }}>{label}</div>
-      <div style={{ display: "flex", gap: 6 }}>
-        <Input value={form.value} onChange={v => setForm(f => ({ ...f, value: v }))} style={{ flex: 1 }} />
-        <Button variant="primary" icon="check" onClick={submitForm} disabled={saving} />
-        <Button variant="secondary" icon="x" onClick={cancelForm} />
-      </div>
-    </div>
-  );
+  const nameFormProps = form ? {
+    value: form.value,
+    onChange: v => setForm(f => ({ ...f, value: v })),
+    onConfirm: submitForm,
+    onCancel: cancelForm,
+    saving,
+  } : null;
 
   const iBtn = { background: "none", border: "none", cursor: "pointer", color: "var(--ink-4)", padding: "3px 5px", borderRadius: 4, lineHeight: 1 };
 
@@ -1535,7 +1544,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
         </div>
 
         {/* Add parent form */}
-        {form?.mode === "add_parent" && nameForm("新父账户名称")}
+        {form?.mode === "add_parent" && <NameForm label="新父账户名称" {...nameFormProps} />}
 
         {selectedParent && form?.mode !== "add_parent" && (
           <>
@@ -1543,7 +1552,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
             <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>父账户</div>
             <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", background: "var(--surface)", borderRadius: 8, marginBottom: 14, border: "1px solid var(--line)" }}>
               {form?.mode === "edit" && form.id === selectedParent.id ? (
-                nameForm("修改名称")
+                <NameForm label="修改名称" {...nameFormProps} />
               ) : (
                 <>
                   <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{selectedParent.name}</span>
@@ -1569,7 +1578,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
                 const isEditingChild = form?.mode === "edit" && form.id === child.id;
                 return (
                   <div key={child.id} style={{ padding: "8px 12px", borderBottom: i < children.length - 1 ? "1px solid var(--line)" : "none" }}>
-                    {isEditingChild ? nameForm("修改名称") : (
+                    {isEditingChild ? <NameForm label="修改名称" {...nameFormProps} /> : (
                       <div style={{ display: "flex", alignItems: "center" }}>
                         <span style={{ fontSize: 13, flex: 1 }}>{child.name}</span>
                         {!form && <>
@@ -1588,7 +1597,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
               {/* Add child row */}
               {form?.mode === "add_child" && form.parentId === selectedParentId ? (
                 <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>
-                  {nameForm("新子账户名称")}
+                  <NameForm label="新子账户名称" {...nameFormProps} />
                 </div>
               ) : !form && (
                 <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>

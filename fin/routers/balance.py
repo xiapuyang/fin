@@ -194,7 +194,9 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
     try:
         BalanceAccountSQLiteRepository(db).delete(account_id, MOCK_USER_ID)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        msg = str(e)
+        status = 409 if "child accounts" in msg else 404
+        raise HTTPException(status_code=status, detail=msg)
     return Response(status_code=204)
 
 

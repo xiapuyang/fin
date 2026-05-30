@@ -115,6 +115,34 @@ def test_account_delete_not_found(client):
     assert r.status_code == 404
 
 
+def test_account_create_empty_name_invalid(client):
+    r = client.post("/api/balance/accounts", json={"name": ""})
+    assert r.status_code == 422
+
+
+def test_account_create_whitespace_name_invalid(client):
+    r = client.post("/api/balance/accounts", json={"name": "   "})
+    assert r.status_code == 422
+
+
+def test_account_delete_with_children_returns_409(client):
+    parent_id = _create_account(client, "招商银行").json()["id"]
+    _create_account(client, "人民币", parent_id=parent_id)
+    r = client.delete(f"/api/balance/accounts/{parent_id}")
+    assert r.status_code == 409
+
+
+def test_account_list_includes_parent_and_child(client):
+    parent_id = _create_account(client, "招商银行").json()["id"]
+    child_id = _create_account(client, "人民币", parent_id=parent_id).json()["id"]
+    lst = client.get("/api/balance/accounts").json()
+    assert len(lst) == 2
+    ids = {a["id"] for a in lst}
+    assert parent_id in ids and child_id in ids
+    child = next(a for a in lst if a["id"] == child_id)
+    assert child["parent_id"] == parent_id
+
+
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 
 
