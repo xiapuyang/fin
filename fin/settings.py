@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 _DEFAULTS = {
     "notify_email": "",
     "notify_enabled": True,
-    "timezone": "America/Toronto",
+    "timezone": "",
+    "display_name": "",
     "rebalance": None,
     "birth_date": "",
     "fire_monthly_exp": None,

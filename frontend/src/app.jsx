@@ -16,7 +16,7 @@ const App = () => {
   const [history, setHistory] = React.useState([]);
   const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
   const [currency, setCurrency] = React.useState("CNY");
-  const [settings, setSettings] = React.useState({ timezone: "America/Toronto" });
+  const [settings, setSettings] = React.useState({ timezone: "", display_name: "" });
   const [showSettings, setShowSettings] = React.useState(false);
   const [marketNow, setMarketNow] = React.useState(new Date());
   const [serverMarket, setServerMarket] = React.useState({});
@@ -81,7 +81,7 @@ const App = () => {
   };
 
   const Page = {
-    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone} currency={currency}/>,
+    dashboard: <Dashboard onNavigate={navigate} alerts={alerts} history={history} timezone={settings.timezone} currency={currency} displayName={settings.display_name || ""}/>,
     alerts:    <Alerts alerts={alerts} setAlerts={setAlerts} history={history} setHistory={setHistory} initialCategory={alertsCategory}/>,
     holdings:  <Holdings currency={currency} birthDate={settings.birth_date || ""}/>,
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
@@ -240,16 +240,19 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrency
 };
 
 const TIMEZONE_OPTIONS = [
+  { value: "UTC",                label: "UTC" },
+  { value: "America/New_York",   label: "New York (ET)" },
   { value: "America/Toronto",    label: "Toronto (ET)" },
   { value: "America/Vancouver",  label: "Vancouver (PT)" },
-  { value: "America/New_York",   label: "New York (ET)" },
+  { value: "America/Los_Angeles",label: "Los Angeles (PT)" },
+  { value: "Europe/London",      label: "London (GMT/BST)" },
   { value: "Asia/Shanghai",      label: "上海 / 北京 (CST)" },
   { value: "Asia/Hong_Kong",     label: "香港 (HKT)" },
-  { value: "UTC",                label: "UTC" },
+  { value: "Asia/Tokyo",         label: "東京 (JST)" },
 ];
 
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
-  const [tz, setTz]              = React.useState(settings.timezone   || "America/Toronto");
+  const [tz, setTz]              = React.useState(settings.timezone   || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
   const [saving, setSaving]       = React.useState(false);
 
