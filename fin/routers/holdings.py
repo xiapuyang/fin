@@ -333,6 +333,24 @@ def list_transactions_paged(
     return {"items": [_tx_response(t) for t in items], "total": total}
 
 
+@router.post("/transactions/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_transactions(
+    items: list[TransactionCreate],
+    db: Session = Depends(get_db),
+):
+    """Bulk-create transactions. All-or-nothing on validation; duplicates skipped.
+
+    Reuses the existing `bulk_create()` repo method which dedups on the
+    `uq_txn_dedup` unique constraint `(user_id, date, code, side, shares,
+    price, currency)` via SQLite `ON CONFLICT DO NOTHING`. Validation errors
+    on any item short-circuit with 422 before any insert (FastAPI handles
+    this via the `list[TransactionCreate]` body annotation).
+    """
+    repo = TransactionSQLiteRepository(db)
+    created = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(created), skipped=len(items) - len(created))
+
+
 @router.post("/transactions", response_model=TransactionResponse, status_code=201)
 def create_transaction(data: TransactionCreate, db: Session = Depends(get_db)):
     repo = TransactionSQLiteRepository(db)
