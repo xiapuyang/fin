@@ -131,6 +131,16 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
       .catch(() => setPortfolioLoading(false));
   }, []);
 
+  // ── Ledger → entries in the past 7 days ─────────────────────────────────────
+  const [ledgerWeekCount, setLedgerWeekCount] = React.useState(null);
+  React.useEffect(() => {
+    const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    fetch(`/api/ledger?start_date=${since}&page=1&page_size=1`)
+      .then(r => r.json())
+      .then(d => setLedgerWeekCount(d.total ?? 0))
+      .catch(() => setLedgerWeekCount(0));
+  }, []);
+
   // ── Balance sheet → net worth history + asset breakdown ────────────────────
   const [snapSeries, setSnapSeries] = React.useState([]);
   const [snapCount, setSnapCount] = React.useState(0);
@@ -269,7 +279,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
     {
       id: "ledger", icon: "book", kicker: "MODULE 03", title: "记账", en: "Ledger",
       color: "var(--violet)",
-      stat: `${LEDGER.length} entries this week`,
+      stat: ledgerWeekCount == null ? "加载中…" : ledgerWeekCount > 0 ? `${ledgerWeekCount} entries this week` : "本周暂无记录",
       blurb: "支出收入 & 月度报表",
     },
     {
