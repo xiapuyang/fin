@@ -60,3 +60,33 @@ class HoldingSQLiteRepository:
         if holding:
             self._db.delete(holding)
             self._db.commit()
+
+    def bulk_create(
+        self, items: list[HoldingCreate], user_id: int
+    ) -> tuple[list[HoldingModel], int]:
+        """Insert many holdings; pre-filter duplicates by (account, code, snapshot_name).
+
+        Dedup runs against both existing DB rows and earlier rows in the same
+        input batch. Matches the `uq_holding_snapshot` UniqueConstraint.
+        """
+        existing = {
+            (h.account, h.code, h.snapshot_name)
+            for h in self._db.query(HoldingModel)
+            .filter(HoldingModel.user_id == user_id)
+            .all()
+        }
+        to_insert: list[HoldingModel] = []
+        skipped = 0
+        for item in items:
+            key = (item.account, item.code, item.snapshot_name)
+            if key in existing:
+                skipped += 1
+                continue
+            existing.add(key)
+            to_insert.append(HoldingModel(user_id=user_id, **item.model_dump()))
+        if to_insert:
+            self._db.add_all(to_insert)
+            self._db.commit()
+            for m in to_insert:
+                self._db.refresh(m)
+        return to_insert, skipped

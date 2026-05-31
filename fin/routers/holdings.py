@@ -26,6 +26,7 @@ from fin.repositories.holding_sqlite import HoldingSQLiteRepository
 from fin.repositories.income_sqlite import IncomeSQLiteRepository
 from fin.repositories.transaction_sqlite import TransactionSQLiteRepository
 from fin.schemas.account import AccountCreate, AccountResponse, AccountUpdate
+from fin.schemas.bulk import BulkResponse
 from fin.schemas.holding import HoldingCreate, HoldingResponse, HoldingUpdate
 from fin.schemas.income import IncomeCreate, IncomeResponse, IncomeUpdate
 from fin.schemas.transaction import (
@@ -231,6 +232,23 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
 def list_holdings(db: Session = Depends(get_db)):
     repo = HoldingSQLiteRepository(db)
     return [_holding_response(h) for h in repo.get_all(MOCK_USER_ID)]
+
+
+@router.post("/holdings/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_holdings(
+    items: list[HoldingCreate],
+    db: Session = Depends(get_db),
+):
+    """Bulk-create holdings. All-or-nothing on validation; duplicates skipped.
+
+    Dedup key is `(account, code, snapshot_name)` (matches `uq_holding_snapshot`)
+    and is pre-filtered against both existing rows and earlier rows in the same
+    input batch. Validation errors on any item short-circuit with 422 before any
+    insert (FastAPI handles this via the `list[HoldingCreate]` body annotation).
+    """
+    repo = HoldingSQLiteRepository(db)
+    _, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(items) - skipped, skipped=skipped)
 
 
 @router.post("/holdings", response_model=HoldingResponse, status_code=201)
