@@ -389,6 +389,24 @@ def create_income(data: IncomeCreate, db: Session = Depends(get_db)):
     return _income_response(repo.create(data, MOCK_USER_ID))
 
 
+@router.post("/income/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_income(
+    items: list[IncomeCreate],
+    db: Session = Depends(get_db),
+):
+    """Bulk-create income records. All-or-nothing on validation; duplicates skipped.
+
+    Reuses the existing `bulk_create()` repo method which dedups on the
+    `uq_income_dedup` unique constraint `(user_id, date, source, amount,
+    currency)` via SQLite `ON CONFLICT DO NOTHING`. Validation errors on any
+    item short-circuit with 422 before any insert (FastAPI handles this via
+    the `list[IncomeCreate]` body annotation).
+    """
+    repo = IncomeSQLiteRepository(db)
+    created = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(created), skipped=len(items) - len(created))
+
+
 @router.put("/income/{income_id}", response_model=IncomeResponse)
 def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db)):
     repo = IncomeSQLiteRepository(db)
