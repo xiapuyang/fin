@@ -253,22 +253,32 @@ const TIMEZONE_OPTIONS = [
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [tz, setTz]              = React.useState(settings.timezone   || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
+  const [notifyEmail, setNotifyEmail] = React.useState(settings.notify_email || "");
+  const [notifyEnabled, setNotifyEnabled] = React.useState(settings.notify_enabled !== false);
   const [saving, setSaving]       = React.useState(false);
+  const [emailError, setEmailError] = React.useState("");
 
   const save = async () => {
+    const trimmed = notifyEmail.trim();
+    if (trimmed && !/.+@.+\..+/.test(trimmed)) {
+      setEmailError("请输入有效邮箱");
+      return;
+    }
+    setEmailError("");
     setSaving(true);
     try {
+      const payload = { timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone: tz, birth_date: birthDate }),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) { onSaved({ timezone: tz, birth_date: birthDate }); onClose(); }
+      if (res.ok) { onSaved(payload); onClose(); }
     } finally { setSaving(false); }
   };
 
   return (
-    <Modal open={true} onClose={onClose} title="应用设置 App Settings" width={400}>
+    <Modal open={true} onClose={onClose} title="应用设置 App Settings" width={420}>
       <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
@@ -288,6 +298,27 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             }}
           />
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于 FIRE 退休计划自动计算当前年龄</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>通知邮箱 Notification Email</div>
+          <Input
+            value={notifyEmail}
+            onChange={v => { setNotifyEmail(v); if (emailError) setEmailError(""); }}
+            prefix={<Icon name="mail" size={13}/>}
+            placeholder="your@email.com"
+          />
+          {emailError && <div style={{ fontSize: 11, color: "var(--down-ink)", marginTop: 4 }}>{emailError}</div>}
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginTop: 10, padding: "10px 12px", background: "var(--bg-deep)", borderRadius: 8,
+            border: "1px solid var(--line)",
+          }}>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>触发提醒通知</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>提醒触发时发送邮件</div>
+            </div>
+            <Toggle value={notifyEnabled} onChange={() => setNotifyEnabled(!notifyEnabled)} />
+          </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>
