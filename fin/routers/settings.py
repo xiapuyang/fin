@@ -23,6 +23,7 @@ class SettingsPayload(BaseModel):
     notify_email: str | None = None
     notify_enabled: bool | None = None
     timezone: str | None = None
+    display_name: str | None = None
     birth_date: str | None = None
     fire_monthly_exp: float | None = None
     fire_cagr: float | None = None

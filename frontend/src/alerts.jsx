@@ -22,9 +22,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   const [category, setCategory] = React.useState(initialCategory || Object.keys(SYMBOLS)[0]);
   const [search, setSearch] = React.useState("");
   const [showImport, setShowImport] = React.useState(false);
-  const [showEmail, setShowEmail] = React.useState(false);
   const [notifyEmail, setNotifyEmail] = React.useState("");
-  const [notifyEnabled, setNotifyEnabled] = React.useState(true);
 
   const [liveQuotes, setLiveQuotes] = React.useState({});
   const [lastCheck, setLastCheck] = React.useState(null);
@@ -41,7 +39,6 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(console.error);
     fetch("/api/settings").then(r => r.json()).then(s => {
       if (s.notify_email) setNotifyEmail(s.notify_email);
-      setNotifyEnabled(s.notify_enabled);
     }).catch(console.error);
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
   }, []);
@@ -289,15 +286,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
       <SectionHeader
         kicker="MODULE 01 · ALERTS"
         title="股票提醒"
-        subtitle={`Stock Price Alerts · 美股 / 港股 / A 股 / 指数 · 触发后邮件通知 ${notifyEmail}`}
-        right={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button variant="secondary" icon="import" onClick={() => setShowImport(true)}>批量导入</Button>
-            <Button variant="secondary" icon="mail" onClick={() => setShowEmail(true)}>
-              邮件设置 <span style={{ marginLeft: 6, fontSize: 10, color: notifyEnabled ? "var(--down)" : "var(--ink-4)", fontWeight: 400 }}>· {notifyEnabled ? "ON" : "OFF"}</span>
-            </Button>
-          </div>
-        }
+        subtitle={`Stock Price Alerts · 美股 / 港股 / A 股 / 指数${notifyEmail ? ` · 触发后邮件通知 ${notifyEmail}` : ""}`}
       />
 
       {/* Stats strip */}
@@ -636,13 +625,6 @@ QQQ price_lte 490 加仓信号
           </div>
         </div>
       </Modal>
-
-      {/* Email settings modal */}
-      <EmailSettingsModal
-        open={showEmail} onClose={() => setShowEmail(false)}
-        email={notifyEmail} setEmail={setNotifyEmail}
-        enabled={notifyEnabled} setEnabled={setNotifyEnabled}
-      />
     </div>
   );
 };
@@ -660,58 +642,6 @@ const removeBtnStyle = {
   background: "var(--ink-4)", color: "#fff",
   border: "none", cursor: "pointer", padding: 0,
   display: "flex", alignItems: "center", justifyContent: "center",
-};
-
-const EmailSettingsModal = ({ open, onClose, email, setEmail, enabled, setEnabled }) => {
-  const [draft, setDraft] = React.useState(email);
-  React.useEffect(() => { setDraft(email); }, [email]);
-
-  const save = () => {
-    const trimmed = draft.trim();
-    if (!/.+@.+\..+/.test(trimmed)) return;
-    fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notify_email: trimmed, notify_enabled: enabled }),
-    }).then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(s => {
-        setEmail(s.notify_email || "");
-        setEnabled(!!s.notify_enabled);
-        onClose();
-      }).catch(console.error);
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="邮件通知 Email Notifications" width={400}>
-      <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <Field label="通知邮箱 Email">
-          <Input
-            value={draft}
-            onChange={setDraft}
-            prefix={<Icon name="mail" size={13}/>}
-            placeholder="your@email.com"
-          />
-        </Field>
-
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "12px 14px", background: "var(--bg-deep)", borderRadius: 8,
-          border: "1px solid var(--line)",
-        }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>触发提醒通知</div>
-            <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 2 }}>提醒触发时发送邮件</div>
-          </div>
-          <Toggle value={enabled} onChange={() => setEnabled(!enabled)} />
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 2 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" icon="check" onClick={save}>保存</Button>
-        </div>
-      </div>
-    </Modal>
-  );
 };
 
 const Field = ({ label, children }) => (
