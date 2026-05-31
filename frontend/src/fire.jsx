@@ -48,7 +48,6 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   usePrivacyMasked(); // re-render KPI tiles + chart amounts on privacy toggle
   const [loading, setLoading] = React.useState(true);
 
-  const [manualAge,       setManualAge]       = React.useState(32);
   const [monthlyExp,      setMonthlyExp]      = React.useState(15000);
   const [ledgerAvgExp,    setLedgerAvgExp]    = React.useState(null);
   const [portfolioValue,  setPortfolioValue]  = React.useState(null); // from holdings, null until prices arrive
@@ -73,7 +72,6 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       if (s.fire_inflation != null) setInflation(s.fire_inflation);
       if (s.fire_monthly   != null) setMonthly(s.fire_monthly);
       if (s.fire_swr       != null) setSwr(s.fire_swr);
-      if (s.fire_manual_age  != null) setManualAge(s.fire_manual_age);
       if (s.fire_target_age  != null) setTargetRetireAge(s.fire_target_age);
       if (s.fire_mc_sigma       != null) setMcSigma(s.fire_mc_sigma);
       if (s.fire_life_expectancy != null) setLifeExpectancy(s.fire_life_expectancy);
@@ -137,7 +135,6 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const setInflationP       = persist(setInflation,       "fire_inflation");
   const setMonthlyP         = persist(setMonthly,         "fire_monthly");
   const setSwrP             = persist(setSwr,             "fire_swr");
-  const setManualAgeP       = persist(setManualAge,       "fire_manual_age");
   const setTargetRetireAgeP = persist(setTargetRetireAge, "fire_target_age");
   const setMcSigmaP         = persist(setMcSigma,         "fire_mc_sigma");
   const setLifeExpectancyP  = persist(setLifeExpectancy,  "fire_life_expectancy");
@@ -148,8 +145,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const toDisp = (cny) => cny / (FX[currency] || 1);
   const fmtM   = (cny, dp = 1) => PRIVACY.masked ? `${sym}•.•M` : `${sym}${(toDisp(cny) / 1_000_000).toFixed(dp)}M`;
 
-  const derivedAge = _calcAge(birthDate);
-  const age = derivedAge ?? manualAge;
+  const age = _calcAge(birthDate);
 
   // SWR drives the multiplier — changing the card changes FIRE NUMBER
   const multiplier = Math.round(100 / swr);
@@ -297,6 +293,27 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 320, color: "var(--ink-3)", fontSize: 14 }}>
       Loading…
+    </div>
+  );
+
+  if (age == null) return (
+    <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
+      <SectionHeader
+        kicker="MODULE 05 · FIRE"
+        title="FIRE 退休计划"
+        subtitle="需要出生日期才能计算 · 请到 设置 页面填出生日期"
+      />
+      <Card padding={32}>
+        <div style={{ textAlign: "center", padding: "48px 24px", color: "var(--ink-3)" }}>
+          <div className="serif-cn" style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--ink-1)" }}>
+            缺少出生日期
+          </div>
+          <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            FIRE 计算依赖当前年龄 — 请到 <span style={{ fontWeight: 600, color: "var(--ink-1)" }}>设置 → 出生日期</span> 填入，
+            <br/>填好后此页面会基于你的真实参数自动计算。
+          </div>
+        </div>
+      </Card>
     </div>
   );
 
@@ -493,18 +510,14 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         <Card padding={20}>
           <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700, marginBottom: 14 }}>参数 Parameters</div>
 
-          {/* Age */}
-          {derivedAge != null ? (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>当前年龄</span>
-                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{derivedAge} 岁</span>
-              </div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>根据出生日期自动计算 · 在设置中修改</div>
+          {/* Age — always derived from birthDate (page is gated on age != null) */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>当前年龄</span>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{age} 岁</span>
             </div>
-          ) : (
-            <FireSlider label="当前年龄" value={manualAge} onChange={setManualAgeP} min={20} max={60} suffix="岁"/>
-          )}
+            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>根据出生日期自动计算 · 在设置中修改</div>
+          </div>
 
           {/* Monthly expense — label row: [月支出] [3yr avg hint] [current value] */}
           <div style={{ marginBottom: 12 }}>
