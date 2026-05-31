@@ -1,13 +1,6 @@
 from pydantic import BaseModel
 
 
-class BalanceImportResponse(BaseModel):
-    snapshots_created: int
-    items_imported: int
-    accounts_seeded: int
-    skipped: list
-
-
 class BalanceSnapshotCreate(BaseModel):
     snapshot_date: str
     label: str

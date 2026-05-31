@@ -124,12 +124,6 @@ async function apiGetAllBalanceItems()               { return _apiFetch("/api/ba
 async function apiCreateBalanceItem(data)            { return _apiFetch("/api/balance/items", _JSON(data)); }
 async function apiUpdateBalanceItem(id, data)        { return _apiFetch(`/api/balance/items/${id}`, _PUT(data)); }
 async function apiDeleteBalanceItem(id)              { return _apiFetch(`/api/balance/items/${id}`, _DEL()); }
-async function apiImportBalance(file) {
-  const fd = new FormData();
-  fd.append("file", file);
-  return _apiFetch("/api/balance/import", { method: "POST", body: fd });
-}
-
 Object.assign(window, {
   SYMBOLS, SYMBOL_INDEX, FX, BS_CAT_COLORS,
   apiGetPrices, apiGetDividends,
@@ -139,5 +133,5 @@ Object.assign(window, {
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
   apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,
   apiGetBalanceSnapshots, apiCreateBalanceSnapshot, apiUpdateBalanceSnapshot, apiDeleteBalanceSnapshot, apiCopyBalanceSnapshot,
-  apiGetBalanceItems, apiGetAllBalanceItems, apiCreateBalanceItem, apiUpdateBalanceItem, apiDeleteBalanceItem, apiImportBalance,
+  apiGetBalanceItems, apiGetAllBalanceItems, apiCreateBalanceItem, apiUpdateBalanceItem, apiDeleteBalanceItem,
 });

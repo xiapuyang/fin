@@ -48,7 +48,6 @@ const BalanceSheet = ({ currency = "CNY" }) => {
   const [historyItem, setHistoryItem]         = React.useState(null);
   const [showCopySnap, setShowCopySnap]       = React.useState(false);
   const [showEditSnap, setShowEditSnap]       = React.useState(false);
-  const [showImport, setShowImport]           = React.useState(false);
   const [showInjectHoldings, setShowInjectHoldings] = React.useState(false);
   const [showManageAccounts, setShowManageAccounts] = React.useState(false);
   const [deleteTarget, setDeleteTarget]       = React.useState(null);
@@ -384,9 +383,6 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       )}
       {showEditSnap && snap && (
         <EditSnapModal snap={snap} onClose={() => setShowEditSnap(false)} onDone={handleSnapUpdated}/>
-      )}
-      {showImport && (
-        <ImportModal onClose={() => setShowImport(false)} onDone={loadAll}/>
       )}
       {showManageAccounts && (
         <BalanceAccountManagerModal
@@ -1378,49 +1374,6 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
 };
 
 // ── Import modal ──────────────────────────────────────────────────────────────
-
-const ImportModal = ({ onClose, onDone }) => {
-  const [file, setFile]       = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [result, setResult]   = React.useState(null);
-  const [error, setError]     = React.useState(null);
-
-  const handleImport = async () => {
-    if (!file) { setError("请选择 CSV 文件"); return; }
-    setLoading(true); setError(null); setResult(null);
-    try {
-      const r = await apiImportBalance(file);
-      setResult(r);
-      onDone();
-    } catch (e) { setError(e.message); }
-    finally     { setLoading(false); }
-  };
-
-  return (
-    <Modal open title="导入 Notion CSV" onClose={onClose} width={460}>
-      <div style={{ padding: "16px 20px 20px" }}>
-        <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 14, lineHeight: 1.6 }}>
-          支持从 Notion 导出的资产负债 CSV 文件（含"关联资产负债表"列）。
-          已存在的条目（同快照 + 同名 + 同侧）将跳过。
-        </div>
-        <input type="file" accept=".csv" onChange={e => setFile(e.target.files[0])} style={{ fontSize: 13 }}/>
-        {result && (
-          <div style={{ marginTop: 14, padding: "10px 12px", background: "var(--bg-deep)", borderRadius: 8, fontSize: 12.5 }}>
-            <div>✓ 新建快照：{result.snapshots_created} · 导入条目：{result.items_imported}</div>
-            {result.skipped?.length > 0 && (
-              <div style={{ marginTop: 6, color: "var(--ink-3)" }}>跳过 {result.skipped.length} 行</div>
-            )}
-          </div>
-        )}
-        {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-          <Button variant="secondary" onClick={onClose}>关闭</Button>
-          {!result && <Button variant="primary" onClick={handleImport} disabled={loading || !file}>{loading ? "导入中…" : "导入"}</Button>}
-        </div>
-      </div>
-    </Modal>
-  );
-};
 
 // ── Confirm delete modal ──────────────────────────────────────────────────────
 
