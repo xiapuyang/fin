@@ -1,6 +1,6 @@
 # fin
 
-把个人财务当成一家公司来经营。通过三张财务报表追踪资金流向，回答一个核心问题：**什么时候可以达到 FIRE 退休目标？**
+个人或家庭财务管理工具。把家庭财务当成一家公司来经营 —— 通过三张财务报表追踪资金流向，回答一个核心问题：**什么时候可以达到 FIRE 退休目标？**
 
 - **收入支出 (Income Statement)** — 工资 / 分红 / 利息 / 消费按类别分组，月度汇总。
 - **资产负债 (Balance Sheet)** — 多账户、多币种快照管理，自动 FX 换算到净值。
@@ -51,14 +51,40 @@ uv run python serve.py     # http://localhost:8899
 ./restart.sh    # 先 stop 后 run
 ```
 
-### Cron — 价格提醒
+## Email Alerts (optional)
 
-价格提醒检查（可选，需要 cron）：
+价格提醒可以在触发时发邮件。完整通路需要三件事：AgentMail 账号 + 环境变量 + cron。三件都不配也能跑 —— 提醒照常触发并写入 DB，只是不发邮件。
+
+### 1. 申请 AgentMail
+
+前往 [agentmail.to](https://agentmail.to) 注册，拿到：
+
+- **API key**（格式 `am_xxx`）
+- **Inbox id**（格式 `agent_xxx@agentmail.to`，作为发件邮箱）
+
+AgentMail 是这个项目用的邮件发送服务。也可以自己改 `check_alerts.py` 的 `_send_email` 接其他 provider。
+
+### 2. 填 `.env`
+
+```env
+AGENTMAIL_API_KEY=am_xxx
+FIN_AGENTMAIL_INBOX=agent_xxx@agentmail.to
+```
+
+任一空 → 跳过发送（仍记 fire 到 DB）。
+
+### 3. 注册 cron
+
+`check_alerts.py` 是独立脚本，靠 cron 周期调用。推荐每 20 分钟一次：
 
 ```cron
 # crontab -e
 */20 * * * * cd /path/to/fin && /path/to/uv run python check_alerts.py
 ```
+
+### 4. UI 启用
+
+TopBar 齿轮 → 应用设置 → 填**通知邮箱** + 打开**触发提醒通知** 开关 → 保存。这是收件地址，跟 .env 里的发件 inbox 是两回事。
 
 ## Config
 
@@ -71,8 +97,8 @@ uv run python serve.py     # http://localhost:8899
 
 | Variable | Purpose |
 |---|---|
-| `AGENTMAIL_API_KEY` | AgentMail API key — 用于发送提醒邮件。未设置则跳过邮件发送（提醒仍会触发并记入 DB）。 |
-| `FIN_AGENTMAIL_INBOX` | 发件邮箱 id（如 `agent_xxx@agentmail.to`）。 |
+| `AGENTMAIL_API_KEY` | AgentMail API key。详见 [Email Alerts](#email-alerts-optional)。 |
+| `FIN_AGENTMAIL_INBOX` | AgentMail 发件 inbox id。详见 [Email Alerts](#email-alerts-optional)。 |
 | `FIN_LOG_DIR` | (Optional) 日志目录覆盖，默认 `<project>/logs`。 |
 
 ### `data/settings.json`
