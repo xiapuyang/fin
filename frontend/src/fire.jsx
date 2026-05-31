@@ -325,34 +325,29 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         title="FIRE 退休计划"
         subtitle={`Financial Independence, Retire Early · 月投入 + 复利 · ${multiplier}× 年支出法则（SWR ${swr}%）· 投资数据取自投资组合页面`}
         right={
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-            <div style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: ".02em", paddingRight: 4 }}>
-              年化收益 · 月度投入 · 提取率 SWR
-            </div>
-            <div style={{ display: "flex", gap: 4, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
-              {[
-                { id: "conservative", label: "保守", cagr: 6,  monthly: 6000,  swr: 3, color: "#2563EB", desc: "低风险组合 · 40+ 年退休资金" },
-                { id: "base",         label: "基准", cagr: 10, monthly: 8000,  swr: 4, color: "#16A34A", desc: "标准 Bengen 4% 法则 · 30 年退休" },
-                { id: "aggressive",   label: "激进", cagr: 13, monthly: 12000, swr: 5, color: "#D97706", desc: "高风险高回报 · 适合有兜底收入" },
-              ].map(s => {
-                const active = activeScenario === s.id;
-                const tip = `${s.label}方案：年化收益 ${s.cagr}% · 月度投入 ¥${s.monthly.toLocaleString()} · 提取率 ${s.swr}%（${s.desc}）`;
-                return (
-                  <button key={s.id} title={tip} onClick={() => applyScenario(s.id)} style={{
-                    padding: "5px 10px 6px", borderRadius: 6, cursor: "pointer",
-                    border: active ? "none" : `1.5px solid ${s.color}33`,
-                    background: active ? s.color : `${s.color}12`,
-                    color: active ? "#fff" : s.color,
-                    textAlign: "center", transition: "all .15s",
-                  }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1 }}>{s.label}</div>
-                    <div style={{ fontSize: 9.5, opacity: active ? .75 : .8, marginTop: 2, letterSpacing: ".01em" }}>
-                      {s.cagr}% · ¥{(s.monthly/1000).toFixed(0)}k · {s.swr}%
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+          <div style={{ display: "flex", gap: 4, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
+            {[
+              { id: "conservative", label: "保守", cagr: 6,  monthly: 6000,  swr: 3, color: "#2563EB", desc: "低风险组合 · 40+ 年退休资金" },
+              { id: "base",         label: "基准", cagr: 10, monthly: 8000,  swr: 4, color: "#16A34A", desc: "标准 Bengen 4% 法则 · 30 年退休" },
+              { id: "aggressive",   label: "激进", cagr: 13, monthly: 12000, swr: 5, color: "#D97706", desc: "高风险高回报 · 适合有兜底收入" },
+            ].map(s => {
+              const active = activeScenario === s.id;
+              const tip = `${s.label}方案：年化收益 ${s.cagr}% · 月度投入 ¥${s.monthly.toLocaleString()} · 提取率 ${s.swr}%（${s.desc}）`;
+              return (
+                <button key={s.id} title={tip} onClick={() => applyScenario(s.id)} style={{
+                  padding: "5px 10px 6px", borderRadius: 6, cursor: "pointer",
+                  border: active ? "none" : `1.5px solid ${s.color}33`,
+                  background: active ? s.color : `${s.color}12`,
+                  color: active ? "#fff" : s.color,
+                  textAlign: "center", transition: "all .15s",
+                }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1 }}>{s.label}</div>
+                  <div style={{ fontSize: 9.5, opacity: active ? .8 : .85, marginTop: 2, letterSpacing: ".01em" }}>
+                    年化 {s.cagr}% · 月投 ¥{(s.monthly/1000).toFixed(0)}k · SWR {s.swr}%
+                  </div>
+                </button>
+              );
+            })}
           </div>
         }
       />
