@@ -16,6 +16,7 @@ from fin.ledger_categories import RECURRING_TYPE_MAP, SUBCATEGORY_MAP
 from fin.models.ledger import LedgerModel
 from fin.models.user import MOCK_USER_ID
 from fin.repositories.ledger_sqlite import LedgerSQLiteRepository
+from fin.schemas.bulk import BulkResponse
 from fin.schemas.ledger import (
     LedgerCreate,
     LedgerImportResponse,
@@ -182,6 +183,24 @@ def list_ledger(
 @router.post("/ledger", response_model=LedgerResponse, status_code=201)
 def create_ledger(data: LedgerCreate, db: Session = Depends(get_db)):
     return _ledger_response(LedgerSQLiteRepository(db).create(data, MOCK_USER_ID))
+
+
+@router.post("/ledger/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_ledger(
+    items: list[LedgerCreate],
+    db: Session = Depends(get_db),
+):
+    """Bulk-create ledger entries. All-or-nothing on validation; duplicates skipped.
+
+    Reuses the existing `bulk_create()` repo method which dedups on the
+    `uq_ledger_dedup` unique constraint `(user_id, direction, name, date,
+    amount)` via SQLite `ON CONFLICT DO NOTHING`. Validation errors on any
+    item short-circuit with 422 before any insert (FastAPI handles this via
+    the `list[LedgerCreate]` body annotation).
+    """
+    repo = LedgerSQLiteRepository(db)
+    created = repo.bulk_create(items, MOCK_USER_ID)
+    return BulkResponse(created=len(created), skipped=len(items) - len(created))
 
 
 @router.put("/ledger/{entry_id}", response_model=LedgerResponse)
