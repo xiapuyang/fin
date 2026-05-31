@@ -1,0 +1,138 @@
+{
+  "schema": {
+    "properties": {
+      "date": {
+        "title": "Date",
+        "type": "string"
+      },
+      "code": {
+        "title": "Code",
+        "type": "string"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Name"
+      },
+      "side": {
+        "enum": [
+          "buy",
+          "sell"
+        ],
+        "title": "Side",
+        "type": "string"
+      },
+      "shares": {
+        "default": 0.0,
+        "title": "Shares",
+        "type": "number"
+      },
+      "price": {
+        "default": 0.0,
+        "title": "Price",
+        "type": "number"
+      },
+      "currency": {
+        "default": "USD",
+        "title": "Currency",
+        "type": "string"
+      },
+      "account": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Account"
+      },
+      "realized": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Realized"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Note"
+      }
+    },
+    "required": [
+      "date",
+      "code",
+      "side"
+    ],
+    "title": "TransactionCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "date": [
+      "date",
+      "日期",
+      "trade_date",
+      "成交日期"
+    ],
+    "code": [
+      "code",
+      "代码",
+      "symbol",
+      "ticker"
+    ],
+    "side": [
+      "side",
+      "方向",
+      "buy_sell"
+    ],
+    "shares": [
+      "shares",
+      "数量",
+      "qty",
+      "quantity"
+    ],
+    "price": [
+      "price",
+      "价格",
+      "成交价"
+    ],
+    "currency": [
+      "currency",
+      "币种",
+      "ccy"
+    ]
+  },
+  "examples": [
+    {
+      "date": "2026-01-15",
+      "code": "AAPL",
+      "side": "buy",
+      "shares": 10,
+      "price": 185.5,
+      "currency": "USD",
+      "account": "IBKR"
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "schema": {
+    "properties": {
+      "code": {
+        "title": "Code",
+        "type": "string"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Name"
+      },
+      "market": {
+        "enum": [
+          "US",
+          "HK",
+          "CN",
+          "CA",
+          "CRYPTO"
+        ],
+        "title": "Market",
+        "type": "string"
+      },
+      "currency": {
+        "default": "USD",
+        "title": "Currency",
+        "type": "string"
+      },
+      "account": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Account"
+      },
+      "snapshot_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Snapshot Name"
+      },
+      "as_of_date": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "As Of Date"
+      },
+      "shares": {
+        "default": 0.0,
+        "title": "Shares",
+        "type": "number"
+      },
+      "avg_cost": {
+        "default": 0.0,
+        "title": "Avg Cost",
+        "type": "number"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Note"
+      }
+    },
+    "required": [
+      "code",
+      "market"
+    ],
+    "title": "HoldingCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "code": [
+      "code",
+      "代码",
+      "symbol",
+      "ticker"
+    ],
+    "market": [
+      "market",
+      "市场",
+      "exchange"
+    ],
+    "shares": [
+      "shares",
+      "数量",
+      "持仓"
+    ],
+    "avg_cost": [
+      "avg_cost",
+      "成本",
+      "cost"
+    ],
+    "account": [
+      "account",
+      "账户",
+      "broker"
+    ],
+    "snapshot_name": [
+      "snapshot_name",
+      "snapshot",
+      "快照"
+    ]
+  },
+  "examples": [
+    {
+      "code": "AAPL",
+      "market": "US",
+      "currency": "USD",
+      "shares": 50,
+      "avg_cost": 150.0,
+      "account": "IBKR",
+      "snapshot_name": "current"
+    }
+  ]
+}

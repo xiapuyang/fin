@@ -1,0 +1,61 @@
+{
+  "schema": {
+    "properties": {
+      "symbol": {
+        "title": "Symbol",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "condition": {
+        "title": "Condition",
+        "type": "string"
+      },
+      "value": {
+        "title": "Value",
+        "type": "number"
+      }
+    },
+    "required": [
+      "symbol",
+      "name",
+      "condition",
+      "value"
+    ],
+    "title": "AlertCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "symbol": [
+      "symbol",
+      "代码",
+      "code",
+      "ticker"
+    ],
+    "name": [
+      "name",
+      "名称"
+    ],
+    "condition": [
+      "condition",
+      "条件",
+      "type"
+    ],
+    "value": [
+      "value",
+      "值",
+      "price",
+      "threshold"
+    ]
+  },
+  "examples": [
+    {
+      "symbol": "AAPL",
+      "name": "Apple",
+      "condition": "price_gte",
+      "value": 200.0
+    }
+  ]
+}

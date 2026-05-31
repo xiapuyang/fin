@@ -1,0 +1,71 @@
+{
+  "schema": {
+    "description": "Request schema for adding a symbol to the watchlist.",
+    "properties": {
+      "symbol": {
+        "maxLength": 32,
+        "minLength": 1,
+        "title": "Symbol",
+        "type": "string"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Name"
+      },
+      "market": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Market"
+      },
+      "currency": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Currency"
+      }
+    },
+    "required": [
+      "symbol"
+    ],
+    "title": "WatchlistAdd",
+    "type": "object"
+  },
+  "aliases": {
+    "symbol": [
+      "symbol",
+      "代码",
+      "ticker"
+    ],
+    "name": [
+      "name",
+      "名称"
+    ]
+  },
+  "examples": [
+    {
+      "symbol": "AAPL",
+      "name": "Apple"
+    }
+  ]
+}

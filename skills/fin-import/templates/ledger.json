@@ -1,0 +1,156 @@
+{
+  "schema": {
+    "properties": {
+      "direction": {
+        "pattern": "^(income|expense)$",
+        "title": "Direction",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "date": {
+        "title": "Date",
+        "type": "string"
+      },
+      "amount": {
+        "title": "Amount",
+        "type": "number"
+      },
+      "currency": {
+        "default": "CNY",
+        "title": "Currency",
+        "type": "string"
+      },
+      "category": {
+        "title": "Category",
+        "type": "string"
+      },
+      "orig_category": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Orig Category"
+      },
+      "subcategory": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Subcategory"
+      },
+      "recurring_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Recurring Type"
+      },
+      "is_expired": {
+        "default": false,
+        "title": "Is Expired",
+        "type": "boolean"
+      },
+      "expiry_date": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expiry Date"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Note"
+      },
+      "amounts_json": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Amounts Json"
+      }
+    },
+    "required": [
+      "direction",
+      "name",
+      "date",
+      "amount",
+      "category"
+    ],
+    "title": "LedgerCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "direction": [
+      "direction",
+      "方向",
+      "type"
+    ],
+    "name": [
+      "name",
+      "项目",
+      "描述"
+    ],
+    "date": [
+      "date",
+      "日期"
+    ],
+    "amount": [
+      "amount",
+      "金额"
+    ],
+    "currency": [
+      "currency",
+      "币种"
+    ],
+    "category": [
+      "category",
+      "分类"
+    ]
+  },
+  "examples": [
+    {
+      "direction": "expense",
+      "name": "Groceries",
+      "date": "2026-01-15",
+      "amount": 120.0,
+      "currency": "CAD",
+      "category": "0001"
+    }
+  ]
+}
