@@ -9,17 +9,26 @@ PROJECT_ROOT = Path(__file__).parent.parent
 # so production deployments that rely on real environment variables still work.
 load_dotenv(PROJECT_ROOT / ".env")
 
-# Dev/prod split. FIN_DEV=1 (set by `serve.py --dev`) routes all personal data
-# to data-dev/ on a different port. Skill writes from a dev machine to prod are
-# blocked by ~/.fin-dev marker — see skills/fin-import/scripts/post_bulk.py.
+# Dev/prod split. FIN_DEV=1 (set by `serve.py --dev`) hard-pins DATA_DIR,
+# DB_PATH, and API_PORT to dev values — FIN_DB_PATH / FIN_PORT env overrides
+# are IGNORED in dev mode so a stale shell export can't silently route a dev
+# server at prod data. Skill writes from a dev machine to prod are blocked
+# at the skill layer by ~/.fin-dev or <repo>/.dev-machine markers — see
+# skills/fin-import/scripts/post_bulk.py.
 FIN_DEV = os.environ.get("FIN_DEV") == "1"
-DATA_DIR = PROJECT_ROOT / ("data-dev" if FIN_DEV else "data")
 LOG_DIR = PROJECT_ROOT / "logs"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 
-# Personal/mutable state — lives under DATA_DIR, toggled by FIN_DEV.
-# FIN_DB_PATH explicit override beats both (tests/smoke use it).
-DB_PATH = Path(os.environ.get("FIN_DB_PATH") or (DATA_DIR / "fin.db"))
+if FIN_DEV:
+    DATA_DIR = PROJECT_ROOT / "data-dev"
+    DB_PATH = DATA_DIR / "fin.db"
+    API_PORT = 18899
+else:
+    DATA_DIR = PROJECT_ROOT / "data"
+    DB_PATH = Path(os.environ.get("FIN_DB_PATH") or (DATA_DIR / "fin.db"))
+    API_PORT = int(os.environ.get("FIN_PORT") or "8899")
+
+# Personal/mutable state — lives under DATA_DIR.
 SETTINGS_PATH = DATA_DIR / "settings.json"
 LEDGER_CATEGORIES_PATH = DATA_DIR / "ledger_categories.json"
 LAST_CHECK_PATH = DATA_DIR / "last_check.json"
@@ -29,7 +38,6 @@ MARKET_STATE_PATH = DATA_DIR / "market_state.json"
 SYMBOLS_PATH = PROJECT_ROOT / "config" / "symbols.json"
 
 API_HOST = "0.0.0.0"
-API_PORT = int(os.environ.get("FIN_PORT") or ("18899" if FIN_DEV else "8899"))
 
 SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
 

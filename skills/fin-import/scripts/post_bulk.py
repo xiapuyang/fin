@@ -31,21 +31,50 @@ ENDPOINTS = {
 _PROD_TARGETS = ("localhost:8899", "127.0.0.1:8899")
 
 
+def _is_dev_machine() -> bool:
+    """Detect a dev machine via two independent markers.
+
+    Either marker is sufficient — defense in depth so accidentally removing one
+    doesn't disable protection.
+
+    Source 1: ~/.fin-dev (user-home, global across repos).
+    Source 2: <repo>/.dev-machine — walks up from this script's resolved real
+    path (follows symlinks back to the source repo, so installations done via
+    `ln -s` still benefit).
+    """
+    if (Path.home() / ".fin-dev").exists():
+        return True
+    real = Path(__file__).resolve()
+    for parent in real.parents:
+        if (parent / ".dev-machine").exists():
+            return True
+        if parent == parent.parent:  # filesystem root
+            break
+    return False
+
+
 def _resolve_base() -> str:
     """Resolve the fin server URL and refuse prod writes from a dev machine.
 
-    `~/.fin-dev` marker = "this is the developer's box, never let me hit prod
-    by accident". Normal users without the marker get the existing behavior.
+    Normal users (no dev markers) get the existing behavior. Dev machines must
+    target a non-prod URL OR set FIN_ALLOW_PROD=1 for the invocation. Removing
+    the markers does NOT silently re-enable prod writes — only the explicit
+    env var does.
     """
     base = os.environ.get("FIN_API_URL", "http://localhost:8899")
-    if (Path.home() / ".fin-dev").exists() and any(t in base for t in _PROD_TARGETS):
-        raise SystemExit(
-            "REFUSED: ~/.fin-dev marker present (dev machine) but the target "
-            f"is prod ({base}). Either:\n"
-            "  export FIN_API_URL=http://127.0.0.1:18899  # point at dev server\n"
-            "  rm ~/.fin-dev                              # really mean to write prod"
-        )
-    return base
+    if not _is_dev_machine():
+        return base
+    if not any(t in base for t in _PROD_TARGETS):
+        return base
+    if os.environ.get("FIN_ALLOW_PROD") == "1":
+        return base
+    raise SystemExit(
+        "REFUSED: dev machine detected (~/.fin-dev or <repo>/.dev-machine) and "
+        f"target is prod ({base}). To write prod once:\n"
+        "  FIN_ALLOW_PROD=1 python scripts/post_bulk.py ...\n"
+        "Or point at dev:\n"
+        "  export FIN_API_URL=http://127.0.0.1:18899"
+    )
 
 
 def post(domain: str, rows: list[dict]) -> dict:

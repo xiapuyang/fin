@@ -18,17 +18,35 @@ import requests
 _PROD_TARGETS = ("localhost:8899", "127.0.0.1:8899")
 
 
+def _is_dev_machine() -> bool:
+    """Two-source dev-machine detection — see post_bulk.py._is_dev_machine."""
+    if (Path.home() / ".fin-dev").exists():
+        return True
+    real = Path(__file__).resolve()
+    for parent in real.parents:
+        if (parent / ".dev-machine").exists():
+            return True
+        if parent == parent.parent:
+            break
+    return False
+
+
 def _resolve_base() -> str:
-    """Refuse prod writes from a dev machine (~/.fin-dev marker present)."""
+    """Refuse prod writes from a dev machine unless FIN_ALLOW_PROD=1."""
     base = os.environ.get("FIN_API_URL", "http://localhost:8899")
-    if (Path.home() / ".fin-dev").exists() and any(t in base for t in _PROD_TARGETS):
-        raise SystemExit(
-            "REFUSED: ~/.fin-dev marker present (dev machine) but the target "
-            f"is prod ({base}). Either:\n"
-            "  export FIN_API_URL=http://127.0.0.1:18899  # point at dev server\n"
-            "  rm ~/.fin-dev                              # really mean to write prod"
-        )
-    return base
+    if not _is_dev_machine():
+        return base
+    if not any(t in base for t in _PROD_TARGETS):
+        return base
+    if os.environ.get("FIN_ALLOW_PROD") == "1":
+        return base
+    raise SystemExit(
+        "REFUSED: dev machine detected (~/.fin-dev or <repo>/.dev-machine) and "
+        f"target is prod ({base}). To write prod once:\n"
+        "  FIN_ALLOW_PROD=1 python scripts/setup_accounts.py ...\n"
+        "Or point at dev:\n"
+        "  export FIN_API_URL=http://127.0.0.1:18899"
+    )
 
 
 def post(rows: list[dict]) -> dict:
