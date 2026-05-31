@@ -31,15 +31,18 @@ def _port_open(port: int) -> bool:
 
 
 def _resolve_base() -> str:
-    """Refuse if both prod and dev fin servers are live — see
-    post_bulk.py._resolve_base."""
+    """Pick the fin server URL — see post_bulk.py._resolve_base for the
+    three-rule decision tree (marker > port-conflict refusal > default)."""
+    explicit = os.environ.get("FIN_API_URL")
+    if (Path.home() / ".fin-dev").exists():
+        return explicit or f"http://127.0.0.1:{DEV_PORT}"
     if _port_open(PROD_PORT) and _port_open(DEV_PORT):
         raise SystemExit(
             f"REFUSED: both prod ({PROD_PORT}) and dev ({DEV_PORT}) fin servers "
-            "are running. Stop one and retry — the skill can't tell which one "
-            "you mean."
+            "are running but ~/.fin-dev is missing. Either touch ~/.fin-dev to "
+            "lock the skill to dev, stop one server, or set FIN_API_URL."
         )
-    return os.environ.get("FIN_API_URL", f"http://localhost:{PROD_PORT}")
+    return explicit or f"http://localhost:{PROD_PORT}"
 
 
 def post(rows: list[dict]) -> dict:

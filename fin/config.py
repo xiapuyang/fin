@@ -13,8 +13,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 # DB_PATH, and API_PORT to dev values — FIN_DB_PATH / FIN_PORT env overrides
 # are IGNORED in dev mode so a stale shell export can't silently route a dev
 # server at prod data. The skill layer (post_bulk.py / setup_accounts.py)
-# refuses to act when BOTH ports (8899 prod, 18899 dev) are reachable, since
-# the target would be ambiguous.
+# always targets dev when ~/.fin-dev exists, and refuses when both ports are
+# reachable without the marker.
 FIN_DEV = os.environ.get("FIN_DEV") == "1"
 LOG_DIR = PROJECT_ROOT / "logs"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"

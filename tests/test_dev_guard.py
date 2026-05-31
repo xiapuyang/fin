@@ -4,8 +4,11 @@ Two layers under test:
 1. fin/config.py FIN_DEV hard-pin — when --dev is on, env overrides
    (FIN_DB_PATH, FIN_PORT) MUST be ignored so a stale shell export can't
    silently route the dev server at prod data.
-2. Skill _resolve_base() — if BOTH the prod (8899) and dev (18899) fin
-   servers are reachable, refuse. Otherwise honor FIN_API_URL or default.
+2. Skill _resolve_base() three-rule decision tree:
+   a. ~/.fin-dev present → default to dev (18899), no port probe.
+   b. No marker + both ports live → REFUSED (ambiguous target).
+   c. Otherwise → FIN_API_URL or default localhost:8899.
+   FIN_API_URL always wins when set.
 """
 
 import importlib
@@ -89,32 +92,64 @@ def _reload_post_bulk():
     return post_bulk
 
 
-def test_no_servers_returns_default(monkeypatch):
-    """Both ports closed → default URL returned (request will fail later)."""
+def test_marker_forces_dev(monkeypatch, tmp_path):
+    """~/.fin-dev present → default to dev URL, no port probe needed."""
+    (tmp_path / ".fin-dev").touch()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("FIN_API_URL", raising=False)
+    pb = _reload_post_bulk()
+    assert pb._resolve_base() == "http://127.0.0.1:18899"
+
+
+def test_marker_skips_port_conflict_check(monkeypatch, tmp_path):
+    """With marker, both servers running is fine — skill still goes to dev."""
+    (tmp_path / ".fin-dev").touch()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("FIN_API_URL", raising=False)
+    pb = _reload_post_bulk()
+    monkeypatch.setattr(pb, "_port_open", lambda port: True)
+    assert pb._resolve_base() == "http://127.0.0.1:18899"
+
+
+def test_marker_honors_fin_api_url(monkeypatch, tmp_path):
+    """Explicit FIN_API_URL wins even when marker is present."""
+    (tmp_path / ".fin-dev").touch()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("FIN_API_URL", "http://localhost:8899")
+    pb = _reload_post_bulk()
+    assert pb._resolve_base() == "http://localhost:8899"
+
+
+def test_no_marker_no_servers_returns_default(monkeypatch, tmp_path):
+    """Both ports closed → default URL (request will fail later)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: False)
     assert pb._resolve_base() == "http://localhost:8899"
 
 
-def test_only_prod_returns_default(monkeypatch):
-    """Normal user: only prod up → use prod."""
+def test_no_marker_only_prod_returns_default(monkeypatch, tmp_path):
+    """Normal user: no marker, only prod up → use prod."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.PROD_PORT)
     assert pb._resolve_base() == "http://localhost:8899"
 
 
-def test_only_dev_honors_fin_api_url(monkeypatch):
-    """Only dev up + explicit FIN_API_URL → use dev URL."""
+def test_no_marker_only_dev_honors_fin_api_url(monkeypatch, tmp_path):
+    """No marker, only dev up + explicit FIN_API_URL → use the URL."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("FIN_API_URL", "http://127.0.0.1:18899")
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.DEV_PORT)
     assert pb._resolve_base() == "http://127.0.0.1:18899"
 
 
-def test_both_servers_refused(monkeypatch):
-    """Both ports open → REFUSED, no override."""
+def test_no_marker_both_servers_refused(monkeypatch, tmp_path):
+    """No marker + both ports open → REFUSED, no override."""
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: True)

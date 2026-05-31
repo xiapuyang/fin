@@ -44,16 +44,26 @@ def _port_open(port: int) -> bool:
 
 
 def _resolve_base() -> str:
-    """Refuse if both prod (8899) and dev (18899) fin servers are live — we
-    can't tell which one the user means. Otherwise honor FIN_API_URL or fall
-    back to localhost:8899."""
+    """Pick the fin server URL.
+
+    1. ~/.fin-dev present → always default to dev (18899). An opt-in marker
+       a developer touches once; skill writes will then target dev regardless
+       of which servers happen to be running.
+    2. No marker + both ports live → refuse (target is ambiguous).
+    3. Otherwise → FIN_API_URL or default localhost:8899.
+
+    FIN_API_URL, when set, wins in every case — explicit overrides marker.
+    """
+    explicit = os.environ.get("FIN_API_URL")
+    if (Path.home() / ".fin-dev").exists():
+        return explicit or f"http://127.0.0.1:{DEV_PORT}"
     if _port_open(PROD_PORT) and _port_open(DEV_PORT):
         raise SystemExit(
             f"REFUSED: both prod ({PROD_PORT}) and dev ({DEV_PORT}) fin servers "
-            "are running. Stop one and retry — the skill can't tell which one "
-            "you mean."
+            "are running but ~/.fin-dev is missing. Either touch ~/.fin-dev to "
+            "lock the skill to dev, stop one server, or set FIN_API_URL."
         )
-    return os.environ.get("FIN_API_URL", f"http://localhost:{PROD_PORT}")
+    return explicit or f"http://localhost:{PROD_PORT}"
 
 
 def post(domain: str, rows: list[dict]) -> dict:
