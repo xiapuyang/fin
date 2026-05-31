@@ -18,6 +18,7 @@ build/
 data/*
 !data/.gitkeep
 fin.pid
+fin-dev.pid
 screenshot/
 
 # Dev environment (FIN_DEV=1 / serve.py --dev) — full mirror of data/.

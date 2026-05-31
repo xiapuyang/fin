@@ -3,7 +3,19 @@
 # --- fin API Server Stop Script ---
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PID_FILE="$SCRIPT_DIR/fin.pid"
+
+DEV=0
+[ "$1" = "--dev" ] && DEV=1
+
+if [ "$DEV" = "1" ]; then
+    PID_FILE="$SCRIPT_DIR/fin-dev.pid"
+    PORT=18899
+    LABEL="fin-dev"
+else
+    PID_FILE="$SCRIPT_DIR/fin.pid"
+    PORT=8899
+    LABEL="fin"
+fi
 
 cd "$SCRIPT_DIR" || exit 1
 
@@ -17,25 +29,35 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-# Fallback: search by script name or port listener
+# Fallback: search by script name (filtered by mode) or port listener
 if [ -z "$PID" ]; then
-    echo "PID file not found or stale. Searching for fin server process..."
-    # Try matching the serve.py script, then the uvicorn module path
-    PID=$(pgrep -u "$(id -u -n)" -f "serve\.py" | head -n 1)
+    echo "PID file not found or stale. Searching for $LABEL server process..."
+    for CAND in $(pgrep -u "$(id -u -n)" -f "serve\.py" 2>/dev/null); do
+        ARGS=$(ps -p "$CAND" -o args= 2>/dev/null)
+        if echo "$ARGS" | grep -q -- "--dev"; then
+            IS_DEV=1
+        else
+            IS_DEV=0
+        fi
+        if [ "$IS_DEV" = "$DEV" ]; then
+            PID="$CAND"
+            break
+        fi
+    done
     if [ -z "$PID" ]; then
-        PID=$(lsof -t -i:8899 -sTCP:LISTEN 2>/dev/null | head -n 1)
+        PID=$(lsof -t -i:$PORT -sTCP:LISTEN 2>/dev/null | head -n 1)
     fi
 fi
 
 if [ -z "$PID" ]; then
-    echo "fin server is not running."
+    echo "$LABEL server is not running."
     exit 0
 fi
 
 CHILDREN=$(pgrep -P "$PID" 2>/dev/null)
 PIDS_TO_KILL="$PID $CHILDREN"
 
-echo "Stopping fin server (PID: $PID, children: ${CHILDREN:-none})..."
+echo "Stopping $LABEL server (PID: $PID, children: ${CHILDREN:-none})..."
 
 kill -TERM $PIDS_TO_KILL 2>/dev/null
 
@@ -68,7 +90,7 @@ for P in $PIDS_TO_KILL; do
 done
 
 if [ -z "$STILL_ALIVE" ]; then
-    echo "fin server stopped."
+    echo "$LABEL server stopped."
     rm -f "$PID_FILE"
 else
     echo "ERROR: Failed to stop processes: $STILL_ALIVE"

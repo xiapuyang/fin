@@ -4,14 +4,17 @@
 
 cd "$(dirname "$0")" || exit 1
 
-echo "Restarting fin server..."
+LABEL="fin"
+[ "$1" = "--dev" ] && LABEL="fin-dev"
 
-echo "Stopping existing fin server..."
-bash ./stop.sh
+echo "Restarting $LABEL server..."
+
+echo "Stopping existing $LABEL server..."
+bash ./stop.sh "$@"
 if [ $? -ne 0 ]; then
     echo "Warning: stop.sh reported an issue, attempting to start anyway..."
 fi
 
 sleep 1
-echo "Starting fin server..."
-bash ./run.sh
+echo "Starting $LABEL server..."
+bash ./run.sh "$@"
