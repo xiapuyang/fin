@@ -224,7 +224,6 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrency
           ))}
         </div>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
-        <Button variant="ghost" size="sm" icon="search">Search…</Button>
         <Button
           variant={masked ? "secondary" : "ghost"}
           size="sm"

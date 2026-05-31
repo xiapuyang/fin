@@ -292,7 +292,6 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         subtitle={`Stock Price Alerts · 美股 / 港股 / A 股 / 指数 · 触发后邮件通知 ${notifyEmail}`}
         right={
           <div style={{ display: "flex", gap: 8 }}>
-            <Button variant="secondary" icon="import" onClick={() => setShowImport(true)}>批量导入</Button>
             <Button variant="secondary" icon="mail" onClick={() => setShowEmail(true)}>
               邮件设置 <span style={{ marginLeft: 6, fontSize: 10, color: notifyEnabled ? "var(--down)" : "var(--ink-4)", fontWeight: 400 }}>· {notifyEnabled ? "ON" : "OFF"}</span>
             </Button>

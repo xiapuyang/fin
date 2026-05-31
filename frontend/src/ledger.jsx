@@ -412,7 +412,6 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
               style={{ width: 110 }}
             />
             <Button variant="secondary" icon="settings" onClick={() => setShowCategoryManager(true)}>分类</Button>
-            <Button variant="secondary" icon="import" onClick={() => setShowImport(true)}>导入</Button>
             <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>添加记录</Button>
           </div>
         }

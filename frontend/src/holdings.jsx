@@ -776,13 +776,11 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
             <option value="">全部 Symbol</option>
             {allSymbols.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport}/>
-          <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 CSV</Button>
           <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>新增记录</Button>
         </div>
       </div>
       {data.total === 0
-        ? <Empty icon="book" title="暂无交易记录" hint="点击「新增记录」手动添加，或「导入 CSV」批量导入 Notion 数据"/>
+        ? <Empty icon="book" title="暂无交易记录" hint="点击「新增记录」手动添加"/>
         : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
@@ -880,9 +878,6 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>分红 / 利息 / 期权权利金 / 账户转入转出 — 收入合计 <Private>{sym}{fmtNum(total, 0)}</Private></div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
-            <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport}/>
-            <Button size="sm" variant="secondary" onClick={() => fileRef.current.click()}>导入 CSV</Button>
             <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>添加记录</Button>
           </div>
         </div>

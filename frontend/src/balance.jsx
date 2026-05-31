@@ -197,7 +197,6 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         right={
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant="secondary" icon="settings" onClick={() => setShowManageAccounts(true)}>账户</Button>
-            <Button variant="secondary" icon="upload" onClick={() => setShowImport(true)}>导入</Button>
             {snap && <Button variant="secondary" icon="copy" onClick={() => setShowCopySnap(true)}>复制快照</Button>}
             <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>新增条目</Button>
           </div>
