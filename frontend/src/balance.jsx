@@ -503,19 +503,19 @@ const CatBreakdownCard = ({ title, cats, total, currency }) => (
   </Card>
 );
 
-// ── Unified color map: categories + accounts share one namespace ──────────────
-
-// Category-level palette (taxonomy labels, no account names) lives in source
-// because it ships with the app. Account-name → color overrides come from
-// GET /api/balance/account-colors, backed by a gitignored personal file.
-const CATEGORY_COLORS = {
-  "现金": "#1F8A4C", "理财": "#2D9E6E", "投资": "#1F4FE0", "期权": "#7A1F4F",
-  "固定资产": "#6B4FB8", "房产": "#4B3580", "社保": "#B8447B", "外债": "#C8821F",
-  "信用卡": "#C03A3A", "贷款": "#9A4D2E", "其他贷款": "#B85C2E",
+// Deterministic palette: djb2-style hash(name) → fixed color slot.
+// Same name always lands on the same color; no config to maintain.
+const PALETTE = [
+  "#1F8A4C", "#1F4FE0", "#C03A3A", "#C8821F", "#7A1F4F",
+  "#2D9E6E", "#6B4FB8", "#B8447B", "#9A4D2E", "#4B3580",
+  "#2196A6", "#C8A000", "#5A7A2E", "#3F4FA0", "#A03A8F", "#5577AA",
+];
+const entityColor = (name) => {
+  let h = 0;
+  const s = name || "";
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return PALETTE[(h >>> 0) % PALETTE.length];
 };
-let ACCOUNT_COLORS = {};
-fetch("/api/balance/account-colors").then(r => r.json()).then(d => { ACCOUNT_COLORS = d || {}; }).catch(() => {});
-const entityColor = (name) => ACCOUNT_COLORS[name] || CATEGORY_COLORS[name] || "#607D8B";
 
 // Blend hex towards white by t ∈ [0,1]
 const blendWhite = (hex, t) => {
