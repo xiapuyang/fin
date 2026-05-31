@@ -35,10 +35,6 @@ Object.values(SYMBOLS).flat().forEach((s, i) => {
   s.spark[s.spark.length - 1] = s.price;
 });
 
-const INITIAL_ALERTS = [];
-
-const TRIGGER_HISTORY = [];
-
 // ── Holdings API helpers ────────────────────────────────────────────────────
 
 async function _apiFetch(url, opts = {}) {
@@ -97,13 +93,7 @@ async function apiCreateAccount(data)     { return _apiFetch("/api/accounts", _J
 async function apiUpdateAccount(id, data) { return _apiFetch(`/api/accounts/${id}`, _PUT(data)); }
 async function apiDeleteAccount(id)       { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
 
-// Module 4 — Balance Sheet snapshots
-// Each item is one row. `inSnapshot: ["s3","s4"]` says which historical snapshots include it.
-const BS_CATEGORIES = {
-  // (asset|liability) → list of subcats matching the user's reference image
-  asset:     ["现金", "投资", "固定资产", "社保", "外债"],
-  liability: ["信用消费", "贷款", "信用卡", "期权"],
-};
+// Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).
 const BS_CAT_COLORS = {
   "现金":      "#1F8A4C",
   "投资":      "#1F4FE0",
@@ -115,59 +105,6 @@ const BS_CAT_COLORS = {
   "信用卡":    "#C03A3A",
   "期权":      "#7A1F4F",
 };
-
-const BS_SNAPSHOTS = [
-  { id: "s1", date: "2025-01-15", label: "2025 Q1 初版", note: "首次梳理" },
-  { id: "s2", date: "2025-04-30", label: "2025 Q2 复盘", note: "腾讯加仓后" },
-  { id: "s3", date: "2025-09-21", label: "2025 Q3 复盘", note: "买房首付划走" },
-  { id: "s4", date: "2026-01-12", label: "2026 元旦", note: "年初规划" },
-  { id: "s5", date: "2026-05-01", label: "2026 五一 (最新)", note: "当前" },
-];
-
-const BS_ITEMS = [
-  // Assets
-  { id: "b01", side: "asset", category: "投资",     name: "IB 股票",        amount: 2980000, currency: "CNY", updated: "2026-05-01", note: "美股仓位",       inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b02", side: "asset", category: "投资",     name: "富途港股",        amount: 220000,  currency: "HKD", updated: "2026-05-01", note: "0700·9988",      inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b03", side: "asset", category: "投资",     name: "A 股账户",        amount: 95000,   currency: "CNY", updated: "2026-05-01", note: "茅台·宁德",      inSnapshot: ["s2","s3","s4","s5"] },
-  { id: "b04", side: "asset", category: "投资",     name: "黄金 ETF",       amount: 78000,   currency: "CNY", updated: "2026-05-01", note: "GLD",           inSnapshot: ["s3","s4","s5"] },
-  { id: "b05", side: "asset", category: "现金",     name: "招行存款",        amount: 675000,  currency: "CNY", updated: "2026-05-01", note: "活期 + 定期",   inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b06", side: "asset", category: "现金",     name: "微众存款",        amount: 402000,  currency: "CNY", updated: "2026-05-01", note: "智能存款",       inSnapshot: ["s2","s3","s4","s5"] },
-  { id: "b07", side: "asset", category: "现金",     name: "BMO 加币户口",    amount: 250000,  currency: "CNY", updated: "2026-05-01", note: "约 47k CAD",    inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b08", side: "asset", category: "现金",     name: "陈兰现金存款",     amount: 140000,  currency: "CNY", updated: "2026-05-01", note: "家用",          inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b09", side: "asset", category: "现金",     name: "招商 HK 银行卡",   amount: 8000,    currency: "HKD", updated: "2026-05-01", note: "",              inSnapshot: ["s2","s3","s4","s5"] },
-  { id: "b10", side: "asset", category: "现金",     name: "汇丰 HK 银行卡",   amount: 75000,   currency: "HKD", updated: "2026-05-01", note: "",              inSnapshot: ["s3","s4","s5"] },
-  { id: "b11", side: "asset", category: "现金",     name: "QUEST 余额",      amount: 25000,   currency: "CNY", updated: "2026-05-01", note: "",              inSnapshot: ["s4","s5"] },
-  { id: "b12", side: "asset", category: "固定资产", name: "中海房产 估值",    amount: 3200000, currency: "CNY", updated: "2026-05-01", note: "评估价",        inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b13", side: "asset", category: "社保",     name: "公司社保账户",     amount: 184000,  currency: "CNY", updated: "2026-05-01", note: "累计缴存",       inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b14", side: "asset", category: "外债",     name: "借出款项",        amount: 0,       currency: "CNY", updated: "2026-05-01", note: "已收回",         inSnapshot: ["s1","s2","s3","s4","s5"] },
-  // Liabilities
-  { id: "b20", side: "liability", category: "贷款",     name: "中海房贷余额",   amount: 2020000, currency: "CNY", updated: "2026-05-01", note: "月供 ¥10.4k",   inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b21", side: "liability", category: "信用卡",   name: "中信信用卡",     amount: 0,       currency: "CNY", updated: "2026-05-01", note: "已还清",         inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b22", side: "liability", category: "信用卡",   name: "招行信用卡",     amount: 0,       currency: "CNY", updated: "2026-05-01", note: "已还清",         inSnapshot: ["s1","s2","s3","s4","s5"] },
-  { id: "b23", side: "liability", category: "信用消费", name: "蚂蚁花呗",       amount: 4200,    currency: "CNY", updated: "2026-05-01", note: "下月扣款",       inSnapshot: ["s3","s4","s5"] },
-  { id: "b24", side: "liability", category: "期权",     name: "卖出 SPY put",   amount: 12000,   currency: "USD", updated: "2026-05-01", note: "保证金占用",     inSnapshot: ["s4","s5"] },
-];
-
-// Savings goals (kept; surfaced in BalanceSheet bottom)
-// Module 3 — ledger entries
-const LEDGER = [
-  { date: "2026-05-01", category: "餐饮 Food",       amount: -86.50, note: "Sushi Yu" },
-  { date: "2026-05-01", category: "工资 Salary",     amount: 12400, note: "April salary" },
-  { date: "2026-04-30", category: "交通 Transit",    amount: -22.00, note: "Uber" },
-  { date: "2026-04-30", category: "投资 Invest",     amount: -8200, note: "Buy NVDA x60" },
-  { date: "2026-04-29", category: "购物 Shopping",   amount: -342.10, note: "Apple Store" },
-  { date: "2026-04-28", category: "餐饮 Food",       amount: -54.20, note: "Tim Hortons" },
-  { date: "2026-04-27", category: "房租 Rent",       amount: -2400, note: "Monthly" },
-  { date: "2026-04-25", category: "订阅 Subs",       amount: -22.99, note: "Spotify · iCloud" },
-];
-
-// Module 4 — savings goals
-const GOALS = [
-  { name: "应急基金 Emergency",   target: 60000,  current: 42300, deadline: "2026-12-31", color: "#2D5BD9" },
-  { name: "首付 Down Payment",   target: 800000, current: 312500, deadline: "2028-06-30", color: "#C8821F" },
-  { name: "旅行 Japan trip",     target: 25000,  current: 18800, deadline: "2026-09-15", color: "#6B4FB8" },
-  { name: "FIRE 储蓄 Annual",    target: 240000, current: 96400, deadline: "2026-12-31", color: "#1F8A4C" },
-];
 
 // ── Balance Sheet API helpers ────────────────────────────────────────────────
 
@@ -194,9 +131,7 @@ async function apiImportBalance(file) {
 }
 
 Object.assign(window, {
-  SYMBOLS, SYMBOL_INDEX, FX, INITIAL_ALERTS, TRIGGER_HISTORY,
-  BS_CATEGORIES, BS_CAT_COLORS, BS_SNAPSHOTS, BS_ITEMS,
-  LEDGER, GOALS, genSpark,
+  SYMBOLS, SYMBOL_INDEX, FX, BS_CAT_COLORS,
   apiGetPrices, apiGetDividends,
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiGetTransactionsPaged, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
