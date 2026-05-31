@@ -1,8 +1,10 @@
+import json
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from fin.config import TS_FMT
+from fin.config import DATA_DIR, TS_FMT
 from fin.database import get_db
 from fin.models.balance_account import BalanceAccountModel
 from fin.models.balance_item import BalanceItemModel
@@ -30,6 +32,9 @@ from fin.schemas.balance_snapshot import (
 )
 
 router = APIRouter(prefix="/api")
+
+_ACCOUNT_COLORS_PATH = DATA_DIR / "account_colors.json"
+
 
 # ── Response helpers ──────────────────────────────────────────────────────────
 
@@ -97,6 +102,24 @@ def list_accounts(db: Session = Depends(get_db)):
         _account_response(a)
         for a in BalanceAccountSQLiteRepository(db).get_all(MOCK_USER_ID)
     ]
+
+
+@router.get("/balance/account-colors")
+def get_account_colors() -> dict[str, str]:
+    """Account-name → hex color overrides loaded from a gitignored file.
+
+    Returns {} when the file is missing or malformed so the UI falls back to
+    its built-in category palette plus a gray default per account.
+    """
+    if not _ACCOUNT_COLORS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_ACCOUNT_COLORS_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items()}
 
 
 @router.post(

@@ -505,20 +505,17 @@ const CatBreakdownCard = ({ title, cats, total, currency }) => (
 
 // ── Unified color map: categories + accounts share one namespace ──────────────
 
-const ENTITY_COLORS = {
-  // categories (same as BALANCE_CAT_COLORS — keeps visual consistency)
+// Category-level palette (taxonomy labels, no account names) lives in source
+// because it ships with the app. Account-name → color overrides come from
+// GET /api/balance/account-colors, backed by a gitignored personal file.
+const CATEGORY_COLORS = {
   "现金": "#1F8A4C", "理财": "#2D9E6E", "投资": "#1F4FE0", "期权": "#7A1F4F",
   "固定资产": "#6B4FB8", "房产": "#4B3580", "社保": "#B8447B", "外债": "#C8821F",
   "信用卡": "#C03A3A", "贷款": "#9A4D2E", "其他贷款": "#B85C2E",
-  // accounts
-  "招商银行": "#D32F2F", "微众银行": "#1565C0", "BMO": "#E65100",
-  "招商香港": "#AD1457", "汇丰银行": "#0277BD", "微信": "#2E7D32",
-  "支付宝": "#1677FF", "IB": "#283593", "招商证券": "#6A1B9A",
-  "招商信用卡": "#C62828", "中信信用卡": "#00695C", "房贷": "#4E342E",
-  "moomoo": "#BF360C", "陈兰微众银行": "#0288D1", "陈兰招商银行": "#F57F17",
-  "陈兰社保": "#558B2F", "陈兰招商证券": "#7B1FA2",
 };
-const entityColor = (name) => ENTITY_COLORS[name] || "#607D8B";
+let ACCOUNT_COLORS = {};
+fetch("/api/balance/account-colors").then(r => r.json()).then(d => { ACCOUNT_COLORS = d || {}; }).catch(() => {});
+const entityColor = (name) => ACCOUNT_COLORS[name] || CATEGORY_COLORS[name] || "#607D8B";
 
 // Blend hex towards white by t ∈ [0,1]
 const blendWhite = (hex, t) => {
