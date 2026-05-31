@@ -6,6 +6,7 @@ from fin.models.alert import AlertModel
 from fin.models.user import MOCK_USER_ID
 from fin.repositories.base import AlertRepository
 from fin.schemas.alert import AlertCreate, AlertUpdate
+from fin.services.quote import normalize_symbol
 
 
 class AlertSQLiteRepository(AlertRepository):
@@ -88,3 +89,37 @@ class AlertSQLiteRepository(AlertRepository):
         self._db.commit()
         self._db.refresh(alert)
         return alert
+
+    def bulk_create(
+        self, items: list[AlertCreate], user_id: int
+    ) -> tuple[list[AlertModel], int]:
+        """Insert many alerts; pre-filter duplicates by (symbol, condition, value).
+
+        Symbols are normalized (e.g. `.SPX` → `^GSPC`) before the dedup key is
+        computed, matching the single-create endpoint's behavior. Dedup runs
+        against both existing DB rows and earlier rows in the same input batch.
+        """
+        existing = {
+            (a.symbol, a.condition, a.value)
+            for a in self._db.query(AlertModel)
+            .filter(AlertModel.user_id == user_id)
+            .all()
+        }
+        to_insert: list[AlertModel] = []
+        skipped = 0
+        for item in items:
+            normalized = item.model_copy(
+                update={"symbol": normalize_symbol(item.symbol)}
+            )
+            key = (normalized.symbol, normalized.condition, normalized.value)
+            if key in existing:
+                skipped += 1
+                continue
+            existing.add(key)
+            to_insert.append(AlertModel(user_id=user_id, **normalized.model_dump()))
+        if to_insert:
+            self._db.add_all(to_insert)
+            self._db.commit()
+            for m in to_insert:
+                self._db.refresh(m)
+        return to_insert, skipped

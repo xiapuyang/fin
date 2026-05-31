@@ -11,6 +11,7 @@ from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
 from fin.repositories.watchlist_sqlite import WatchlistSQLiteRepository
 from fin.repositories.stock_sqlite import StockSQLiteRepository
+from fin.models.user import MOCK_USER_ID
 from fin.schemas.alert import (
     AlertCreate,
     AlertResponse,
@@ -18,6 +19,7 @@ from fin.schemas.alert import (
     HistoryResponse,
     TriggeredInfo,
 )
+from fin.schemas.bulk import BulkResponse
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService, normalize_symbol as _normalize_symbol
 
@@ -136,6 +138,23 @@ def _check_duplicate(
             status_code=409,
             detail=f"Duplicate alert: {symbol} {condition} {value} already exists",
         )
+
+
+@router.post("/alerts/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_alerts(
+    items: list[AlertCreate],
+    db: Session = Depends(get_db),
+):
+    """Bulk-create alerts. All-or-nothing on validation; duplicates skipped.
+
+    Dedup key is `(symbol, condition, value)` and is pre-filtered against both
+    existing rows and earlier rows in the same input batch. Validation errors
+    on any item short-circuit with 422 before any insert (FastAPI handles this
+    automatically via the `list[AlertCreate]` body annotation).
+    """
+    repo = AlertSQLiteRepository(db)
+    _, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(items) - skipped, skipped=skipped)
 
 
 @router.post("/alerts", response_model=AlertResponse, status_code=201)
