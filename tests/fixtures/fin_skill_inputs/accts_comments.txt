@@ -1,0 +1,7 @@
+# brokers
+IB/股票账户
+IB/现金
+
+# banks (note: 招商 appears twice — should dedup to one parent)
+招商银行/人民币
+招商银行/美元

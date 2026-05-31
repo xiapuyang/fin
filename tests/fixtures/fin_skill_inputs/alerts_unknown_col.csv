@@ -1,0 +1,2 @@
+symbol,name,condition,value,trigger_at
+NVDA,Nvidia,price_gte,500,2026-06-01

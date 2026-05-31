@@ -1,0 +1,4 @@
+name,category,side,amount,currency
+活期账户,现金,asset,15000,CNY
+理财产品,理财,asset,80000,CNY
+信用卡欠款,信用卡,liability,5000,CNY

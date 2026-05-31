@@ -37,9 +37,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=fin --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=fin --cov-report=term-missing --cov-fail-under=80 -m 'not e2e'"
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "e2e: spins up a real uvicorn + temp SQLite; slow. Run with `-m e2e --no-cov`.",
+]
 
 [tool.coverage.run]
 omit = ["serve.py", "check_alerts.py"]

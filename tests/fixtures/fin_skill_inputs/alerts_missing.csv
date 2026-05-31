@@ -1,0 +1,3 @@
+symbol,name,condition
+NVDA,Nvidia,price_gte
+META,Meta,price_lte

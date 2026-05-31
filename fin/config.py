@@ -11,7 +11,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 DATA_DIR = PROJECT_ROOT / "data"
 LOG_DIR = PROJECT_ROOT / "logs"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
-DB_PATH = DATA_DIR / "fin.db"
+# FIN_DB_PATH override lets tests/smoke runs point at a throwaway SQLite without
+# touching data/fin.db. Unset in normal use.
+DB_PATH = Path(os.environ.get("FIN_DB_PATH") or (DATA_DIR / "fin.db"))
 SYMBOLS_PATH = DATA_DIR / "symbols.json"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 LEDGER_CATEGORIES_PATH = DATA_DIR / "ledger_categories.json"
