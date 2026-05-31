@@ -343,6 +343,22 @@ def create_item(data: BalanceItemCreate, db: Session = Depends(get_db)):
     return _item_response(item, snap_date, account_map)
 
 
+@router.post("/balance/items/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_balance_items(
+    items: list[BalanceItemCreate],
+    db: Session = Depends(get_db),
+) -> BulkResponse:
+    """Bulk-create balance items. All-or-nothing on validation; duplicates skipped.
+
+    Each item must carry a valid `snapshot_id` (Pydantic enforces presence at
+    422; the dedup key is `(snapshot_id, name, side, category)`). The endpoint
+    does NOT resolve snapshots by date — that lives in the fin-import skill.
+    """
+    repo = BalanceItemSQLiteRepository(db)
+    created, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(created), skipped=skipped)
+
+
 @router.put("/balance/items/{item_id}", response_model=BalanceItemResponse)
 def update_item(item_id: int, data: BalanceItemUpdate, db: Session = Depends(get_db)):
     item_repo = BalanceItemSQLiteRepository(db)
