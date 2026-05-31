@@ -31,7 +31,7 @@ def test_seed_mock_user_creates_user(db):
     _seed_mock_user(db)
     user = db.query(UserModel).filter(UserModel.id == MOCK_USER_ID).first()
     assert user is not None
-    assert user.name == "Sharp"
+    assert user.name == "User"
 
 
 def test_seed_mock_user_is_idempotent(db):

@@ -12,9 +12,6 @@ build/
 .mypy_cache/
 .ruff_cache/
 
-# uv
-uv.lock
-
 # App data
 data/fin.db
 data/.credentials.json

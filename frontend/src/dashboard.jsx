@@ -37,7 +37,8 @@ const MARKET_HOURS = (now = new Date()) => {
 // Compute CNY value of a balance item
 const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
 
-const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", currency = "CNY" }) => {
+const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", displayName = "" }) => {
+  timezone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   usePrivacyMasked(); // re-render on toggle so chart Y-labels refresh
   const [now, setNow] = React.useState(new Date());
 
@@ -307,7 +308,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone = "America/Toronto", 
           const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
           return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
         })()}</div>
-        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>下午好，sharp</h1>
+        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{displayName ? `下午好，${displayName}` : "下午好"}</h1>
         <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
       </div>
 
