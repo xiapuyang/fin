@@ -28,8 +28,28 @@ ENDPOINTS = {
 }
 
 
-def post(domain: str, rows: list[dict]) -> dict:
+_PROD_TARGETS = ("localhost:8899", "127.0.0.1:8899")
+
+
+def _resolve_base() -> str:
+    """Resolve the fin server URL and refuse prod writes from a dev machine.
+
+    `~/.fin-dev` marker = "this is the developer's box, never let me hit prod
+    by accident". Normal users without the marker get the existing behavior.
+    """
     base = os.environ.get("FIN_API_URL", "http://localhost:8899")
+    if (Path.home() / ".fin-dev").exists() and any(t in base for t in _PROD_TARGETS):
+        raise SystemExit(
+            "REFUSED: ~/.fin-dev marker present (dev machine) but the target "
+            f"is prod ({base}). Either:\n"
+            "  export FIN_API_URL=http://127.0.0.1:18899  # point at dev server\n"
+            "  rm ~/.fin-dev                              # really mean to write prod"
+        )
+    return base
+
+
+def post(domain: str, rows: list[dict]) -> dict:
+    base = _resolve_base()
     url = base + ENDPOINTS[domain]
     try:
         r = requests.post(url, json=rows, timeout=30)

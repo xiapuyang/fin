@@ -12,17 +12,16 @@ build/
 .mypy_cache/
 .ruff_cache/
 
-# App data
-data/fin.db
-data/.credentials.json
-data/settings.json
-data/last_check.json
-data/import/
+# App data (prod). data/ holds personal mutable state; config/ holds shared
+# static config (committed). symbols.json lives in config/ not data/.
+# Default-deny: everything in data/ is gitignored unless explicitly allowed.
+data/*
+!data/.gitkeep
 fin.pid
-data/market_state.json
-data/ledger_categories.json
 screenshot/
-data/*.tgz
+
+# Dev environment (FIN_DEV=1 / serve.py --dev) — full mirror of data/.
+data-dev/
 
 # Logs
 logs/
