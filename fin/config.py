@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -17,6 +18,11 @@ API_PORT = 8899
 SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
 
 TS_FMT = "%Y-%m-%d %H:%M:%S"
+
+# Env-driven config. See .env.example for descriptions.
+AGENTMAIL_API_KEY = os.environ.get("AGENTMAIL_API_KEY", "")
+AGENTMAIL_INBOX = os.environ.get("FIN_AGENTMAIL_INBOX", "")
+DEFAULT_USER_NAME = os.environ.get("FIN_USER_NAME", "User")
 
 # Ensure directories exist at import time
 DATA_DIR.mkdir(parents=True, exist_ok=True)

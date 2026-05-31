@@ -2,7 +2,6 @@
 """Cron entry point: check stock alerts and send email notifications."""
 
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +12,7 @@ import json
 
 from agentmail import AgentMail
 
-from fin.config import LAST_CHECK_PATH
+from fin.config import AGENTMAIL_API_KEY, AGENTMAIL_INBOX, LAST_CHECK_PATH
 from fin.database import SessionLocal, init_db
 from fin.logger import setup_logging
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
@@ -22,8 +21,6 @@ from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
 from fin import settings as settings_store
 
-AGENTMAIL_INBOX = "agent_of_sharp@agentmail.to"
-
 VALID_CONDITIONS = {"price_gte", "price_lte", "change_gte", "change_lte"}
 
 setup_logging("check-alerts")
@@ -31,15 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 def _get_agentmail_client() -> AgentMail | None:
-    key = os.environ.get("AGENTMAIL_API_KEY", "")
-    if not key:
+    if not AGENTMAIL_API_KEY:
         return None
-    return AgentMail(api_key=key)
+    return AgentMail(api_key=AGENTMAIL_API_KEY)
 
 
 def _send_email(
     am: AgentMail, subject: str, html_body: str, text_body: str, notify_email: str
 ) -> None:
+    if not AGENTMAIL_INBOX:
+        logger.warning("FIN_AGENTMAIL_INBOX not set; skipping email send")
+        return
     am.inboxes.messages.send(
         inbox_id=AGENTMAIL_INBOX,
         to=notify_email,
