@@ -5,7 +5,7 @@ description: Bulk-import data into the fin app (a local personal-finance dashboa
 
 # fin-import
 
-Bulk importer for the fin app. Accepts pasted text, `.txt`, or `.csv`.
+Bulk importer for the fin app. Accepts pasted text, `.txt`, or `.csv`. (xlsx not supported — convert to CSV first.)
 
 ## When to use
 
