@@ -1926,6 +1926,9 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
             options={[{ value: "", label: "— 不选 —" }, ...balSubs.map(a => ({ value: String(a.id), label: a.name }))]}
             style={{ opacity: balSubs.length === 0 ? 0.5 : 1, pointerEvents: balSubs.length === 0 ? "none" : "auto" }}/>
         </FormRow>
+        <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
+          如不存在，请前往「资产负债 → 账户」添加。
+        </div>
         <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
 
         {/* Symbol market overrides */}
