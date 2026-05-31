@@ -152,25 +152,6 @@ const Sidebar = ({ route, setRoute }) => (
         );
       })}
     </nav>
-
-    <div style={{ marginTop: "auto", borderTop: "1px dashed var(--line)", paddingTop: 14 }}>
-      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-          <Icon name="clock" size={12} style={{ color: "var(--ink-3)" }}/>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".1em" }}>CRON STATUS</span>
-        </div>
-        <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4 }}>US <span className="mono">*/20 9-16 * * 1-5</span></div>
-        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>Asia <span className="mono">*/20 21-23 * * 0-4</span></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8, fontSize: 10.5, color: "var(--down)" }}>
-          <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: 3, background: "var(--up)" }}/>
-          <span>Next run in 18m</span>
-        </div>
-      </div>
-      <div style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 12, padding: "0 4px", lineHeight: 1.5 }}>
-        ~/.openclaw/cron/fin/<br/>
-        local-first · zero cloud
-      </div>
-    </div>
   </aside>
 );
 
