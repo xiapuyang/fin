@@ -16,10 +16,12 @@ from fin.repositories.balance_account_sqlite import BalanceAccountSQLiteReposito
 from fin.repositories.balance_item_sqlite import BalanceItemSQLiteRepository
 from fin.repositories.balance_snapshot_sqlite import BalanceSnapshotSQLiteRepository
 from fin.schemas.balance_account import (
+    BalanceAccountBulkItem,
     BalanceAccountCreate,
     BalanceAccountResponse,
     BalanceAccountUpdate,
 )
+from fin.schemas.bulk import BulkResponse
 from fin.schemas.balance_item import (
     BALANCE_CATEGORIES,
     BalanceItemCreate,
@@ -175,6 +177,30 @@ def create_account(data: BalanceAccountCreate, db: Session = Depends(get_db)):
     return _account_response(
         BalanceAccountSQLiteRepository(db).create(data, MOCK_USER_ID)
     )
+
+
+@router.post("/balance/accounts/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_balance_accounts(
+    items: list[BalanceAccountBulkItem],
+    db: Session = Depends(get_db),
+) -> BulkResponse:
+    """Bulk-create balance accounts; resolves parents by name.
+
+    Two-phase insert in one transaction: root accounts first, then children
+    whose `parent_name` is resolved against the union of existing roots and
+    just-created roots. Unknown parent names abort the whole batch with 400.
+
+    Dedup key is `(user_id, name, parent_id)`; duplicates are counted as
+    skipped, not errors.
+    """
+    repo = BalanceAccountSQLiteRepository(db)
+    try:
+        created, skipped = repo.bulk_create_with_parent_names(
+            items, user_id=MOCK_USER_ID
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return BulkResponse(created=created, skipped=skipped)
 
 
 @router.put("/balance/accounts/{account_id}", response_model=BalanceAccountResponse)
