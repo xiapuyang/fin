@@ -7,6 +7,7 @@ from fin.database import get_db
 from fin.models.user import MOCK_USER_ID
 from fin.models.watchlist import WatchlistModel
 from fin.repositories.watchlist_sqlite import WatchlistSQLiteRepository
+from fin.schemas.bulk import BulkResponse
 from fin.schemas.watchlist import WatchlistAdd, WatchlistItem
 from fin.services.quote import normalize_symbol
 
@@ -44,6 +45,23 @@ def list_watchlist(db: Session = Depends(get_db)) -> list[WatchlistItem]:
     """
     repo = WatchlistSQLiteRepository(db)
     return [_to_item(w) for w in repo.get_all(MOCK_USER_ID)]
+
+
+@router.post("/watchlist/bulk", response_model=BulkResponse, status_code=201)
+def bulk_create_watchlist(
+    items: list[WatchlistAdd],
+    db: Session = Depends(get_db),
+) -> BulkResponse:
+    """Bulk-create watchlist entries. All-or-nothing on validation; dupes skipped.
+
+    Dedup key is `symbol` (matches `uq_watchlist_user_symbol`) after upper-case
+    + `normalize_symbol`, so bulk and single inserts share dedup semantics.
+    Validation errors on any item short-circuit with 422 before any insert
+    (FastAPI handles this via the `list[WatchlistAdd]` body annotation).
+    """
+    repo = WatchlistSQLiteRepository(db)
+    created, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=created, skipped=skipped)
 
 
 @router.post("/watchlist", response_model=WatchlistItem, status_code=201)

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, String, UniqueConstraint
+from sqlalchemy import BigInteger, Column, DateTime, Integer, String, UniqueConstraint
 
 from fin.database import Base
 
@@ -13,7 +13,7 @@ class WatchlistModel(Base):
         UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
     )
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True)
     symbol = Column(String, nullable=False, index=True)
     name = Column(String)
