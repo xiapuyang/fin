@@ -10,6 +10,7 @@ Returns the server's BulkResponse JSON to stdout. Non-zero exit on error.
 import argparse
 import json
 import os
+import socket
 import sys
 import time
 from pathlib import Path
@@ -27,54 +28,32 @@ ENDPOINTS = {
     "balance_accounts": "/api/balance/accounts/bulk",
 }
 
+PROD_PORT = 8899
+DEV_PORT = 18899
 
-_PROD_TARGETS = ("localhost:8899", "127.0.0.1:8899")
 
-
-def _is_dev_machine() -> bool:
-    """Detect a dev machine via two independent markers.
-
-    Either marker is sufficient — defense in depth so accidentally removing one
-    doesn't disable protection.
-
-    Source 1: ~/.fin-dev (user-home, global across repos).
-    Source 2: <repo>/.dev-machine — walks up from this script's resolved real
-    path (follows symlinks back to the source repo, so installations done via
-    `ln -s` still benefit).
-    """
-    if (Path.home() / ".fin-dev").exists():
-        return True
-    real = Path(__file__).resolve()
-    for parent in real.parents:
-        if (parent / ".dev-machine").exists():
+def _port_open(port: int) -> bool:
+    """True if something is listening on 127.0.0.1:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        try:
+            s.connect(("127.0.0.1", port))
             return True
-        if parent == parent.parent:  # filesystem root
-            break
-    return False
+        except OSError:
+            return False
 
 
 def _resolve_base() -> str:
-    """Resolve the fin server URL and refuse prod writes from a dev machine.
-
-    Normal users (no dev markers) get the existing behavior. Dev machines must
-    target a non-prod URL OR set FIN_ALLOW_PROD=1 for the invocation. Removing
-    the markers does NOT silently re-enable prod writes — only the explicit
-    env var does.
-    """
-    base = os.environ.get("FIN_API_URL", "http://localhost:8899")
-    if not _is_dev_machine():
-        return base
-    if not any(t in base for t in _PROD_TARGETS):
-        return base
-    if os.environ.get("FIN_ALLOW_PROD") == "1":
-        return base
-    raise SystemExit(
-        "REFUSED: dev machine detected (~/.fin-dev or <repo>/.dev-machine) and "
-        f"target is prod ({base}). To write prod once:\n"
-        "  FIN_ALLOW_PROD=1 python scripts/post_bulk.py ...\n"
-        "Or point at dev:\n"
-        "  export FIN_API_URL=http://127.0.0.1:18899"
-    )
+    """Refuse if both prod (8899) and dev (18899) fin servers are live — we
+    can't tell which one the user means. Otherwise honor FIN_API_URL or fall
+    back to localhost:8899."""
+    if _port_open(PROD_PORT) and _port_open(DEV_PORT):
+        raise SystemExit(
+            f"REFUSED: both prod ({PROD_PORT}) and dev ({DEV_PORT}) fin servers "
+            "are running. Stop one and retry — the skill can't tell which one "
+            "you mean."
+        )
+    return os.environ.get("FIN_API_URL", f"http://localhost:{PROD_PORT}")
 
 
 def post(domain: str, rows: list[dict]) -> dict:

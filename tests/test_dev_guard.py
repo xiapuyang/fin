@@ -4,8 +4,8 @@ Two layers under test:
 1. fin/config.py FIN_DEV hard-pin — when --dev is on, env overrides
    (FIN_DB_PATH, FIN_PORT) MUST be ignored so a stale shell export can't
    silently route the dev server at prod data.
-2. Skill _resolve_base() — when ~/.fin-dev or <repo>/.dev-machine is
-   present, prod URLs MUST be refused unless FIN_ALLOW_PROD=1.
+2. Skill _resolve_base() — if BOTH the prod (8899) and dev (18899) fin
+   servers are reachable, refuse. Otherwise honor FIN_API_URL or default.
 """
 
 import importlib
@@ -13,6 +13,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "skills" / "fin-import" / "scripts"))
@@ -75,11 +77,11 @@ def test_prod_mode_honors_fin_port():
     assert out["port"] == "9000"
 
 
-# ── Layer 2: skill _resolve_base guard ───────────────────────────────────────
+# ── Layer 2: skill _resolve_base port-conflict guard ─────────────────────────
 
 
 def _reload_post_bulk():
-    """Re-import post_bulk so env / marker changes take effect."""
+    """Re-import post_bulk so env changes take effect."""
     if "post_bulk" in sys.modules:
         importlib.reload(sys.modules["post_bulk"])
     import post_bulk
@@ -87,77 +89,34 @@ def _reload_post_bulk():
     return post_bulk
 
 
-def test_no_markers_no_guard(monkeypatch, tmp_path):
-    """Normal user: no markers anywhere → skill writes go through."""
-    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.fin-dev
+def test_no_servers_returns_default(monkeypatch):
+    """Both ports closed → default URL returned (request will fail later)."""
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    monkeypatch.delenv("FIN_ALLOW_PROD", raising=False)
-    # Move repo-level .dev-machine aside for the test
-    marker = REPO_ROOT / ".dev-machine"
-    backup = REPO_ROOT / ".dev-machine.testbackup"
-    marker_existed = marker.exists()
-    if marker_existed:
-        marker.rename(backup)
-    try:
-        pb = _reload_post_bulk()
-        assert pb._is_dev_machine() is False
-        assert pb._resolve_base() == "http://localhost:8899"
-    finally:
-        if marker_existed:
-            backup.rename(marker)
-
-
-def test_home_marker_triggers_guard(monkeypatch, tmp_path):
-    """~/.fin-dev alone triggers refusal."""
-    (tmp_path / ".fin-dev").touch()
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("FIN_API_URL", raising=False)
-    monkeypatch.delenv("FIN_ALLOW_PROD", raising=False)
     pb = _reload_post_bulk()
-    assert pb._is_dev_machine() is True
-    import pytest
-
-    with pytest.raises(SystemExit, match="REFUSED"):
-        pb._resolve_base()
+    monkeypatch.setattr(pb, "_port_open", lambda port: False)
+    assert pb._resolve_base() == "http://localhost:8899"
 
 
-def test_repo_marker_triggers_guard_even_without_home_marker(monkeypatch, tmp_path):
-    """Defense in depth: rm'ing ~/.fin-dev doesn't disable protection if
-    <repo>/.dev-machine still exists."""
-    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.fin-dev
+def test_only_prod_returns_default(monkeypatch):
+    """Normal user: only prod up → use prod."""
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    monkeypatch.delenv("FIN_ALLOW_PROD", raising=False)
-    marker = REPO_ROOT / ".dev-machine"
-    marker_existed = marker.exists()
-    if not marker_existed:
-        marker.touch()
-    try:
-        pb = _reload_post_bulk()
-        assert pb._is_dev_machine() is True
-        import pytest
-
-        with pytest.raises(SystemExit, match="REFUSED"):
-            pb._resolve_base()
-    finally:
-        if not marker_existed:
-            marker.unlink()
+    pb = _reload_post_bulk()
+    monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.PROD_PORT)
+    assert pb._resolve_base() == "http://localhost:8899"
 
 
-def test_dev_url_passes_through(monkeypatch, tmp_path):
-    """Dev machine + dev URL (18899) → no refusal."""
-    (tmp_path / ".fin-dev").touch()
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_only_dev_honors_fin_api_url(monkeypatch):
+    """Only dev up + explicit FIN_API_URL → use dev URL."""
     monkeypatch.setenv("FIN_API_URL", "http://127.0.0.1:18899")
-    monkeypatch.delenv("FIN_ALLOW_PROD", raising=False)
     pb = _reload_post_bulk()
+    monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.DEV_PORT)
     assert pb._resolve_base() == "http://127.0.0.1:18899"
 
 
-def test_allow_prod_escape_hatch(monkeypatch, tmp_path):
-    """FIN_ALLOW_PROD=1 is the ONLY way to write prod from a dev machine."""
-    (tmp_path / ".fin-dev").touch()
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_both_servers_refused(monkeypatch):
+    """Both ports open → REFUSED, no override."""
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    monkeypatch.setenv("FIN_ALLOW_PROD", "1")
     pb = _reload_post_bulk()
-    assert pb._resolve_base() == "http://localhost:8899"
+    monkeypatch.setattr(pb, "_port_open", lambda port: True)
+    with pytest.raises(SystemExit, match="REFUSED"):
+        pb._resolve_base()

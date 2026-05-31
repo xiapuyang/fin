@@ -12,9 +12,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 # Dev/prod split. FIN_DEV=1 (set by `serve.py --dev`) hard-pins DATA_DIR,
 # DB_PATH, and API_PORT to dev values — FIN_DB_PATH / FIN_PORT env overrides
 # are IGNORED in dev mode so a stale shell export can't silently route a dev
-# server at prod data. Skill writes from a dev machine to prod are blocked
-# at the skill layer by ~/.fin-dev or <repo>/.dev-machine markers — see
-# skills/fin-import/scripts/post_bulk.py.
+# server at prod data. The skill layer (post_bulk.py / setup_accounts.py)
+# refuses to act when BOTH ports (8899 prod, 18899 dev) are reachable, since
+# the target would be ambiguous.
 FIN_DEV = os.environ.get("FIN_DEV") == "1"
 LOG_DIR = PROJECT_ROOT / "logs"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"

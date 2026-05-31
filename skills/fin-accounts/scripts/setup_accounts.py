@@ -8,45 +8,38 @@ Usage:
 import argparse
 import json
 import os
+import socket
 import sys
 import time
 from pathlib import Path
 
 import requests
 
+PROD_PORT = 8899
+DEV_PORT = 18899
 
-_PROD_TARGETS = ("localhost:8899", "127.0.0.1:8899")
 
-
-def _is_dev_machine() -> bool:
-    """Two-source dev-machine detection — see post_bulk.py._is_dev_machine."""
-    if (Path.home() / ".fin-dev").exists():
-        return True
-    real = Path(__file__).resolve()
-    for parent in real.parents:
-        if (parent / ".dev-machine").exists():
+def _port_open(port: int) -> bool:
+    """True if something is listening on 127.0.0.1:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        try:
+            s.connect(("127.0.0.1", port))
             return True
-        if parent == parent.parent:
-            break
-    return False
+        except OSError:
+            return False
 
 
 def _resolve_base() -> str:
-    """Refuse prod writes from a dev machine unless FIN_ALLOW_PROD=1."""
-    base = os.environ.get("FIN_API_URL", "http://localhost:8899")
-    if not _is_dev_machine():
-        return base
-    if not any(t in base for t in _PROD_TARGETS):
-        return base
-    if os.environ.get("FIN_ALLOW_PROD") == "1":
-        return base
-    raise SystemExit(
-        "REFUSED: dev machine detected (~/.fin-dev or <repo>/.dev-machine) and "
-        f"target is prod ({base}). To write prod once:\n"
-        "  FIN_ALLOW_PROD=1 python scripts/setup_accounts.py ...\n"
-        "Or point at dev:\n"
-        "  export FIN_API_URL=http://127.0.0.1:18899"
-    )
+    """Refuse if both prod and dev fin servers are live — see
+    post_bulk.py._resolve_base."""
+    if _port_open(PROD_PORT) and _port_open(DEV_PORT):
+        raise SystemExit(
+            f"REFUSED: both prod ({PROD_PORT}) and dev ({DEV_PORT}) fin servers "
+            "are running. Stop one and retry — the skill can't tell which one "
+            "you mean."
+        )
+    return os.environ.get("FIN_API_URL", f"http://localhost:{PROD_PORT}")
 
 
 def post(rows: list[dict]) -> dict:

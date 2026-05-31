@@ -23,10 +23,6 @@ screenshot/
 # Dev environment (FIN_DEV=1 / serve.py --dev) — full mirror of data/.
 data-dev/
 
-# Per-machine dev marker. `touch .dev-machine` on a developer box to enable
-# the skill's prod-write guard. Each developer creates their own; never commit.
-.dev-machine
-
 # Logs
 logs/
 
