@@ -86,24 +86,17 @@ FIN_AGENTMAIL_INBOX=agent_xxx@agentmail.to
 
 TopBar 齿轮 → 应用设置 → 填**通知邮箱** + 打开**触发提醒通知** 开关 → 保存。这是收件地址，跟 .env 里的发件 inbox 是两回事。
 
-## Config
+### 5. 端到端验证
 
-两层配置，泾渭分明：
+`verify_email.py` 一次性自检整条链路：`.env` 凭据、`settings.json` 收件人、SQLite DB、crontab 注册、发一封真模板的预览邮件（合成 2 条示例触发，让你看到红涨绿跌的最终样式）。
 
-- **启动期密钥** → `.env`（gitignored）
-- **运行期偏好** → `data/settings.json`（gitignored，由前端「应用设置」弹窗维护）
+```bash
+uv run python verify_email.py            # 全检 + 发预览邮件
+uv run python verify_email.py --no-send  # 只检查，不发邮件
+uv run python verify_email.py --to a@b.com  # 临时覆盖收件人
+```
 
-### `.env`
-
-| Variable | Purpose |
-|---|---|
-| `AGENTMAIL_API_KEY` | AgentMail API key。详见 [Email Alerts](#email-alerts-optional)。 |
-| `FIN_AGENTMAIL_INBOX` | AgentMail 发件 inbox id。详见 [Email Alerts](#email-alerts-optional)。 |
-| `FIN_LOG_DIR` | (Optional) 日志目录覆盖，默认 `<project>/logs`。 |
-
-### `data/settings.json`
-
-前端「应用设置」弹窗（TopBar 齿轮图标）管理：显示名（首页问候语）、通知邮箱、邮件开关、时区、出生日期（用于 FIRE 自动算年龄）、隐私脱敏开关、FIRE 默认参数。文件不存在时使用内置默认值。
+任何一步 FAIL → 退出码 1；crontab 缺失只 WARN（你可能用 launchd / systemd 调度）。
 
 ## Stack
 
