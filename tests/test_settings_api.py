@@ -34,6 +34,15 @@ def test_put_settings_persists(client, tmp_path, monkeypatch):
     assert r.json()["notify_email"] == "persist@example.com"
 
 
+def test_put_settings_persists_display_name(client, tmp_path, monkeypatch):
+    """Regression: display_name was dropped by SettingsPayload before this test existed."""
+    monkeypatch.setattr(settings_mod, "SETTINGS_PATH", tmp_path / "settings.json")
+    r = client.put("/api/settings", json={"display_name": "Alice"})
+    assert r.status_code == 200
+    assert r.json()["display_name"] == "Alice"
+    assert client.get("/api/settings").json()["display_name"] == "Alice"
+
+
 def test_get_fx_returns_rates_via_quote_service(client):
     fake_rates = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
     with patch("fin.routers.settings.QuoteService") as mock_qs:
