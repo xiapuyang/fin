@@ -1,0 +1,136 @@
+---
+name: fin-import
+description: Bulk-import data into the fin app (a local personal-finance dashboard at http://localhost:8899) across 7 domains — alerts, transactions, holdings, income, ledger, balance sheet items, watchlist. Auto-detects type from input, asks upfront for account / snapshot date / format ambiguities, shows a confirmation gate before any write, and is idempotent (skips duplicates server-side and previews them client-side). Triggers on phrases like "import to fin", "导入到 fin", "fin 导入", "bulk add transactions to fin", "把这些持仓加进 fin", or any time the user provides tabular data (CSV or pasted text) plus intent to write it to the fin app. Use fin-accounts (not this skill) when the user wants to set up balance accounts WITHOUT importing data.
+---
+
+# fin-import
+
+Bulk importer for the fin app. Accepts pasted text, `.txt`, or `.csv`.
+
+## When to use
+
+Trigger when the user wants to populate the fin app (running at `http://localhost:8899`) with one of:
+
+- **alerts** — price/change conditions on symbols
+- **transactions** — buy/sell history (single account per import)
+- **holdings** — current positions snapshot (single account per import)
+- **income** — salary, dividends, interest
+- **ledger** — expense/income entries (everyday spending)
+- **balance** — snapshot rows for the balance sheet (asks for snapshot date)
+- **watchlist** — symbols to track without alerts
+
+## Runtime flow
+
+Run scripts under `scripts/` via `python scripts/<name>.py`. The skill orchestrates them in this order:
+
+1. **Detect type** — `detect_type.py < input`. If `ambiguous`, AskUserQuestion to pick.
+2. **Preflight (per type):**
+   - `transactions` / `holdings`: AskUserQuestion for the target `account`. If the account doesn't exist (`GET /api/accounts`), ask for `currency`, optional `balance_account_id` (showing current balance accounts), optional `cutoff_date`. Then `POST /api/accounts` to create.
+   - `balance`: run `snapshot_resolver.py --date YYYY-MM-DD`. Internally:
+     a. AskUserQuestion for snapshot date (default today, YYYY-MM-DD).
+     b. `GET /api/balance/snapshots`, filter by `snapshot_date == <date>` client-side.
+     c. If found → AskUserQuestion: "Snapshot for `<date>` exists (label='X', N items). Append more items? [Yes / Pick different date / Cancel]". Yes → use that `id`.
+     d. If not found → AskUserQuestion: "No snapshot for `<date>`. Create new snapshot? [label?]". On confirm → `POST /api/balance/snapshots {snapshot_date, label}`, capture returned `id`.
+     The resolved `snapshot_id` is then passed to `transform.py --snapshot-id`.
+   - `income`: if no `account` column in input AND multiple accounts exist, ask which to attribute.
+3. **Parse input** — `parse_input.py <file_or_-> --format <csv|txt>` returns `list[dict]`.
+4. **Transform** — `transform.py --type <domain> --rows <json> [--default-account NAME] [--snapshot-id N]` returns canonical schema list + a `gaps` list (unmapped columns, missing required fields, ambiguous dates). For each gap kind, ask the user once per gap (not per row):
+   - Unmapped column → "Map column X to which field? [list canonical fields + 'skip']"
+   - Missing required field for all rows → "All rows missing `currency`, set default for this import?"
+   - Missing required for some rows → "Skip these N rows or fill in manually?"
+   - Ambiguous date → "Format MM/DD or DD/MM?"
+5. **Account name resolution (balance only)** — for items referencing account names, consult `assets/starter_accounts.json` to suggest parent/sub, fall back to `GET /api/balance/accounts` exact match, AskUserQuestion if still unresolved. If accounts need to be created, `POST /api/balance/accounts/bulk` with parent_name resolution.
+6. **Preview + dedup** — `preview.py --type <domain> --rows <canonical.json>` fetches existing data via `GET /api/<domain>`, performs client-side dedup using the documented natural keys, prints:
+   ```
+   ── fin import preview: <domain> ──
+   Will create: N
+   Already exists (skip): M
+   Sample (first 3 new rows):
+     [0] { ... }
+     [1] { ... }
+     [2] { ... }
+   ```
+7. **Hard confirmation gate** — AskUserQuestion: "Create N <domain> rows? [Yes / No]". Do not proceed without explicit Yes.
+8. **POST** — `post_bulk.py --type <domain> --rows <json>` calls the appropriate bulk endpoint (FIN_API_URL env, default `http://localhost:8899`).
+9. **Report** — print the final summary block (see below).
+
+## Endpoint mapping
+
+| Domain | Endpoint |
+|---|---|
+| alerts | `POST /api/alerts/bulk` |
+| transactions | `POST /api/transactions/bulk` |
+| holdings | `POST /api/holdings/bulk` |
+| income | `POST /api/income/bulk` |
+| ledger | `POST /api/ledger/bulk` |
+| balance | `POST /api/balance/items/bulk` |
+| watchlist | `POST /api/watchlist/bulk` |
+| balance_accounts | `POST /api/balance/accounts/bulk` |
+| accounts (single) | `POST /api/accounts` |
+
+## Required-field contract
+
+Before any POST, the skill must have these fields populated for every row.
+Anything missing → ask once per import (per-import default) or per row only as last resort.
+
+| Domain | Required (from schema) | Skill-derived |
+|---|---|---|
+| alerts | symbol, name, condition, value | — |
+| transactions | date, code, side, shares, price, currency | account (upfront) |
+| holdings | code, market, currency, shares, avg_cost | account, snapshot_name (upfront, defaults) |
+| income | date, amount, currency, name, category | account (upfront if multiple exist) |
+| ledger | direction, name, date, amount, currency, category | — |
+| balance | name, category, side, amount, currency | snapshot_id (upfront), account_id/sub_account_id (resolved) |
+| watchlist | symbol | — |
+
+## Decision contract (when to ask)
+
+- **Type ambiguous** → AskUserQuestion with 7 domains
+- **Account doesn't exist (tx/holdings)** → AskUserQuestion 1: "Create account 'X' with currency Y, link to balance account Z? [Yes / Modify / Cancel]"
+- **Snapshot date (balance)** → AskUserQuestion: "Snapshot date for this import? [today / YYYY-MM-DD]"
+- **Field missing for all rows** → AskUserQuestion with default value choices
+- **Date format ambiguous** (`02/03/2026`) → AskUserQuestion: MM/DD or DD/MM
+- **Unknown column** → AskUserQuestion: "Column 'X' — map to which field?"
+- **Before any POST** → AskUserQuestion: "Create N rows? [Yes / No]"
+
+## Error handling
+
+- **fin not running** → "fin is not running at $FIN_API_URL — start with `uv run python serve.py` and retry"
+- **422 from bulk endpoint** → whole batch rejected; print detail; write full payload to `/tmp/fin-import-error-<ts>.json`; stop
+- **5xx** → stop; do not retry
+- **Hook gate (any AskUserQuestion answer "No")** → exit cleanly, no write
+
+## Output format
+
+```
+✓ fin: <domain>
+  Created: N
+  Skipped (duplicates): M
+  Errors:  E
+  <if E > 0> Details: /tmp/fin-import-error-<ts>.json
+  <if writes happened> Refresh the fin app at http://localhost:8899 to see new data.
+```
+
+## Templates
+
+`templates/` holds 7 JSON files generated from fin's Pydantic schemas by
+`scripts/export_schemas.py` in the fin project. Each file has:
+- `schema` — JSON Schema for the canonical payload
+- `aliases` — column-header synonyms (e.g. `"date": ["date", "日期", "trade_date"]`)
+- `examples` — 1+ valid payloads for few-shot transformation
+
+Regenerate after backend schema changes: `uv run python -m scripts.export_schemas`.
+
+## Starter accounts (parsing vocabulary)
+
+`assets/starter_accounts.json` ships a small, privacy-pruned account hierarchy
+(11 parents covering broker / bank / credit card / wallet / crypto / cash /
+fixed asset / mortgage / debt / options / social insurance). It's the skill's
+parsing reference: when a user pastes "招商美元 5000" or "IB 股票", the skill
+consults this file to map account references to parent/sub.
+
+Heavily anonymized: family-member accounts removed entirely, country-specific
+accounts removed (no Canadian / HK / SG banks), each account type keeps only
+one canonical example, property/employer names abstracted. Use as vocabulary
+hints, not authoritative — real users will add their own accounts via
+fin-accounts skill or the UI.
