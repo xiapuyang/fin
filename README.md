@@ -41,6 +41,18 @@ uv sync                    # install Python deps
 uv run python serve.py     # http://localhost:8899
 ```
 
+### Server scripts
+
+也可以用仓库根目录的脚本以后台方式管理服务，PID 写到 `fin.pid`，日志输出到 `logs/fin.log`：
+
+```bash
+./run.sh        # 启动（后台），等待端口 8899 绑定成功
+./stop.sh       # 优雅停止（SIGTERM → 等待 → 必要时 SIGKILL）
+./restart.sh    # 先 stop 后 run
+```
+
+### Cron — 价格提醒
+
 价格提醒检查（可选，需要 cron）：
 
 ```cron
@@ -61,12 +73,11 @@ uv run python serve.py     # http://localhost:8899
 |---|---|
 | `AGENTMAIL_API_KEY` | AgentMail API key — 用于发送提醒邮件。未设置则跳过邮件发送（提醒仍会触发并记入 DB）。 |
 | `FIN_AGENTMAIL_INBOX` | 发件邮箱 id（如 `agent_xxx@agentmail.to`）。 |
-| `FIN_USER_NAME` | (Optional) 单用户 mock 的显示名，默认 `User`。 |
 | `FIN_LOG_DIR` | (Optional) 日志目录覆盖，默认 `<project>/logs`。 |
 
 ### `data/settings.json`
 
-前端「应用设置」弹窗（TopBar 齿轮图标）管理：通知邮箱、邮件开关、时区、出生日期（用于 FIRE 自动算年龄）、隐私脱敏开关、FIRE 默认参数。文件不存在时使用内置默认值。
+前端「应用设置」弹窗（TopBar 齿轮图标）管理：显示名（首页问候语）、通知邮箱、邮件开关、时区、出生日期（用于 FIRE 自动算年龄）、隐私脱敏开关、FIRE 默认参数。文件不存在时使用内置默认值。
 
 ## Stack
 

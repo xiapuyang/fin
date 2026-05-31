@@ -251,6 +251,7 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
+  const [displayName, setDisplayName] = React.useState(settings.display_name || "");
   const [tz, setTz]              = React.useState(settings.timezone   || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
   const [notifyEmail, setNotifyEmail] = React.useState(settings.notify_email || "");
@@ -267,7 +268,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
     setEmailError("");
     setSaving(true);
     try {
-      const payload = { timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
+      const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -280,6 +281,15 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   return (
     <Modal open={true} onClose={onClose} title="应用设置 App Settings" width={420}>
       <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>显示名 Display Name</div>
+          <Input
+            value={displayName}
+            onChange={setDisplayName}
+            placeholder="例如 Alice — 留空显示通用问候语"
+          />
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语「下午好，xxx」</div>
+        </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
           <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>

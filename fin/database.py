@@ -31,13 +31,10 @@ def _seed_mock_user(db: "Session") -> None:
     Args:
         db: Active SQLAlchemy session.
     """
-    from fin.config import DEFAULT_USER_NAME
     from fin.models.user import UserModel, MOCK_USER_ID
 
     if not db.query(UserModel).filter(UserModel.email == "admin@fin.local").first():
-        db.add(
-            UserModel(id=MOCK_USER_ID, name=DEFAULT_USER_NAME, email="admin@fin.local")
-        )
+        db.add(UserModel(id=MOCK_USER_ID, name="User", email="admin@fin.local"))
         db.commit()
 
 
