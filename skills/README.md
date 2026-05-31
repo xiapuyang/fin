@@ -9,25 +9,25 @@ Development source for Claude Code skills shipped with the fin project. Each sub
 
 ## Install
 
-Pick one location per skill:
+Symlink (not copy) so edits in this repo take effect immediately — no re-sync needed.
 
 ```bash
 # Global install (all projects, all sessions)
-cp -r skills/fin-import   ~/.claude/skills/
-cp -r skills/fin-accounts ~/.claude/skills/
+ln -s "$(pwd)/skills/fin-import"   ~/.claude/skills/fin-import
+ln -s "$(pwd)/skills/fin-accounts" ~/.claude/skills/fin-accounts
 
 # Project-local install (this project only)
 mkdir -p .claude/skills
-cp -r skills/fin-import   .claude/skills/
-cp -r skills/fin-accounts .claude/skills/
+ln -s "$(pwd)/skills/fin-import"   .claude/skills/fin-import
+ln -s "$(pwd)/skills/fin-accounts" .claude/skills/fin-accounts
 ```
 
 After install, restart the Claude session or run `/skills reload`.
 
 ## Develop
 
-Edit files under `skills/<name>/` directly. To re-test a change in a current
-Claude session, re-copy the affected skill dir and run `/skills reload`. To
+Edit files under `skills/<name>/` directly — symlinks mean changes are live.
+Run `/skills reload` in the current Claude session to pick them up. To
 regenerate JSON Schema templates after backend schema changes:
 
 ```bash
