@@ -1,0 +1,189 @@
+{
+  "schema": {
+    "properties": {
+      "snapshot_id": {
+        "title": "Snapshot Id",
+        "type": "integer"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "category": {
+        "title": "Category",
+        "type": "string"
+      },
+      "side": {
+        "title": "Side",
+        "type": "string"
+      },
+      "amount": {
+        "title": "Amount",
+        "type": "number"
+      },
+      "currency": {
+        "default": "CNY",
+        "title": "Currency",
+        "type": "string"
+      },
+      "account_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Account Id"
+      },
+      "sub_account_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Sub Account Id"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Note"
+      },
+      "price": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Price"
+      },
+      "quantity": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Quantity"
+      },
+      "start_date": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Start Date"
+      },
+      "end_date": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "End Date"
+      },
+      "interest_rate": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Interest Rate"
+      },
+      "monthly_payment": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Monthly Payment"
+      }
+    },
+    "required": [
+      "snapshot_id",
+      "name",
+      "category",
+      "side",
+      "amount"
+    ],
+    "title": "BalanceItemCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "snapshot_id": [
+      "snapshot_id",
+      "快照id",
+      "snapshot"
+    ],
+    "name": [
+      "name",
+      "项目",
+      "账户"
+    ],
+    "category": [
+      "category",
+      "分类"
+    ],
+    "side": [
+      "side",
+      "类型",
+      "asset_liability"
+    ],
+    "amount": [
+      "amount",
+      "金额",
+      "balance"
+    ],
+    "currency": [
+      "currency",
+      "币种"
+    ]
+  },
+  "examples": [
+    {
+      "snapshot_id": 1,
+      "name": "活期账户",
+      "category": "现金",
+      "side": "asset",
+      "amount": 15000.0,
+      "currency": "CNY"
+    }
+  ],
+  "extra_fields": []
+}

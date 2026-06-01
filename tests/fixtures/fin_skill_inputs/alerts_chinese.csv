@@ -1,0 +1,3 @@
+代码,名称,条件,值
+NVDA,英伟达,price_gte,500
+0700.HK,腾讯,price_lte,300

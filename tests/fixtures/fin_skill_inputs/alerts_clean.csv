@@ -1,0 +1,4 @@
+symbol,name,condition,value
+NVDA,Nvidia,price_gte,500
+META,Meta,price_lte,400
+TSLA,Tesla,change_gte,5

@@ -1,0 +1,116 @@
+{
+  "schema": {
+    "properties": {
+      "date": {
+        "title": "Date",
+        "type": "string"
+      },
+      "source": {
+        "title": "Source",
+        "type": "string"
+      },
+      "category": {
+        "enum": [
+          "dividend",
+          "interest",
+          "option",
+          "deposit",
+          "withdrawal"
+        ],
+        "title": "Category",
+        "type": "string"
+      },
+      "amount": {
+        "title": "Amount",
+        "type": "number"
+      },
+      "currency": {
+        "default": "USD",
+        "title": "Currency",
+        "type": "string"
+      },
+      "account": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Account"
+      },
+      "code": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Code"
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Note"
+      }
+    },
+    "required": [
+      "date",
+      "source",
+      "category",
+      "amount"
+    ],
+    "title": "IncomeCreate",
+    "type": "object"
+  },
+  "aliases": {
+    "date": [
+      "date",
+      "日期",
+      "入账日"
+    ],
+    "source": [
+      "source",
+      "name",
+      "项目",
+      "来源",
+      "from"
+    ],
+    "category": [
+      "category",
+      "分类",
+      "type"
+    ],
+    "amount": [
+      "amount",
+      "金额",
+      "value"
+    ],
+    "currency": [
+      "currency",
+      "币种",
+      "ccy"
+    ]
+  },
+  "examples": [
+    {
+      "date": "2026-01-15",
+      "source": "Vanguard ETF",
+      "category": "dividend",
+      "amount": 250.0,
+      "currency": "USD"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# App data (prod). data/ holds personal mutable state; config/ holds shared
+# static config (committed). symbols.json lives in config/ not data/.
+# Default-deny: everything in data/ is gitignored unless explicitly allowed.
+data/*
+!data/.gitkeep
+fin.pid
+fin-dev.pid
+screenshot/
+
+# Dev environment (FIN_DEV=1 / serve.py --dev) — full mirror of data/.
+data-dev/
+
+# Logs
+logs/
+
+# Secrets / env
+.env
+*.env
+
+# Temp / backup
+*.bak
+*.orig
+*.temp
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+docs/
+
+# Test artifacts
+.coverage
+htmlcov/
+
+# Claude Code local settings
+.claude/
+.context/
+.playwright-mcp/
+
+# Screenshot artifacts
+*.png
+# README screenshots are intentional and committed
+!assets/screenshots/*.png

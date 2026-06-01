@@ -1,0 +1,4 @@
+name,category,side,amount,currency,account,sub_account
+工资卡余额,现金,asset,1234.56,CNY,示例银行,人民币
+理财产品A,理财,asset,1234.56,CNY,示例银行,理财账户
+收入存款,现金,asset,800.00,CNY,示例银行B,活期
