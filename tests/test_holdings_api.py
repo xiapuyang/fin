@@ -199,9 +199,9 @@ def test_delete_transaction(client):
 def test_import_transactions_notion_csv(client):
     csv_content = textwrap.dedent("""\
         Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词
-        NVDA,$78.40,100,"$7,840.00",买,,"June 12, 2024",
-        AAPL,$235.40,30,"$7,062.00",卖,"$1,803.00","January 9, 2025",
-        QQQ,$462.10,60,"$27,726.00",买,,"March 21, 2025",
+        NVDA,$100.00,10,"$1,000.00",买,,"January 1, 2024",
+        AAPL,$200.00,20,"$4,000.00",卖,"$300.00","February 1, 2024",
+        QQQ,$300.00,30,"$9,000.00",买,,"March 1, 2024",
     """)
     r = client.post(
         "/api/transactions/import",
@@ -217,9 +217,9 @@ def test_import_transactions_notion_csv(client):
 def test_import_transactions_skips_bad_rows(client):
     csv_content = textwrap.dedent("""\
         Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词
-        NVDA,$78.40,100,"$7,840.00",买,,"June 12, 2024",
+        NVDA,$100.00,10,"$1,000.00",买,,"January 1, 2024",
         BAD,,$50,$0.00,买,,"not a date",
-        QQQ,$462.10,60,"$27,726.00",买,,"March 21, 2025",
+        QQQ,$300.00,30,"$9,000.00",买,,"March 1, 2024",
     """)
     r = client.post(
         "/api/transactions/import",
@@ -356,7 +356,7 @@ def test_transaction_negative_shares_invalid(client):
 def test_import_unknown_side_skipped(client):
     csv_content = (
         "Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词\n"
-        'NVDA,$78.40,100,"$7,840.00",持有,,"June 12, 2024",\n'
+        'NVDA,$100.00,10,"$1,000.00",持有,,"January 1, 2024",\n'
     )
     r = client.post(
         "/api/transactions/import",
@@ -373,7 +373,7 @@ def test_import_realized_only_row(client):
     """Rows with shares=0 and price=0 but a realized value must import successfully."""
     csv_content = (
         "Name,买卖价格,买卖数量,买卖金额,交易,卖出盈利,日期,🔑 关键词\n"
-        'VTI,,,"$0.00",卖,"$5,496.00","March 19, 2024",\n'
+        'VTI,,,"$0.00",卖,"$500.00","April 1, 2024",\n'
     )
     r = client.post(
         "/api/transactions/import",
@@ -385,7 +385,7 @@ def test_import_realized_only_row(client):
     assert data["skipped"] == []
     txns = client.get("/api/transactions").json()
     assert txns[0]["shares"] == 0.0
-    assert "5,496" in (txns[0]["note"] or "")
+    assert "500" in (txns[0]["note"] or "")
 
 
 def test_create_holding_for_code_with_existing_transactions(client):
