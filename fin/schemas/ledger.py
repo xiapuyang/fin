@@ -98,14 +98,3 @@ class LedgerStatsResponse(BaseModel):
     bars: list[LedgerStatBar]
     pie: list[LedgerStatPie]
     summary: LedgerSummary
-
-
-class LedgerImportSkipped(BaseModel):
-    row: int
-    name: str
-    reason: str
-
-
-class LedgerImportResponse(BaseModel):
-    imported: int
-    skipped: list[LedgerImportSkipped]

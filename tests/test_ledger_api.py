@@ -1,6 +1,5 @@
-"""Tests for ledger CRUD, stats, import, and recurring endpoints."""
+"""Tests for ledger CRUD, stats, and recurring endpoints."""
 
-import io
 import json
 
 
@@ -220,30 +219,6 @@ def test_stats_with_fx_rates(client):
 def test_stats_invalid_fx_json(client):
     r = client.get("/api/ledger/stats?fx_rates=not-json")
     assert r.status_code == 400
-
-
-# ── Import ────────────────────────────────────────────────────────────────────
-
-_CSV = """\
-Name,金额,消费日期,分类,消费类型,是否过期,过期时间,Text
-Coffee,CN¥50.00,"March 15, 2024",聚餐请客,单次,,,
-,CN¥0.00,"March 16, 2024",,,,,
-"""
-
-
-def test_import_csv(client):
-    f = io.BytesIO(_CSV.encode())
-    r = client.post("/api/ledger/import", files={"file": ("data.csv", f, "text/csv")})
-    assert r.status_code == 200
-    data = r.json()
-    assert data["imported"] == 1
-    assert len(data["skipped"]) == 1  # empty name row
-
-
-def test_import_too_large(client):
-    big = io.BytesIO(b"x" * (11 * 1024 * 1024))
-    r = client.post("/api/ledger/import", files={"file": ("big.csv", big, "text/csv")})
-    assert r.status_code == 413
 
 
 # ── Backfill ──────────────────────────────────────────────────────────────────

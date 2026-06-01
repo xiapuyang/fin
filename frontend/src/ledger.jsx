@@ -194,7 +194,6 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
   const [recurringExpired, setRecurringExpired] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
-  const [showImport, setShowImport] = React.useState(false);
   const [editItem, setEditItem] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [duplicateItem, setDuplicateItem] = React.useState(null);
@@ -654,12 +653,6 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
       )}
 
       {/* Modals */}
-      {showImport && (
-        <ImportModal
-          onClose={() => setShowImport(false)}
-          onDone={() => { setShowImport(false); setPage(1); }}
-        />
-      )}
       {editItem !== null && (
         <EntryModal
           item={Object.keys(editItem).length === 0 ? null : editItem}
@@ -1063,59 +1056,6 @@ const FieldRow = ({ label, children }) => (
     {children}
   </div>
 );
-
-// ── Import Modal ──────────────────────────────────────────────────────────────
-
-const ImportModal = ({ onClose, onDone }) => {
-  const [file, setFile] = React.useState(null);
-  const [result, setResult] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(null);
-
-  const handleImport = async () => {
-    if (!file) return;
-    setLoading(true); setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/ledger/import", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Import failed");
-      setResult(data);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal open title="导入 Notion CSV" onClose={onClose} width={480}>
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>支持 Notion 消费支出记录导出的 CSV 格式，自动去重。</div>
-        <input type="file" accept=".csv" onChange={e => { setFile(e.target.files[0]); setResult(null); setError(null); }} style={{ fontSize: 13 }} />
-        {error && <div style={{ color: "var(--up)", fontSize: 13 }}>{error}</div>}
-        {result && (
-          <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: 12, fontSize: 13 }}>
-            <div style={{ color: "var(--down-ink)", fontWeight: 600 }}>✓ 导入成功：{result.imported} 条</div>
-            {result.skipped?.length > 0 && (
-              <div style={{ color: "var(--ink-3)", marginTop: 4 }}>跳过 {result.skipped.length} 条（零金额或格式问题）</div>
-            )}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          {result
-            ? <Button variant="primary" onClick={onDone}>完成</Button>
-            : <Button variant="primary" onClick={handleImport} disabled={!file || loading}>
-                {loading ? "导入中…" : "开始导入"}
-              </Button>
-          }
-        </div>
-      </div>
-    </Modal>
-  );
-};
 
 // ── Duplicate Modal (quick record from recurring template) ────────────────────
 

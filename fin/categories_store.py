@@ -44,9 +44,15 @@ def _save_custom(rows: list[dict]) -> None:
 
 
 def _next_id() -> str:
+    """Next custom ID, always above the reserved built-in ceiling.
+
+    Existing customs in the reserved range (e.g. early installs that started
+    customs at a lower floor) remain valid for lookup, but new IDs never
+    collide with the reserved range.
+    """
     rows = _load_custom()
     existing = [int(c["id"]) for c in rows if str(c.get("id", "")).isdigit()]
-    next_num = max(existing, default=BUILTIN_MAX_ID) + 1
+    next_num = max([*existing, BUILTIN_MAX_ID]) + 1
     return f"{next_num:04d}"
 
 

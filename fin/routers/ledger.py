@@ -1,25 +1,19 @@
-import csv
-import io
 import json
 import logging
 import math
-import re
-from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from fin import categories_store
 from fin.config import SUPPORTED_CURRENCIES
 from fin.database import get_db
-from fin.ledger_categories import RECURRING_TYPE_MAP, SUBCATEGORY_MAP
 from fin.models.ledger import LedgerModel
 from fin.models.user import MOCK_USER_ID
 from fin.repositories.ledger_sqlite import LedgerSQLiteRepository
 from fin.schemas.bulk import BulkResponse
 from fin.schemas.ledger import (
     LedgerCreate,
-    LedgerImportResponse,
     LedgerListResponse,
     LedgerResponse,
     LedgerStatsResponse,
@@ -32,9 +26,6 @@ router = APIRouter(prefix="/api")
 
 _TS_FMT = "%Y-%m-%d %H:%M:%S"
 _CCY_PATTERN = "^(" + "|".join(SUPPORTED_CURRENCIES) + ")$"
-
-# Matches "May 25, 2025 9:22 PM (EDT)" — capture up to AM/PM, discard timezone
-_DATETIME_RE = re.compile(r"^(\w+ \d+, \d{4} \d+:\d+ [AP]M)")
 
 
 def _resolve_category_name(cat_id: str) -> str:
@@ -62,88 +53,6 @@ def _ledger_response(e: LedgerModel, count: int | None = None) -> LedgerResponse
         update_time=e.update_time.strftime(_TS_FMT),
         count=count,
     )
-
-
-def _parse_notion_amount(raw: str) -> float | None:
-    """Parse 'CN¥1,174.00' → 1174.0. Returns None for zero or unparseable."""
-    s = raw.strip().replace("CN¥", "").replace(",", "")
-    try:
-        val = float(s)
-        return val if val > 0 else None
-    except ValueError:
-        return None
-
-
-def _parse_notion_date(raw: str) -> str | None:
-    """Parse Notion date fields to YYYY-MM-DD. Returns None on failure."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    # Strip date range suffix like "November 1, 2022 → November 30, 2022"
-    raw = raw.split("→")[0].strip()
-    m = _DATETIME_RE.match(raw)
-    if m:
-        raw = m.group(1)
-        try:
-            return datetime.strptime(raw, "%B %d, %Y %I:%M %p").strftime("%Y-%m-%d")
-        except ValueError:
-            pass
-    try:
-        return datetime.strptime(raw, "%B %d, %Y").strftime("%Y-%m-%d")
-    except ValueError:
-        return None
-
-
-def _parse_expiry_date(raw: str) -> str | None:
-    """Parse '2025/09/01' → '2025-09-01'."""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, "%Y/%m/%d").strftime("%Y-%m-%d")
-    except ValueError:
-        return None
-
-
-def _parse_notion_row(row: dict) -> tuple[LedgerCreate | None, str]:
-    """Parse one Notion expense CSV row. Returns (LedgerCreate, '') or (None, reason)."""
-    name = row.get("Name", "").strip()
-    if not name:
-        return None, "empty name"
-
-    amount = _parse_notion_amount(row.get("金额", ""))
-    if amount is None:
-        return None, f"zero or unparseable amount: {row.get('金额', '')!r}"
-
-    date_str = _parse_notion_date(row.get("消费日期", ""))
-    if date_str is None:
-        return None, f"unparseable date: {row.get('消费日期', '')!r}"
-
-    raw_sub = row.get("分类", "").strip()
-    category = SUBCATEGORY_MAP.get(raw_sub, "0019")
-
-    raw_type = row.get("消费类型", "").strip()
-    recurring_type = RECURRING_TYPE_MAP.get(raw_type)
-
-    is_expired = row.get("是否过期", "").strip() == "Yes"
-    expiry_date = _parse_expiry_date(row.get("过期时间", ""))
-
-    note = row.get("Text", "").strip() or None
-
-    return LedgerCreate(
-        direction="expense",
-        name=name,
-        date=date_str,
-        amount=amount,
-        currency="CNY",
-        category=category,
-        orig_category=raw_sub or None,
-        subcategory=None,
-        recurring_type=recurring_type,
-        is_expired=is_expired,
-        expiry_date=expiry_date,
-        note=note,
-    ), ""
 
 
 # ── List + CRUD ──────────────────────────────────────────────────────────────
@@ -289,39 +198,6 @@ def ledger_stats(
         pie=data["pie"],
         summary=data["summary"],
     )
-
-
-# ── Import ───────────────────────────────────────────────────────────────────
-
-
-@router.post("/ledger/import", response_model=LedgerImportResponse)
-async def import_ledger(file: UploadFile, db: Session = Depends(get_db)):
-    """Import expense records from a Notion CSV export."""
-    content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
-    try:
-        text = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = content.decode("latin-1")
-
-    reader = csv.DictReader(io.StringIO(text))
-    valid: list[LedgerCreate] = []
-    skipped: list[dict] = []
-
-    for i, row in enumerate(reader):
-        entry, reason = _parse_notion_row(row)
-        if entry is None:
-            skipped.append({"row": i, "name": row.get("Name", ""), "reason": reason})
-        else:
-            valid.append(entry)
-
-    repo = LedgerSQLiteRepository(db)
-    imported = repo.bulk_create(valid, MOCK_USER_ID)
-    logger.info(
-        "Ledger CSV import: %d imported, %d skipped", len(imported), len(skipped)
-    )
-    return {"imported": len(imported), "skipped": skipped}
 
 
 # ── Backfill ─────────────────────────────────────────────────────────────────
