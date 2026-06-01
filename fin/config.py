@@ -37,7 +37,9 @@ MARKET_STATE_PATH = DATA_DIR / "market_state.json"
 # Static shared config — committed, ships with code, identical across dev/prod.
 SYMBOLS_PATH = PROJECT_ROOT / "config" / "symbols.json"
 
-API_HOST = "0.0.0.0"
+API_HOST = os.environ.get("FIN_HOST", "127.0.0.1")
+
+BULK_MAX_ITEMS = 500
 
 SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
 

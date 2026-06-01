@@ -4,6 +4,8 @@ Imported by both check_alerts.py (real cron path) and verify_email.py
 (end-to-end verification), so the user always sees the same template.
 """
 
+from html import escape
+
 _COND_LABELS = {
     "price_gte": "价格 ≥",
     "price_lte": "价格 ≤",
@@ -19,7 +21,9 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
     """
     if len(fired) == 1:
         alert, _, _ = fired[0]
-        subject = f"[fin] 提醒触发: {alert.name} ({alert.symbol})"
+        safe_name = alert.name.replace("\r", " ").replace("\n", " ")
+        safe_symbol = alert.symbol.replace("\r", " ").replace("\n", " ")
+        subject = f"[fin] 提醒触发: {safe_name} ({safe_symbol})"
     else:
         subject = f"[fin] {len(fired)} 个提醒触发"
 
@@ -32,9 +36,9 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
         cond_str = f"{label} {alert.value}{'%' if 'change' in alert.condition else ''}"
         rows_html += (
             f"<tr>"
-            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-weight:600'>{alert.name}</td>"
-            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-family:monospace;color:#5C6270'>{alert.symbol}</td>"
-            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5'>{cond_str}</td>"
+            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-weight:600'>{escape(alert.name)}</td>"
+            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-family:monospace;color:#5C6270'>{escape(alert.symbol)}</td>"
+            f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5'>{escape(cond_str)}</td>"
             f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-family:monospace;font-weight:600'>{price:.2f}</td>"
             f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-family:monospace;color:{color};font-weight:600'>{change_str}</td>"
             f"</tr>"

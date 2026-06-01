@@ -1,6 +1,14 @@
 """Shared response schema for all /bulk endpoints."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class ErrorDetail(BaseModel):
+    """Structured error entry returned in BulkResponse.errors."""
+
+    reason: str
+    details: str | None = None
+    index: int | None = None
 
 
 class BulkResponse(BaseModel):
@@ -13,4 +21,4 @@ class BulkResponse(BaseModel):
 
     created: int
     skipped: int
-    errors: list[dict] = []
+    errors: list[ErrorDetail] = Field(default_factory=list)

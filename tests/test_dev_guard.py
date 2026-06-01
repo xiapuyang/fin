@@ -83,13 +83,13 @@ def test_prod_mode_honors_fin_port():
 # ── Layer 2: skill _resolve_base port-conflict guard ─────────────────────────
 
 
-def _reload_post_bulk():
-    """Re-import post_bulk so env changes take effect."""
-    if "post_bulk" in sys.modules:
-        importlib.reload(sys.modules["post_bulk"])
-    import post_bulk
+def _reload_fin_url():
+    """Re-import _fin_url so env changes take effect."""
+    if "_fin_url" in sys.modules:
+        importlib.reload(sys.modules["_fin_url"])
+    import _fin_url
 
-    return post_bulk
+    return _fin_url
 
 
 def test_marker_forces_dev(monkeypatch, tmp_path):
@@ -97,8 +97,8 @@ def test_marker_forces_dev(monkeypatch, tmp_path):
     (tmp_path / ".fin-dev").touch()
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    pb = _reload_post_bulk()
-    assert pb._resolve_base() == "http://127.0.0.1:18888"
+    fu = _reload_fin_url()
+    assert fu.resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_marker_skips_port_conflict_check(monkeypatch, tmp_path):
@@ -106,9 +106,9 @@ def test_marker_skips_port_conflict_check(monkeypatch, tmp_path):
     (tmp_path / ".fin-dev").touch()
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    pb = _reload_post_bulk()
-    monkeypatch.setattr(pb, "_port_open", lambda port: True)
-    assert pb._resolve_base() == "http://127.0.0.1:18888"
+    fu = _reload_fin_url()
+    monkeypatch.setattr(fu, "_port_open", lambda port: True)
+    assert fu.resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_marker_honors_fin_api_url(monkeypatch, tmp_path):
@@ -116,42 +116,42 @@ def test_marker_honors_fin_api_url(monkeypatch, tmp_path):
     (tmp_path / ".fin-dev").touch()
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("FIN_API_URL", "http://localhost:8888")
-    pb = _reload_post_bulk()
-    assert pb._resolve_base() == "http://localhost:8888"
+    fu = _reload_fin_url()
+    assert fu.resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_no_servers_returns_default(monkeypatch, tmp_path):
     """Both ports closed → default URL (request will fail later)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    pb = _reload_post_bulk()
-    monkeypatch.setattr(pb, "_port_open", lambda port: False)
-    assert pb._resolve_base() == "http://localhost:8888"
+    fu = _reload_fin_url()
+    monkeypatch.setattr(fu, "_port_open", lambda port: False)
+    assert fu.resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_only_prod_returns_default(monkeypatch, tmp_path):
     """Normal user: no marker, only prod up → use prod."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    pb = _reload_post_bulk()
-    monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.PROD_PORT)
-    assert pb._resolve_base() == "http://localhost:8888"
+    fu = _reload_fin_url()
+    monkeypatch.setattr(fu, "_port_open", lambda port: port == fu.PROD_PORT)
+    assert fu.resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_only_dev_honors_fin_api_url(monkeypatch, tmp_path):
     """No marker, only dev up + explicit FIN_API_URL → use the URL."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("FIN_API_URL", "http://127.0.0.1:18888")
-    pb = _reload_post_bulk()
-    monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.DEV_PORT)
-    assert pb._resolve_base() == "http://127.0.0.1:18888"
+    fu = _reload_fin_url()
+    monkeypatch.setattr(fu, "_port_open", lambda port: port == fu.DEV_PORT)
+    assert fu.resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_no_marker_both_servers_refused(monkeypatch, tmp_path):
     """No marker + both ports open → REFUSED, no override."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
-    pb = _reload_post_bulk()
-    monkeypatch.setattr(pb, "_port_open", lambda port: True)
+    fu = _reload_fin_url()
+    monkeypatch.setattr(fu, "_port_open", lambda port: True)
     with pytest.raises(SystemExit, match="REFUSED"):
-        pb._resolve_base()
+        fu.resolve_base()

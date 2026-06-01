@@ -35,3 +35,12 @@ def test_bulk_create_transactions_empty(client):
         "skipped": 0,
         "errors": [],
     }
+
+
+def test_bulk_create_skips_duplicates_within_input(client):
+    payload = [_txn(), _txn()]
+    r = client.post("/api/transactions/bulk", json=payload)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["created"] == 1
+    assert body["skipped"] == 1

@@ -30,7 +30,7 @@ def _decide() -> tuple[str, str]:
     explicit = os.environ.get("FIN_API_URL")
     if explicit:
         return explicit, "FIN_API_URL env"
-    if (Path.home() / ".fin-dev").exists():
+    if (Path.home() / ".fin-dev").is_file():
         return f"http://127.0.0.1:{DEV_PORT}", "~/.fin-dev present → dev"
     if _port_open(PROD_PORT) and _port_open(DEV_PORT):
         raise SystemExit(

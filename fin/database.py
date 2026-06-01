@@ -150,7 +150,8 @@ def _migrate_columns(db: "Session") -> None:
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:
-        assert table in _KNOWN_TABLES, f"unexpected table name: {table!r}"
+        if table not in _KNOWN_TABLES:
+            raise ValueError(f"unknown table: {table}")
         cols = [row[1] for row in db.execute(text(f"PRAGMA table_info({table})"))]
         if col not in cols:
             db.execute(text(stmt))

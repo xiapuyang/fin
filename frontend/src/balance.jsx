@@ -1061,19 +1061,24 @@ const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
   const handleSave = async () => {
     setSaving(true); setError(null);
     try {
-      for (const acct of holdAccounts) {
-        if (!checked[acct.name] || !acct.balance_account_id || isDupe(acct)) continue;
-        const { amount, currency } = totals[acct.name] || { amount: 0, currency: acct.currency };
-        await apiCreateBalanceItem({
-          snapshot_id: snapId,
-          name: acct.name,
-          category: "投资",
-          side: "asset",
-          amount: Math.round(amount),
-          currency,
-          account_id: acct.balance_account_id,
-          sub_account_id: acct.balance_sub_account_id || null,
+      const payloads = holdAccounts
+        .filter(acct => checked[acct.name] && acct.balance_account_id && !isDupe(acct))
+        .map(acct => {
+          const { amount, currency } = totals[acct.name] || { amount: 0, currency: acct.currency };
+          return {
+            snapshot_id: snapId,
+            name: acct.name,
+            category: "投资",
+            side: "asset",
+            amount: Math.round(amount),
+            currency,
+            account_id: acct.balance_account_id,
+            sub_account_id: acct.balance_sub_account_id || null,
+          };
         });
+      if (payloads.length > 0) {
+        const result = await apiCreateBalanceItemsBulk(payloads);
+        if (result.errors && result.errors.length > 0) throw new Error(result.errors[0].reason);
       }
       onDone();
     } catch (e) { setError(e.message); }

@@ -148,11 +148,10 @@ def test_balance_chinese_vocab_passes_through():
 
 def test_watchlist_txt_one_per_line():
     rows = parse(text=_read("watchlist_symbols.txt"), format="txt")
-    # txt parser names the single column "value" — needs to be remapped to "symbol"
-    # in real flow. Here we just confirm parsing works.
+    # txt parser uses txt_key="symbol" by default.
     assert len(rows) == 4
-    assert rows[0]["value"] == "AAPL"
-    assert rows[3]["value"] == "0700.HK"
+    assert rows[0]["symbol"] == "AAPL"
+    assert rows[3]["symbol"] == "0700.HK"
 
 
 # ── fin-import: preview dedup ────────────────────────────────────────────────
@@ -163,7 +162,7 @@ def test_preview_dedup_against_existing_alerts():
         {"symbol": "NVDA", "name": "Nvidia", "condition": "price_gte", "value": 500.0},
         {"symbol": "META", "name": "Meta", "condition": "price_lte", "value": 400.0},
     ]
-    existing = [{"symbol": "NVDA", "condition": "price_gte", "value": 500.0}]
+    existing = [{"code": "NVDA", "cond": "price_gte", "threshold": 500.0}]
     new, skipped = dedup("alerts", incoming, existing)
     assert skipped == 1
     assert len(new) == 1 and new[0]["symbol"] == "META"

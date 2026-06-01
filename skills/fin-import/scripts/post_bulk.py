@@ -14,12 +14,11 @@ Returns the server's BulkResponse JSON to stdout. Non-zero exit on error.
 import argparse
 import json
 import sys
-import time
-from pathlib import Path
 
 import requests
 
 from _fin_url import resolve_base
+from _utils import _err, _load_rows
 
 ENDPOINTS = {
     "alerts": "/api/alerts/bulk",
@@ -34,42 +33,29 @@ ENDPOINTS = {
 
 
 def post(domain: str, rows: list[dict]) -> dict:
+    """POST canonical rows to the fin bulk endpoint for the given domain.
+
+    Args:
+        domain: One of the keys in ENDPOINTS (alerts, transactions, etc.).
+        rows: List of canonical row dicts matching the domain's schema.
+
+    Returns:
+        BulkResponse-shaped dict with created, skipped, and errors keys.
+    """
     base = resolve_base()
     url = base + ENDPOINTS[domain]
     try:
         r = requests.post(url, json=rows, timeout=30)
-    except requests.ConnectionError:
+    except requests.exceptions.RequestException:
         return _err(
             f"could not reach fin at {base} — start with `uv run python serve.py`"
         )
     if r.status_code >= 400:
         return _err(f"{r.status_code}: {r.text}", payload=rows)
-    return r.json()
-
-
-def _load_rows(arg: str) -> list[dict]:
-    """Accept either an inline JSON list/object or a file path."""
-    stripped = arg.lstrip()
-    if stripped.startswith("[") or stripped.startswith("{"):
-        return json.loads(arg)
-    return json.loads(Path(arg).read_text())
-
-
-def _err(reason: str, payload=None) -> dict:
-    ts = int(time.time())
-    err_path = Path(f"/tmp/fin-import-error-{ts}.json")
-    err_path.write_text(
-        json.dumps(
-            {"reason": reason, "payload": payload},
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    return {
-        "created": 0,
-        "skipped": 0,
-        "errors": [{"reason": reason, "details": str(err_path)}],
-    }
+    try:
+        return r.json()
+    except ValueError:
+        return {"errors": [{"reason": "non-json-response", "details": r.text[:500]}]}
 
 
 def main() -> int:

@@ -43,3 +43,12 @@ def test_bulk_create_ledger_validation_aborts(client):
 def test_bulk_create_ledger_empty(client):
     r = client.post("/api/ledger/bulk", json=[])
     assert r.json() == {"created": 0, "skipped": 0, "errors": []}
+
+
+def test_bulk_create_skips_duplicates_within_input(client):
+    payload = [_ledger(), _ledger()]
+    r = client.post("/api/ledger/bulk", json=payload)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["created"] == 1
+    assert body["skipped"] == 1

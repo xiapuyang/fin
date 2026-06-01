@@ -95,15 +95,32 @@ class BalanceItemSQLiteRepository:
     def bulk_create(
         self, items: list[BalanceItemCreate], user_id: int
     ) -> tuple[list[BalanceItemModel], int]:
-        """Insert many balance items; pre-filter by (snapshot_id, name, side, category).
+        """Insert many balance items; pre-filter by (snapshot_id, side, account_id, sub_account_id, category).
 
         Dedup runs against both existing DB rows and earlier rows in the same
         input batch. Insert-only: matching keys are counted as skipped and never
         updated. The caller stamps `snapshot_id` on each item — this method does
         not look up snapshots by date.
         """
+
+        def _dedup_key(snapshot_id, side, account_id, sub_account_id, category):
+            """Build a key that matches the DB unique index uq_balance_item.
+
+            The index uses COALESCE(account_id,-1) and COALESCE(sub_account_id,-1)
+            so that two NULL values hash to the same bucket.
+            """
+            return (
+                snapshot_id,
+                side,
+                account_id if account_id is not None else -1,
+                sub_account_id if sub_account_id is not None else -1,
+                category,
+            )
+
         existing = {
-            (b.snapshot_id, b.name, b.side, b.category)
+            _dedup_key(
+                b.snapshot_id, b.side, b.account_id, b.sub_account_id, b.category
+            )
             for b in self._db.query(BalanceItemModel)
             .filter(BalanceItemModel.user_id == user_id)
             .all()
@@ -111,7 +128,13 @@ class BalanceItemSQLiteRepository:
         to_insert: list[BalanceItemModel] = []
         skipped = 0
         for item in items:
-            key = (item.snapshot_id, item.name, item.side, item.category)
+            key = _dedup_key(
+                item.snapshot_id,
+                item.side,
+                item.account_id,
+                item.sub_account_id,
+                item.category,
+            )
             if key in existing:
                 skipped += 1
                 continue

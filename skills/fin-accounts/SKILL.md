@@ -65,3 +65,4 @@ Country-specific accounts (CA / HK / SG banks), duplicate-type accounts, family-
 - **400 from bulk endpoint (unknown parent)** → print the missing parent names, suggest re-running with parents listed first
 - **5xx** → stop; do not retry
 - **Hook gate "No"** → exit cleanly, no write
+- **REFUSED: dev+prod ports both reachable, ~/.fin-dev missing** — `_fin_url.resolve_base()` refuses to pick a port when both 8888 and 18888 are reachable and the dev marker is absent. Create `~/.fin-dev` (touch it) on this machine if it's a dev box; otherwise stop one of the servers.

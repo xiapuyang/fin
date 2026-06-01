@@ -22,11 +22,11 @@ numbers couldn't be computed.
 import argparse
 import json
 import sys
-from pathlib import Path
 
 import requests
 
 from _fin_url import resolve_base
+from _utils import _load_rows
 
 # Per-field tuple: (incoming_alias, existing_alias). String entry = same name
 # on both sides. Add a new entry when fin's POST vs GET schemas diverge.
@@ -45,7 +45,7 @@ ENDPOINTS = {
     "transactions": "/api/transactions",
     "holdings": "/api/holdings",
     "income": "/api/income",
-    "ledger": "/api/ledger",
+    "ledger": "/api/ledger?page_size=200",
     "balance": "/api/balance/items",
     "watchlist": "/api/watchlist",
 }
@@ -65,6 +65,16 @@ def _extract_key(row: dict, spec: tuple, side: int) -> tuple:
 def dedup(
     domain: str, incoming: list[dict], existing: list[dict]
 ) -> tuple[list[dict], int]:
+    """Client-side dedup: filter incoming rows that already exist server-side.
+
+    Args:
+        domain: Import domain key (must be in NATURAL_KEYS).
+        incoming: Canonical rows about to be posted.
+        existing: Rows fetched from the server via GET /api/<domain>.
+
+    Returns:
+        Tuple of (new_rows, skipped_count) where new_rows excludes dupes.
+    """
     spec = NATURAL_KEYS[domain]
     existing_keys = {_extract_key(e, spec, side=1) for e in existing}
     new: list[dict] = []
@@ -79,15 +89,15 @@ def dedup(
     return new, skipped
 
 
-def _load_rows(arg: str) -> list[dict]:
-    """Accept either an inline JSON list/object or a file path."""
-    stripped = arg.lstrip()
-    if stripped.startswith("[") or stripped.startswith("{"):
-        return json.loads(arg)
-    return json.loads(Path(arg).read_text())
-
-
 def _fetch_existing(domain: str) -> list[dict] | None:
+    """Fetch existing rows from the server for dedup comparison.
+
+    Args:
+        domain: Import domain key matching an entry in ENDPOINTS.
+
+    Returns:
+        List of existing row dicts, or None if the server is unreachable.
+    """
     base = resolve_base()
     try:
         r = requests.get(base + ENDPOINTS[domain], timeout=10)

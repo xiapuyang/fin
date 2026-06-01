@@ -1,8 +1,11 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from fin.config import TS_FMT
+from fin.config import BULK_MAX_ITEMS, TS_FMT
 from fin.database import get_db
 from fin.models.balance_account import BalanceAccountModel
 from fin.models.balance_item import BalanceItemModel
@@ -36,6 +39,14 @@ router = APIRouter(prefix="/api")
 
 
 def _account_response(m: BalanceAccountModel) -> BalanceAccountResponse:
+    """Convert a BalanceAccountModel ORM instance to a BalanceAccountResponse.
+
+    Args:
+        m: ORM model instance.
+
+    Returns:
+        BalanceAccountResponse schema instance.
+    """
     return BalanceAccountResponse(
         id=m.id,
         name=m.name,
@@ -48,6 +59,15 @@ def _account_response(m: BalanceAccountModel) -> BalanceAccountResponse:
 def _snapshot_response(
     m: BalanceSnapshotModel, item_count: int
 ) -> BalanceSnapshotResponse:
+    """Convert a BalanceSnapshotModel to a BalanceSnapshotResponse.
+
+    Args:
+        m: ORM model instance.
+        item_count: Pre-computed count of items in this snapshot.
+
+    Returns:
+        BalanceSnapshotResponse schema instance.
+    """
     return BalanceSnapshotResponse(
         id=m.id,
         snapshot_date=m.snapshot_date,
@@ -62,6 +82,16 @@ def _snapshot_response(
 def _item_response(
     item: BalanceItemModel, snapshot_date: str, account_map: dict[int, str]
 ) -> BalanceItemResponse:
+    """Convert a BalanceItemModel to a BalanceItemResponse.
+
+    Args:
+        item: ORM model instance.
+        snapshot_date: ISO date string of the parent snapshot.
+        account_map: Mapping of account id to account name for display.
+
+    Returns:
+        BalanceItemResponse schema instance.
+    """
     return BalanceItemResponse(
         id=item.id,
         snapshot_id=item.snapshot_id,
@@ -111,7 +141,7 @@ def create_account(data: BalanceAccountCreate, db: Session = Depends(get_db)):
 
 @router.post("/balance/accounts/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_balance_accounts(
-    items: list[BalanceAccountBulkItem],
+    items: Annotated[list[BalanceAccountBulkItem], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ) -> BulkResponse:
     """Bulk-create balance accounts; resolves parents by name.
@@ -275,7 +305,7 @@ def create_item(data: BalanceItemCreate, db: Session = Depends(get_db)):
 
 @router.post("/balance/items/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_balance_items(
-    items: list[BalanceItemCreate],
+    items: Annotated[list[BalanceItemCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ) -> BulkResponse:
     """Bulk-create balance items. All-or-nothing on validation; duplicates skipped.

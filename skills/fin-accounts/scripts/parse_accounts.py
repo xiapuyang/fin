@@ -5,6 +5,14 @@ import io
 
 
 def _split_pair(line: str) -> tuple[str, str | None]:
+    """Split a 'Parent/Sub' or 'Parent > Sub' line into (parent, sub) pair.
+
+    Args:
+        line: A single text line, possibly containing a separator.
+
+    Returns:
+        Tuple of (parent_name, sub_name_or_None).
+    """
     for sep in ("/", " > ", " > ", ">"):
         if sep in line:
             parent, sub = line.split(sep, 1)

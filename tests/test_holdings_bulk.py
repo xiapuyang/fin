@@ -43,3 +43,12 @@ def test_bulk_create_holdings_validation_aborts(client):
 def test_bulk_create_holdings_empty(client):
     r = client.post("/api/holdings/bulk", json=[])
     assert r.json() == {"created": 0, "skipped": 0, "errors": []}
+
+
+def test_bulk_create_skips_duplicates_within_input(client):
+    payload = [_holding_payload(code="AAPL"), _holding_payload(code="AAPL")]
+    r = client.post("/api/holdings/bulk", json=payload)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["created"] == 1
+    assert body["skipped"] == 1

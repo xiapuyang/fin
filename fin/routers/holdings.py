@@ -6,14 +6,15 @@ import math
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Annotated, Any
 
 import yfinance as yf
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from fin.config import TS_FMT
+from fin.config import BULK_MAX_ITEMS, TS_FMT
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.holding import HoldingModel
@@ -77,6 +78,14 @@ def _account_response(a: AccountModel) -> AccountResponse:
 
 
 def _holding_response(h: HoldingModel) -> HoldingResponse:
+    """Convert a HoldingModel ORM instance to a HoldingResponse schema.
+
+    Args:
+        h: ORM model instance.
+
+    Returns:
+        HoldingResponse schema instance.
+    """
     return HoldingResponse(
         id=h.id,
         code=h.code,
@@ -95,6 +104,14 @@ def _holding_response(h: HoldingModel) -> HoldingResponse:
 
 
 def _tx_response(t: TransactionModel) -> TransactionResponse:
+    """Convert a TransactionModel ORM instance to a TransactionResponse schema.
+
+    Args:
+        t: ORM model instance.
+
+    Returns:
+        TransactionResponse schema instance.
+    """
     return TransactionResponse(
         id=t.id,
         date=t.date,
@@ -113,6 +130,14 @@ def _tx_response(t: TransactionModel) -> TransactionResponse:
 
 
 def _income_response(i: IncomeModel) -> IncomeResponse:
+    """Convert an IncomeModel ORM instance to an IncomeResponse schema.
+
+    Args:
+        i: ORM model instance.
+
+    Returns:
+        IncomeResponse schema instance.
+    """
     return IncomeResponse(
         id=i.id,
         date=i.date,
@@ -236,7 +261,7 @@ def list_holdings(db: Session = Depends(get_db)):
 
 @router.post("/holdings/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_holdings(
-    items: list[HoldingCreate],
+    items: Annotated[list[HoldingCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ):
     """Bulk-create holdings. All-or-nothing on validation; duplicates skipped.
@@ -247,8 +272,8 @@ def bulk_create_holdings(
     insert (FastAPI handles this via the `list[HoldingCreate]` body annotation).
     """
     repo = HoldingSQLiteRepository(db)
-    _, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
-    return BulkResponse(created=len(items) - skipped, skipped=skipped)
+    created_models, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(created_models), skipped=skipped)
 
 
 @router.post("/holdings", response_model=HoldingResponse, status_code=201)
@@ -335,7 +360,7 @@ def list_transactions_paged(
 
 @router.post("/transactions/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_transactions(
-    items: list[TransactionCreate],
+    items: Annotated[list[TransactionCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ):
     """Bulk-create transactions. All-or-nothing on validation; duplicates skipped.
@@ -391,7 +416,7 @@ def create_income(data: IncomeCreate, db: Session = Depends(get_db)):
 
 @router.post("/income/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_income(
-    items: list[IncomeCreate],
+    items: Annotated[list[IncomeCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ):
     """Bulk-create income records. All-or-nothing on validation; duplicates skipped.

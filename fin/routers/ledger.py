@@ -1,12 +1,14 @@
 import json
 import logging
 import math
+from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from fin import categories_store
-from fin.config import SUPPORTED_CURRENCIES
+from fin.config import BULK_MAX_ITEMS, SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.models.ledger import LedgerModel
 from fin.models.user import MOCK_USER_ID
@@ -29,11 +31,28 @@ _CCY_PATTERN = "^(" + "|".join(SUPPORTED_CURRENCIES) + ")$"
 
 
 def _resolve_category_name(cat_id: str) -> str:
+    """Look up a category ID's display name.
+
+    Args:
+        cat_id: Category ID string (e.g. '0001').
+
+    Returns:
+        Human-readable name, or cat_id unchanged if not found.
+    """
     cat = categories_store.find(cat_id)
     return cat["name"] if cat else cat_id
 
 
 def _ledger_response(e: LedgerModel, count: int | None = None) -> LedgerResponse:
+    """Convert a LedgerModel ORM instance to a LedgerResponse schema.
+
+    Args:
+        e: ORM model instance.
+        count: Optional occurrence count for recurring entries.
+
+    Returns:
+        LedgerResponse schema instance.
+    """
     return LedgerResponse(
         id=e.id,
         direction=e.direction,
@@ -96,7 +115,7 @@ def create_ledger(data: LedgerCreate, db: Session = Depends(get_db)):
 
 @router.post("/ledger/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_ledger(
-    items: list[LedgerCreate],
+    items: Annotated[list[LedgerCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ):
     """Bulk-create ledger entries. All-or-nothing on validation; duplicates skipped.

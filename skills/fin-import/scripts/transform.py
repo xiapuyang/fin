@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from _utils import _load_rows  # noqa: E402
+
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 
@@ -170,14 +172,6 @@ def transform(
 
         result.rows.append(canonical)
     return result
-
-
-def _load_rows(arg: str) -> list[dict]:
-    """Accept either an inline JSON list or a file path."""
-    stripped = arg.lstrip()
-    if stripped.startswith("[") or stripped.startswith("{"):
-        return json.loads(arg)
-    return json.loads(Path(arg).read_text())
 
 
 def main() -> int:

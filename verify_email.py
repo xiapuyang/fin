@@ -51,13 +51,31 @@ class Result:
         self.warned = False
 
     def ok(self, step: str, detail: str = "") -> None:
+        """Print a PASS line for a completed check step.
+
+        Args:
+            step: Step label (e.g. '[1] .env').
+            detail: Optional detail appended after an em-dash.
+        """
         print(f"[{PASS}] {step}" + (f" — {detail}" if detail else ""))
 
     def warn(self, step: str, detail: str) -> None:
+        """Print a WARN line and set warned flag.
+
+        Args:
+            step: Step label.
+            detail: Explanation of the warning condition.
+        """
         self.warned = True
         print(f"[{WARN}] {step} — {detail}")
 
     def fail(self, step: str, detail: str) -> None:
+        """Print a FAIL line and set failed flag.
+
+        Args:
+            step: Step label.
+            detail: Explanation of the failure condition.
+        """
         self.failed = True
         print(f"[{FAIL}] {step} — {detail}")
 
@@ -69,7 +87,7 @@ def check_env(r: Result) -> bool:
     if not AGENTMAIL_INBOX:
         r.fail("[1] .env", "FIN_AGENTMAIL_INBOX not set")
     if AGENTMAIL_API_KEY and AGENTMAIL_INBOX:
-        r.ok("[1] .env", f"inbox={AGENTMAIL_INBOX}")
+        r.ok("[1] .env", "AGENTMAIL_INBOX: configured")
         return True
     return False
 

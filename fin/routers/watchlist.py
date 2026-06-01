@@ -1,8 +1,11 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import Field
 from sqlalchemy.orm import Session
 
+from fin.config import BULK_MAX_ITEMS
 from fin.database import get_db
 from fin.models.user import MOCK_USER_ID
 from fin.models.watchlist import WatchlistModel
@@ -49,7 +52,7 @@ def list_watchlist(db: Session = Depends(get_db)) -> list[WatchlistItem]:
 
 @router.post("/watchlist/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_watchlist(
-    items: list[WatchlistAdd],
+    items: Annotated[list[WatchlistAdd], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ) -> BulkResponse:
     """Bulk-create watchlist entries. All-or-nothing on validation; dupes skipped.

@@ -29,6 +29,15 @@ _MIN_SCORE = 2
 
 
 def detect(text: str) -> str:
+    """Classify input text into one of fin's 7 import domains.
+
+    Args:
+        text: Raw input text (CSV or plain text).
+
+    Returns:
+        Domain name string (alerts, transactions, holdings, income, ledger,
+        balance, watchlist) or 'ambiguous' when confidence is too low.
+    """
     text_lower = text.lower()
     headers: set[str] = set()
     first = text.splitlines()[0] if text else ""

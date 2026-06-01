@@ -1,10 +1,12 @@
 import json
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import Field
 from sqlalchemy.orm import Session
 
-from fin.config import MARKET_STATE_PATH, SYMBOLS_PATH
+from fin.config import BULK_MAX_ITEMS, MARKET_STATE_PATH, SYMBOLS_PATH
 from fin.database import get_db
 from fin.models.alert import AlertFireModel, AlertModel
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
@@ -142,7 +144,7 @@ def _check_duplicate(
 
 @router.post("/alerts/bulk", response_model=BulkResponse, status_code=201)
 def bulk_create_alerts(
-    items: list[AlertCreate],
+    items: Annotated[list[AlertCreate], Field(max_length=BULK_MAX_ITEMS)],
     db: Session = Depends(get_db),
 ):
     """Bulk-create alerts. All-or-nothing on validation; duplicates skipped.
@@ -153,8 +155,8 @@ def bulk_create_alerts(
     automatically via the `list[AlertCreate]` body annotation).
     """
     repo = AlertSQLiteRepository(db)
-    _, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
-    return BulkResponse(created=len(items) - skipped, skipped=skipped)
+    created_models, skipped = repo.bulk_create(items, user_id=MOCK_USER_ID)
+    return BulkResponse(created=len(created_models), skipped=skipped)
 
 
 @router.post("/alerts", response_model=AlertResponse, status_code=201)

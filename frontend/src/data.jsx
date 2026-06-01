@@ -122,6 +122,7 @@ async function apiCopyBalanceSnapshot(id, opts = {}) { return _apiFetch(`/api/ba
 async function apiGetBalanceItems(snapshotId)        { return _apiFetch(`/api/balance/snapshots/${snapshotId}/items`); }
 async function apiGetAllBalanceItems()               { return _apiFetch("/api/balance/items"); }
 async function apiCreateBalanceItem(data)            { return _apiFetch("/api/balance/items", _JSON(data)); }
+async function apiCreateBalanceItemsBulk(items)      { return _apiFetch("/api/balance/items/bulk", _JSON(items)); }
 async function apiUpdateBalanceItem(id, data)        { return _apiFetch(`/api/balance/items/${id}`, _PUT(data)); }
 async function apiDeleteBalanceItem(id)              { return _apiFetch(`/api/balance/items/${id}`, _DEL()); }
 Object.assign(window, {
@@ -133,5 +134,5 @@ Object.assign(window, {
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
   apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,
   apiGetBalanceSnapshots, apiCreateBalanceSnapshot, apiUpdateBalanceSnapshot, apiDeleteBalanceSnapshot, apiCopyBalanceSnapshot,
-  apiGetBalanceItems, apiGetAllBalanceItems, apiCreateBalanceItem, apiUpdateBalanceItem, apiDeleteBalanceItem,
+  apiGetBalanceItems, apiGetAllBalanceItems, apiCreateBalanceItem, apiCreateBalanceItemsBulk, apiUpdateBalanceItem, apiDeleteBalanceItem,
 });

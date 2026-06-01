@@ -78,6 +78,7 @@ def main() -> None:
 
     init_db()
     db = SessionLocal()
+    check_completed = False
     try:
         alert_repo = AlertSQLiteRepository(db)
         fire_repo = AlertFireSQLiteRepository(db)
@@ -182,10 +183,13 @@ def main() -> None:
             except Exception:
                 logger.exception("Failed to send summary email")
 
+        check_completed = True
+
     finally:
-        LAST_CHECK_PATH.write_text(
-            json.dumps({"checked_at": datetime.utcnow().isoformat() + "Z"})
-        )
+        if check_completed:
+            LAST_CHECK_PATH.write_text(
+                json.dumps({"checked_at": datetime.utcnow().isoformat() + "Z"})
+            )
         db.close()
 
 

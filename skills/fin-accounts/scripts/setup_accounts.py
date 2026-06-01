@@ -9,39 +9,38 @@ Usage:
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
 
 import requests
 
 from _fin_url import resolve_base as _resolve_base
+from _utils import _err
 
 
 def post(rows: list[dict]) -> dict:
+    """POST balance account rows to /api/balance/accounts/bulk.
+
+    Args:
+        rows: List of {name, parent_name?} dicts.
+
+    Returns:
+        BulkResponse-shaped dict with created, skipped, and errors keys.
+    """
     base = _resolve_base()
     url = base + "/api/balance/accounts/bulk"
     try:
         r = requests.post(url, json=rows, timeout=30)
-    except requests.ConnectionError:
+    except requests.exceptions.RequestException:
         return _err(
-            f"could not reach fin at {base} — start with `uv run python serve.py`"
+            f"could not reach fin at {base} — start with `uv run python serve.py`",
+            prefix="fin-accounts",
         )
     if r.status_code >= 400:
-        return _err(f"{r.status_code}: {r.text}", payload=rows)
-    return r.json()
-
-
-def _err(reason: str, payload=None) -> dict:
-    ts = int(time.time())
-    err_path = Path(f"/tmp/fin-accounts-error-{ts}.json")
-    err_path.write_text(
-        json.dumps({"reason": reason, "payload": payload}, indent=2, ensure_ascii=False)
-    )
-    return {
-        "created": 0,
-        "skipped": 0,
-        "errors": [{"reason": reason, "details": str(err_path)}],
-    }
+        return _err(f"{r.status_code}: {r.text}", payload=rows, prefix="fin-accounts")
+    try:
+        return r.json()
+    except ValueError:
+        return {"errors": [{"reason": "non-json-response", "details": r.text[:500]}]}
 
 
 def main() -> int:
