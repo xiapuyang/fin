@@ -9,11 +9,11 @@ DEV=0
 
 if [ "$DEV" = "1" ]; then
     PID_FILE="$SCRIPT_DIR/fin-dev.pid"
-    PORT=18899
+    PORT=18888
     LABEL="fin-dev"
 else
     PID_FILE="$SCRIPT_DIR/fin.pid"
-    PORT=8899
+    PORT=8888
     LABEL="fin"
 fi
 

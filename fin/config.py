@@ -22,11 +22,11 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 if FIN_DEV:
     DATA_DIR = PROJECT_ROOT / "data-dev"
     DB_PATH = DATA_DIR / "fin.db"
-    API_PORT = 18899
+    API_PORT = 18888
 else:
     DATA_DIR = PROJECT_ROOT / "data"
     DB_PATH = Path(os.environ.get("FIN_DB_PATH") or (DATA_DIR / "fin.db"))
-    API_PORT = int(os.environ.get("FIN_PORT") or "8899")
+    API_PORT = int(os.environ.get("FIN_PORT") or "8888")
 
 # Personal/mutable state — lives under DATA_DIR.
 SETTINGS_PATH = DATA_DIR / "settings.json"

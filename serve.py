@@ -2,8 +2,8 @@
 """Run the fin API server.
 
 Usage:
-    uv run python serve.py          # prod: data/, port 8899
-    uv run python serve.py --dev    # dev:  data-dev/, port 18899, hot reload
+    uv run python serve.py          # prod: data/, port 8888
+    uv run python serve.py --dev    # dev:  data-dev/, port 18888, hot reload
 
 Both modes can run concurrently — different ports, different SQLite files.
 """
@@ -21,7 +21,7 @@ def main() -> None:
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="use data-dev/, port 18899, hot reload",
+        help="use data-dev/, port 18888, hot reload",
     )
     args = parser.parse_args()
 

@@ -2,9 +2,9 @@
 
 Decision tree (in order):
   1. FIN_API_URL env var → use as-is
-  2. ~/.fin-dev exists   → always use dev port 18899
+  2. ~/.fin-dev exists   → always use dev port 18888
   3. Both ports open     → refuse (ambiguous, would silently hit wrong data)
-  4. Default             → prod port 8899
+  4. Default             → prod port 8888
 """
 
 import os
@@ -12,8 +12,8 @@ import socket
 import sys
 from pathlib import Path
 
-PROD_PORT = 8899
-DEV_PORT = 18899
+PROD_PORT = 8888
+DEV_PORT = 18888
 
 
 def _port_open(port: int) -> bool:

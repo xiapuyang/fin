@@ -1,6 +1,6 @@
 ---
 name: fin-import
-description: Bulk-import data into the fin app (a local personal-finance dashboard at http://localhost:8899) across 7 domains — alerts, transactions, holdings, income, ledger, balance sheet items, watchlist. Auto-detects type from input, asks upfront for account / snapshot date / format ambiguities, shows a confirmation gate before any write, and is idempotent (skips duplicates server-side and previews them client-side). Triggers on phrases like "import to fin", "导入到 fin", "fin 导入", "bulk add transactions to fin", "把这些持仓加进 fin", or any time the user provides tabular data (CSV or pasted text) plus intent to write it to the fin app. Use fin-accounts (not this skill) when the user wants to set up balance accounts WITHOUT importing data.
+description: Bulk-import data into the fin app (a local personal-finance dashboard at http://localhost:8888) across 7 domains — alerts, transactions, holdings, income, ledger, balance sheet items, watchlist. Auto-detects type from input, asks upfront for account / snapshot date / format ambiguities, shows a confirmation gate before any write, and is idempotent (skips duplicates server-side and previews them client-side). Triggers on phrases like "import to fin", "导入到 fin", "fin 导入", "bulk add transactions to fin", "把这些持仓加进 fin", or any time the user provides tabular data (CSV or pasted text) plus intent to write it to the fin app. Use fin-accounts (not this skill) when the user wants to set up balance accounts WITHOUT importing data.
 ---
 
 # fin-import
@@ -9,7 +9,7 @@ Bulk importer for the fin app. Accepts pasted text, `.txt`, or `.csv`. (xlsx not
 
 ## When to use
 
-Trigger when the user wants to populate the fin app (running at `http://localhost:8899`) with one of:
+Trigger when the user wants to populate the fin app (running at `http://localhost:8888`) with one of:
 
 - **alerts** — price/change conditions on symbols
 - **transactions** — buy/sell history (single account per import)
@@ -23,7 +23,7 @@ Trigger when the user wants to populate the fin app (running at `http://localhos
 
 Run scripts under `scripts/` via `python scripts/<name>.py`. Scripts that make HTTP calls (`preview.py`, `post_bulk.py`) require `requests`: run them as `uv run --with requests python scripts/<name>.py`. The skill orchestrates them in this order:
 
-0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18899 / prod 8899 / explicit) will be touched before any prompts or writes.
+0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18888 / prod 8888 / explicit) will be touched before any prompts or writes.
 1. **Detect type** — `detect_type.py < input`. If `ambiguous`, AskUserQuestion to pick.
 2. **Preflight (per type):**
    - `transactions` / `holdings`: AskUserQuestion for the target `account`. If the account doesn't exist (`GET /api/accounts`), ask for `currency`, optional `balance_account_id` (showing current balance accounts), optional `cutoff_date`. Then `POST /api/accounts` to create.
@@ -65,7 +65,7 @@ Run scripts under `scripts/` via `python scripts/<name>.py`. Scripts that make H
      [2] { ... }
    ```
 7. **Hard confirmation gate** — AskUserQuestion: "Create N <domain> rows? [Yes / No]". Do not proceed without explicit Yes.
-8. **POST** — `post_bulk.py --type <domain> --rows <json>` calls the appropriate bulk endpoint (FIN_API_URL env, default `http://localhost:8899`).
+8. **POST** — `post_bulk.py --type <domain> --rows <json>` calls the appropriate bulk endpoint (FIN_API_URL env, default `http://localhost:8888`).
 9. **Report** — print the final summary block (see below).
 
 ## Endpoint mapping
@@ -109,7 +109,7 @@ Anything missing → ask once per import (per-import default) or per row only as
 
 ## Environment isolation
 
-The skill targets exactly one fin instance per run — dev (`http://127.0.0.1:18899`, marker `~/.fin-dev`) or prod (`http://127.0.0.1:8899`). `_fin_url.py` is the only place that decides which. **Never `cat` files under `data/` or `data-dev/` to "check" what categories / accounts / snapshots / settings exist** — that bypasses the env switch and silently reads the wrong instance. Always go through the API (`GET /api/categories`, `GET /api/accounts`, `GET /api/balance/snapshots`, `GET /api/settings`, etc.). If an endpoint is missing for what you need, add one rather than reading the JSON file. Tooling like `category_resolver.py list` and `snapshot_resolver.py find` exist for exactly this reason.
+The skill targets exactly one fin instance per run — dev (`http://127.0.0.1:18888`, marker `~/.fin-dev`) or prod (`http://127.0.0.1:8888`). `_fin_url.py` is the only place that decides which. **Never `cat` files under `data/` or `data-dev/` to "check" what categories / accounts / snapshots / settings exist** — that bypasses the env switch and silently reads the wrong instance. Always go through the API (`GET /api/categories`, `GET /api/accounts`, `GET /api/balance/snapshots`, `GET /api/settings`, etc.). If an endpoint is missing for what you need, add one rather than reading the JSON file. Tooling like `category_resolver.py list` and `snapshot_resolver.py find` exist for exactly this reason.
 
 ## Error handling
 
@@ -126,7 +126,7 @@ The skill targets exactly one fin instance per run — dev (`http://127.0.0.1:18
   Skipped (duplicates): M
   Errors:  E
   <if E > 0> Details: /tmp/fin-import-error-<ts>.json
-  <if writes happened> Refresh the fin app at http://localhost:8899 to see new data.
+  <if writes happened> Refresh the fin app at http://localhost:8888 to see new data.
 ```
 
 ## Templates

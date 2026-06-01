@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run the API server (http://localhost:8899)
+# Run the API server (http://localhost:8888)
 uv run python serve.py
 
 # Run the alert checker manually (also used as a cron job)

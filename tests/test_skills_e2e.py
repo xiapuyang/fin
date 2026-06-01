@@ -66,7 +66,7 @@ def fin_server(tmp_path_factory):
 
     # Inline runner: imports the app fresh, init_db creates the schema, uvicorn
     # serves it. Easier to manage than `uv run python serve.py` since serve.py
-    # hardcodes 8899 and includes the price updater + scheduler we don't need.
+    # hardcodes 8888 and includes the price updater + scheduler we don't need.
     runner = (
         "from fin.api import app; "
         "from fin.database import init_db; init_db(); "

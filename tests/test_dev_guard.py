@@ -5,9 +5,9 @@ Two layers under test:
    (FIN_DB_PATH, FIN_PORT) MUST be ignored so a stale shell export can't
    silently route the dev server at prod data.
 2. Skill _resolve_base() three-rule decision tree:
-   a. ~/.fin-dev present → default to dev (18899), no port probe.
+   a. ~/.fin-dev present → default to dev (18888), no port probe.
    b. No marker + both ports live → REFUSED (ambiguous target).
-   c. Otherwise → FIN_API_URL or default localhost:8899.
+   c. Otherwise → FIN_API_URL or default localhost:8888.
    FIN_API_URL always wins when set.
 """
 
@@ -63,9 +63,9 @@ def test_dev_mode_ignores_fin_db_path():
 
 
 def test_dev_mode_ignores_fin_port():
-    """FIN_DEV=1 + FIN_PORT=8899 → port must stay 18899."""
-    out = _config_in_subprocess({"FIN_DEV": "1", "FIN_PORT": "8899"})
-    assert out["port"] == "18899"
+    """FIN_DEV=1 + FIN_PORT=8888 → port must stay 18888."""
+    out = _config_in_subprocess({"FIN_DEV": "1", "FIN_PORT": "8888"})
+    assert out["port"] == "18888"
 
 
 def test_prod_mode_honors_fin_db_path():
@@ -98,7 +98,7 @@ def test_marker_forces_dev(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
-    assert pb._resolve_base() == "http://127.0.0.1:18899"
+    assert pb._resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_marker_skips_port_conflict_check(monkeypatch, tmp_path):
@@ -108,16 +108,16 @@ def test_marker_skips_port_conflict_check(monkeypatch, tmp_path):
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: True)
-    assert pb._resolve_base() == "http://127.0.0.1:18899"
+    assert pb._resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_marker_honors_fin_api_url(monkeypatch, tmp_path):
     """Explicit FIN_API_URL wins even when marker is present."""
     (tmp_path / ".fin-dev").touch()
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("FIN_API_URL", "http://localhost:8899")
+    monkeypatch.setenv("FIN_API_URL", "http://localhost:8888")
     pb = _reload_post_bulk()
-    assert pb._resolve_base() == "http://localhost:8899"
+    assert pb._resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_no_servers_returns_default(monkeypatch, tmp_path):
@@ -126,7 +126,7 @@ def test_no_marker_no_servers_returns_default(monkeypatch, tmp_path):
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: False)
-    assert pb._resolve_base() == "http://localhost:8899"
+    assert pb._resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_only_prod_returns_default(monkeypatch, tmp_path):
@@ -135,16 +135,16 @@ def test_no_marker_only_prod_returns_default(monkeypatch, tmp_path):
     monkeypatch.delenv("FIN_API_URL", raising=False)
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.PROD_PORT)
-    assert pb._resolve_base() == "http://localhost:8899"
+    assert pb._resolve_base() == "http://localhost:8888"
 
 
 def test_no_marker_only_dev_honors_fin_api_url(monkeypatch, tmp_path):
     """No marker, only dev up + explicit FIN_API_URL → use the URL."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("FIN_API_URL", "http://127.0.0.1:18899")
+    monkeypatch.setenv("FIN_API_URL", "http://127.0.0.1:18888")
     pb = _reload_post_bulk()
     monkeypatch.setattr(pb, "_port_open", lambda port: port == pb.DEV_PORT)
-    assert pb._resolve_base() == "http://127.0.0.1:18899"
+    assert pb._resolve_base() == "http://127.0.0.1:18888"
 
 
 def test_no_marker_both_servers_refused(monkeypatch, tmp_path):

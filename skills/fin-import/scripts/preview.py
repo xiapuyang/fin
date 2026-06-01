@@ -14,7 +14,7 @@ hit wins. When both schemas already use the same name (watchlist `symbol`), pass
 a single-string entry.
 
 URL resolution lives in _fin_url.resolve_base (FIN_API_URL > ~/.fin-dev marker
-> port-conflict refusal > default :8899). Network failures degrade gracefully —
+> port-conflict refusal > default :8888). Network failures degrade gracefully —
 preview still shows local row count + sample, but flags that server-side dedup
 numbers couldn't be computed.
 """

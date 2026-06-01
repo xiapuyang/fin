@@ -17,7 +17,7 @@ If the user is importing data (not just setting up accounts), use **fin-import**
 
 ## Runtime flow
 
-0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18899 / prod 8899 / explicit) will be touched before any prompts or writes.
+0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18888 / prod 8888 / explicit) will be touched before any prompts or writes.
 1. **Mode detection** — AskUserQuestion if not obvious:
    - "Parse from your input" — user has text/CSV listing accounts
    - "Apply starter template" — use `assets/starter_accounts.json` (11 parents, minimal starter)

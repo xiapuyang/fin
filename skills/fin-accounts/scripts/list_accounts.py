@@ -2,7 +2,7 @@
 
 Usage:
     python list_accounts.py
-    FIN_API_URL=http://localhost:18899 python list_accounts.py
+    FIN_API_URL=http://localhost:18888 python list_accounts.py
 """
 
 import json
