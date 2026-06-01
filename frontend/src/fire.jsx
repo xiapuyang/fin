@@ -77,11 +77,17 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       if (s.fire_life_expectancy != null) setLifeExpectancy(s.fire_life_expectancy);
 
       // monthly expense — ledger avg always shown as reference
-      if (avgExp != null) {
-        setLedgerAvgExp(avgExp);
-        if (s.fire_monthly_exp == null) setMonthlyExp(avgExp);
+      if (avgExp != null) setLedgerAvgExp(avgExp);
+      if (s.fire_monthly_exp != null) {
+        setMonthlyExp(s.fire_monthly_exp);
+      } else {
+        // First visit, no saved value — persist whatever we display so dashboard
+        // and other pages see the same number instead of relying on the local
+        // useState default leaking visual truth across components.
+        const fallback = (avgExp != null && avgExp > 0) ? avgExp : monthlyExp;
+        setMonthlyExp(fallback);
+        saveSettings({ fire_monthly_exp: fallback });
       }
-      if (s.fire_monthly_exp != null) setMonthlyExp(s.fire_monthly_exp);
 
       // portfolio value + MWRR — fetched async after basic load
       const codes = [...new Set([...h, ...t].map(r => r.code).filter(Boolean))];
