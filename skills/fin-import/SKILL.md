@@ -21,25 +21,39 @@ Trigger when the user wants to populate the fin app (running at `http://localhos
 
 ## Runtime flow
 
-Run scripts under `scripts/` via `python scripts/<name>.py`. The skill orchestrates them in this order:
+Run scripts under `scripts/` via `python scripts/<name>.py`. Scripts that make HTTP calls (`preview.py`, `post_bulk.py`) require `requests`: run them as `uv run --with requests python scripts/<name>.py`. The skill orchestrates them in this order:
 
+0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18899 / prod 8899 / explicit) will be touched before any prompts or writes.
 1. **Detect type** — `detect_type.py < input`. If `ambiguous`, AskUserQuestion to pick.
 2. **Preflight (per type):**
    - `transactions` / `holdings`: AskUserQuestion for the target `account`. If the account doesn't exist (`GET /api/accounts`), ask for `currency`, optional `balance_account_id` (showing current balance accounts), optional `cutoff_date`. Then `POST /api/accounts` to create.
-   - `balance`: run `snapshot_resolver.py --date YYYY-MM-DD`. Internally:
+   - `balance`: resolve the snapshot. Steps:
      a. AskUserQuestion for snapshot date (default today, YYYY-MM-DD).
-     b. `GET /api/balance/snapshots`, filter by `snapshot_date == <date>` client-side.
+     b. `snapshot_resolver.py find --date YYYY-MM-DD` → prints the matching snapshot dict, or `null`.
      c. If found → AskUserQuestion: "Snapshot for `<date>` exists (label='X', N items). Append more items? [Yes / Pick different date / Cancel]". Yes → use that `id`.
-     d. If not found → AskUserQuestion: "No snapshot for `<date>`. Create new snapshot? [label?]". On confirm → `POST /api/balance/snapshots {snapshot_date, label}`, capture returned `id`.
+     d. If not found → AskUserQuestion: "No snapshot for `<date>`. Create new snapshot? [label?]". On confirm → `snapshot_resolver.py create --date YYYY-MM-DD --label TEXT` → prints the created record.
      The resolved `snapshot_id` is then passed to `transform.py --snapshot-id`.
    - `income`: if no `account` column in input AND multiple accounts exist, ask which to attribute.
-3. **Parse input** — `parse_input.py <file_or_-> --format <csv|txt>` returns `list[dict]`.
+3. **Parse input** — `parse_input.py <file_or_-> --format <csv|txt>` returns `list[dict]`. `.txt` is one-value-per-line input; each line becomes `{"symbol": line}` by default. Realistically only useful for **watchlist** (other domains need ≥4 fields per row). Override key with `--txt-key NAME` if a future single-field domain needs it.
 4. **Transform** — `transform.py --type <domain> --rows <json> [--default-account NAME] [--snapshot-id N]` returns canonical schema list + a `gaps` list (unmapped columns, missing required fields, ambiguous dates). For each gap kind, ask the user once per gap (not per row):
    - Unmapped column → "Map column X to which field? [list canonical fields + 'skip']"
    - Missing required field for all rows → "All rows missing `currency`, set default for this import?"
    - Missing required for some rows → "Skip these N rows or fill in manually?"
    - Ambiguous date → "Format MM/DD or DD/MM?"
-5. **Account name resolution (balance only)** — for items referencing account names, consult `assets/starter_accounts.json` to suggest parent/sub, fall back to `GET /api/balance/accounts` exact match, AskUserQuestion if still unresolved. If accounts need to be created, `POST /api/balance/accounts/bulk` with parent_name resolution.
+5. **Account name resolution (balance only)** — for rows carrying `account` / `sub_account` name strings (passed through transform via `extra_fields`):
+   a. `balance_account_resolver.py list` → array of `{id, parent_id, name, parent_name}` from the **current env's API**.
+   b. For each unique `(account, sub_account)` pair:
+      - Exact-match `account` to a parent (where `parent_id is None`); then exact-match `sub_account` to a child whose `parent_id` equals that parent's id. Both hit → assign `account_id` (parent id) + `sub_account_id` (child id). (The schema field naming is unfortunate: `account_id` actually points to the PARENT row, `sub_account_id` to the child. This matches `BalanceItemCreate`.)
+      - Only the parent matches (sub doesn't) → AskUserQuestion derived **at runtime** by the LLM inspecting the existing subs under that parent + the row's full context (`currency`, item `name`, `category`). Use semantic judgment, not a fixed similarity formula — same approach as ledger category resolution (step 5b/c). E.g. row `currency=CNY, sub_account=储蓄` under a 招商银行 parent whose subs are 人民币/美元/港币/朝朝宝/朝朝赢 — LLM proposes "人民币 (default for CNY cash at this parent)" as a candidate alongside "create new sub 储蓄". Always include "Create new sub under parent", "Attach to parent only (no sub)", and "Skip rows" as options. Put reasoning in each option's `description`.
+      - Neither matches → AskUserQuestion: "Account `<X>/<Y>` doesn't exist. Create parent `<X>` + sub `<Y>`? / Create parent only / Pick from existing list / Skip rows". When proposing existing candidates, the LLM ranks the tree by semantic closeness (e.g. user typed "招商" → suggest "招商银行" / "招商信用卡"). No fixed similarity formula — just inspect the list.
+   c. On "create" decisions, call `balance_account_resolver.py create --name NAME [--parent-id N]`; capture returned IDs.
+   d. Strip `account` and `sub_account` from canonical rows; inject `account_id` / `sub_account_id` integers. Then preview + post.
+5b. **Category resolution (ledger only)** — for any row whose `category` value is a name (not an ID like `"0002"`):
+   a. `category_resolver.py list` → array of `{id, direction, name}` from the **current env's API** (never read `data/` or `data-dev/` JSON directly — those may belong to a different instance).
+   b. Exact `(direction, name)` match → swap `category` to the ID, continue.
+   c. No exact match → for each unmapped name, AskUserQuestion with options derived **at runtime** by inspecting the existing list against the unmapped name. Use semantic judgment, not a fixed similarity formula: e.g. `饮食` → suggest mapping to `餐饮`; `Uber` / `打车` → suggest `交通`; `Amazon` / `星巴克` → suggest `购物`. Always include "Create new custom category" and "Skip these N rows" as options. Pre-articulate: state the reasoning briefly in the option `description` so the user can audit ("`饮食` and `餐饮` both mean food/eating").
+   d. User picks "Create new" → `category_resolver.py create --direction <expense|income> --name <NAME>` → returns the new record with its ID; use that ID.
+   e. User picks "Skip rows" → drop those rows from the canonical list before preview.
 6. **Preview + dedup** — `preview.py --type <domain> --rows <canonical.json>` fetches existing data via `GET /api/<domain>`, performs client-side dedup using the documented natural keys, prints:
    ```
    ── fin import preview: <domain> ──
@@ -92,6 +106,10 @@ Anything missing → ask once per import (per-import default) or per row only as
 - **Date format ambiguous** (`02/03/2026`) → AskUserQuestion: MM/DD or DD/MM
 - **Unknown column** → AskUserQuestion: "Column 'X' — map to which field?"
 - **Before any POST** → AskUserQuestion: "Create N rows? [Yes / No]"
+
+## Environment isolation
+
+The skill targets exactly one fin instance per run — dev (`http://127.0.0.1:18899`, marker `~/.fin-dev`) or prod (`http://127.0.0.1:8899`). `_fin_url.py` is the only place that decides which. **Never `cat` files under `data/` or `data-dev/` to "check" what categories / accounts / snapshots / settings exist** — that bypasses the env switch and silently reads the wrong instance. Always go through the API (`GET /api/categories`, `GET /api/accounts`, `GET /api/balance/snapshots`, `GET /api/settings`, etc.). If an endpoint is missing for what you need, add one rather than reading the JSON file. Tooling like `category_resolver.py list` and `snapshot_resolver.py find` exist for exactly this reason.
 
 ## Error handling
 

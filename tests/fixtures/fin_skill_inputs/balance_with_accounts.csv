@@ -1,0 +1,4 @@
+name,category,side,amount,currency,account,sub_account
+工资卡余额,现金,asset,5000,CNY,招商银行,人民币
+朝朝宝持仓,理财,asset,12000,CNY,招商银行,储蓄
+零工收款,现金,asset,800,CNY,海航银行,活期

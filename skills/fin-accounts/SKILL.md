@@ -1,6 +1,6 @@
 ---
 name: fin-accounts
-description: Batch create balance accounts (parent + sub-accounts) in the fin app at http://localhost:8899. Two modes — (1) parse account names from user input (text/CSV: each line a "Parent" or "Parent/Sub"); (2) seed from the bundled starter_accounts.json template covering ~30 common broker/bank/wallet/card hierarchies (anonymized real reference). Always shows a confirmation gate before creating. Triggers on phrases like "set up fin accounts", "在 fin 里建账户", "fin 建一批账户", "create balance accounts", "use the starter accounts template", "init fin accounts". Use fin-import (not this skill) when the user has data to import — fin-import will inline-create missing accounts on its own.
+description: Batch create balance accounts (parent + sub-accounts) in the fin app. Two modes — (1) parse account names from user input (text/CSV: each line a "Parent" or "Parent/Sub"); (2) seed from the bundled starter_accounts.json template covering ~30 common broker/bank/wallet/card hierarchies (anonymized real reference). Always shows a confirmation gate before creating. Triggers on phrases like "set up fin accounts", "在 fin 里建账户", "fin 建一批账户", "create balance accounts", "use the starter accounts template", "init fin accounts". Use fin-import (not this skill) when the user has data to import — fin-import will inline-create missing accounts on its own.
 ---
 
 # fin-accounts
@@ -17,17 +17,18 @@ If the user is importing data (not just setting up accounts), use **fin-import**
 
 ## Runtime flow
 
+0. **Preflight: announce target URL** — run `python scripts/_fin_url.py` once at the start. It prints `[fin] → <url>  (<reason>)` to stderr so the user sees which fin instance (dev 18899 / prod 8899 / explicit) will be touched before any prompts or writes.
 1. **Mode detection** — AskUserQuestion if not obvious:
    - "Parse from your input" — user has text/CSV listing accounts
    - "Apply starter template" — use `assets/starter_accounts.json` (11 parents, minimal starter)
 2. **Parse (mode 1)** — `parse_accounts.py <input>` returns `list[{name, parent_name?}]`. Format examples:
-   - `IB` → root account
-   - `IB/股票账户` → sub-account `股票账户` under parent `IB`
-   - `招商银行,人民币` → CSV form, parent in col 1, sub in col 2
+   - `汇丰银行` → parent account
+   - `汇丰银行/人民币` → sub-account `人民币` under parent `汇丰银行` (slash form)
+   - `汇丰银行,港币` → sub-account `港币` under parent `汇丰银行` (CSV form, parent in col 1, sub in col 2)
 3. **Load (mode 2)** — read `assets/starter_accounts.json` directly.
-4. **Diff against existing** — `GET /api/balance/accounts`, filter input rows by `(name, parent_name)` already present, report how many are new.
-5. **Hard confirmation gate** — AskUserQuestion: "Create N accounts (M roots, K sub-accounts)? [Yes / Show full list / Cancel]"
-6. **POST** — `setup_accounts.py --rows <json>` → `POST /api/balance/accounts/bulk`.
+4. **Diff against existing** — run `uv run --with requests python scripts/list_accounts.py` (handles dev/prod routing via `~/.fin-dev`), parse the JSON output, filter input rows by `(name, parent_name)` already present, report how many are new.
+5. **Hard confirmation gate** — AskUserQuestion: "Create N accounts (M parent accounts, K sub-accounts)? [Yes / Show full list / Cancel]"
+6. **POST** — `uv run --with requests python scripts/setup_accounts.py --rows <json>` → `POST /api/balance/accounts/bulk`.
 7. **Report**:
    ```
    ✓ fin-accounts

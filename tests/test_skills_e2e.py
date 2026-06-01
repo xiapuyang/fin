@@ -176,7 +176,7 @@ def test_accounts_bulk_e2e_with_parent_resolution(fin_server):
     from parse_accounts import parse_text
     from setup_accounts import post
 
-    rows = parse_text("IB/股票账户\nIB/现金\nWealthSimple > Chequing")
+    rows = parse_text("IB/股票账户\nIB/现金\n汇丰银行 > 活期")
     response = post(rows)
     assert response["created"] == 5  # 2 roots + 3 children
     assert response["errors"] == []
@@ -184,7 +184,7 @@ def test_accounts_bulk_e2e_with_parent_resolution(fin_server):
     accts = requests.get(fin_server + "/api/balance/accounts").json()
     by_name = {a["name"]: a for a in accts}
     assert by_name["股票账户"]["parent_id"] == by_name["IB"]["id"]
-    assert by_name["Chequing"]["parent_id"] == by_name["WealthSimple"]["id"]
+    assert by_name["活期"]["parent_id"] == by_name["汇丰银行"]["id"]
 
 
 @pytest.mark.e2e

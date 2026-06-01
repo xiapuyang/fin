@@ -174,7 +174,7 @@ def test_preview_dedup_against_existing_alerts():
 
 def test_accts_plain_roots_only():
     out = parse_text(_read("accts_plain.txt"))
-    assert out == [{"name": "IB"}, {"name": "WealthSimple"}, {"name": "招商银行"}]
+    assert out == [{"name": "IB"}, {"name": "汇丰银行"}, {"name": "招商银行"}]
 
 
 def test_accts_slash_separator():
@@ -193,19 +193,17 @@ def test_accts_slash_separator():
 def test_accts_arrow_separator():
     out = parse_text(_read("accts_arrow.txt"))
     assert {r["name"] for r in out if "parent_name" not in r} == {
-        "WealthSimple",
+        "汇丰银行",
         "招商银行",
     }
-    assert {"Chequing", "Savings", "港币"} == {
-        r["name"] for r in out if "parent_name" in r
-    }
+    assert {"活期", "定期", "港币"} == {r["name"] for r in out if "parent_name" in r}
 
 
 def test_accts_csv_with_blank_sub():
     out = parse_csv(_read("accts.csv"))
-    # WealthSimple row has blank sub → just the root
-    parents_with_blank = [r for r in out if r.get("name") == "WealthSimple"]
-    assert parents_with_blank == [{"name": "WealthSimple"}]
+    # 汇丰银行 row has blank sub → just the root
+    parents_with_blank = [r for r in out if r.get("name") == "汇丰银行"]
+    assert parents_with_blank == [{"name": "汇丰银行"}]
 
 
 def test_accts_comments_and_dedup():

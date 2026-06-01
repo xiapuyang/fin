@@ -2,47 +2,19 @@
 
 Usage:
     python setup_accounts.py --rows rows.json
+    python setup_accounts.py --rows '[{"name": "IB"}, ...]'
     FIN_API_URL=... python setup_accounts.py --rows rows.json
 """
 
 import argparse
 import json
-import os
-import socket
 import sys
 import time
 from pathlib import Path
 
 import requests
 
-PROD_PORT = 8899
-DEV_PORT = 18899
-
-
-def _port_open(port: int) -> bool:
-    """True if something is listening on 127.0.0.1:port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.3)
-        try:
-            s.connect(("127.0.0.1", port))
-            return True
-        except OSError:
-            return False
-
-
-def _resolve_base() -> str:
-    """Pick the fin server URL — see post_bulk.py._resolve_base for the
-    three-rule decision tree (marker > port-conflict refusal > default)."""
-    explicit = os.environ.get("FIN_API_URL")
-    if (Path.home() / ".fin-dev").exists():
-        return explicit or f"http://127.0.0.1:{DEV_PORT}"
-    if _port_open(PROD_PORT) and _port_open(DEV_PORT):
-        raise SystemExit(
-            f"REFUSED: both prod ({PROD_PORT}) and dev ({DEV_PORT}) fin servers "
-            "are running but ~/.fin-dev is missing. Either touch ~/.fin-dev to "
-            "lock the skill to dev, stop one server, or set FIN_API_URL."
-        )
-    return explicit or f"http://localhost:{PROD_PORT}"
+from _fin_url import resolve_base as _resolve_base
 
 
 def post(rows: list[dict]) -> dict:
@@ -76,7 +48,12 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--rows", required=True)
     args = p.parse_args()
-    rows = json.loads(Path(args.rows).read_text())
+    raw = args.rows.lstrip()
+    rows = (
+        json.loads(raw)
+        if raw.startswith(("[", "{"))
+        else json.loads(Path(args.rows).read_text())
+    )
     result = post(rows)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if not result["errors"] else 1

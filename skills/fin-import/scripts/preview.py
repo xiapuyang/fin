@@ -2,28 +2,41 @@
 
 Usage:
     python preview.py --type alerts --rows rows.json
+    python preview.py --type alerts --rows '[{"symbol":"AAPL",...}]'
 
-Reads FIN_API_URL (default http://localhost:8899). Network failures degrade
-gracefully — preview still shows local row count + sample, but flags that
-server-side dedup numbers couldn't be computed.
+--rows accepts either a path to a JSON file or an inline JSON list — autodetected
+by leading '[' or '{'.
+
+Dedup key fields are tuples of (incoming_alias, existing_alias). The fin backend
+intentionally uses different names on POST (`AlertCreate.symbol`) vs GET
+(`AlertResponse.code`); both sides are looked up via `.get(alias)` and the first
+hit wins. When both schemas already use the same name (watchlist `symbol`), pass
+a single-string entry.
+
+URL resolution lives in _fin_url.resolve_base (FIN_API_URL > ~/.fin-dev marker
+> port-conflict refusal > default :8899). Network failures degrade gracefully —
+preview still shows local row count + sample, but flags that server-side dedup
+numbers couldn't be computed.
 """
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
 import requests
 
-# Same keys server uses for pre-filter dedup.
-NATURAL_KEYS: dict[str, tuple[str, ...]] = {
-    "alerts": ("symbol", "condition", "value"),
+from _fin_url import resolve_base
+
+# Per-field tuple: (incoming_alias, existing_alias). String entry = same name
+# on both sides. Add a new entry when fin's POST vs GET schemas diverge.
+NATURAL_KEYS: dict[str, tuple[tuple[str, ...] | str, ...]] = {
+    "alerts": (("symbol", "code"), ("condition", "cond"), ("value", "threshold")),
     "transactions": ("date", "code", "side", "shares", "price", "currency"),
     "holdings": ("account", "code", "snapshot_name"),
     "income": ("date", "source", "amount", "currency"),
     "ledger": ("direction", "name", "date", "amount"),
-    "balance": ("snapshot_id", "name", "side", "category"),
+    "balance": ("snapshot_id", "side", "account_id", "sub_account_id", "category"),
     "watchlist": ("symbol",),
 }
 
@@ -38,15 +51,26 @@ ENDPOINTS = {
 }
 
 
+def _extract_key(row: dict, spec: tuple, side: int) -> tuple:
+    """Build the dedup tuple. side=0 for incoming aliases, side=1 for existing."""
+    out = []
+    for field in spec:
+        if isinstance(field, str):
+            out.append(row.get(field))
+        else:
+            out.append(row.get(field[side]))
+    return tuple(out)
+
+
 def dedup(
     domain: str, incoming: list[dict], existing: list[dict]
 ) -> tuple[list[dict], int]:
-    keys = NATURAL_KEYS[domain]
-    existing_keys = {tuple(e.get(k) for k in keys) for e in existing}
+    spec = NATURAL_KEYS[domain]
+    existing_keys = {_extract_key(e, spec, side=1) for e in existing}
     new: list[dict] = []
     skipped = 0
     for row in incoming:
-        k = tuple(row.get(k) for k in keys)
+        k = _extract_key(row, spec, side=0)
         if k in existing_keys:
             skipped += 1
         else:
@@ -55,8 +79,16 @@ def dedup(
     return new, skipped
 
 
+def _load_rows(arg: str) -> list[dict]:
+    """Accept either an inline JSON list/object or a file path."""
+    stripped = arg.lstrip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        return json.loads(arg)
+    return json.loads(Path(arg).read_text())
+
+
 def _fetch_existing(domain: str) -> list[dict] | None:
-    base = os.environ.get("FIN_API_URL", "http://localhost:8899")
+    base = resolve_base()
     try:
         r = requests.get(base + ENDPOINTS[domain], timeout=10)
         r.raise_for_status()
@@ -72,7 +104,7 @@ def main() -> int:
     p.add_argument("--rows", required=True)
     args = p.parse_args()
 
-    rows = json.loads(Path(args.rows).read_text())
+    rows = _load_rows(args.rows)
     existing = _fetch_existing(args.type)
 
     print(f"\n── fin import preview: {args.type} ──")

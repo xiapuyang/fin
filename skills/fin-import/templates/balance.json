@@ -173,6 +173,16 @@
     "currency": [
       "currency",
       "币种"
+    ],
+    "account": [
+      "account",
+      "账户",
+      "父账户"
+    ],
+    "sub_account": [
+      "sub_account",
+      "子账户",
+      "subaccount"
     ]
   },
   "examples": [
@@ -184,5 +194,9 @@
       "amount": 15000.0,
       "currency": "CNY"
     }
+  ],
+  "extra_fields": [
+    "account",
+    "sub_account"
   ]
 }

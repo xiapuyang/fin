@@ -1,0 +1,6 @@
+direction,name,date,amount,currency,category
+expense,午餐 Lunch,2026-05-20,45.00,CNY,饮食
+expense,Uber 打车,2026-05-21,32.50,CNY,交通
+expense,星巴克,2026-05-22,38,CNY,饮食
+income,退税,2026-05-25,1200,CNY,退税
+expense,买书 Amazon,2026-05-28,89,CNY,购物

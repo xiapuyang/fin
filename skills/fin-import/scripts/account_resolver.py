@@ -9,13 +9,13 @@ Workflow (called from SKILL.md runtime):
 Pure helpers — AskUserQuestion + POST happen in the orchestrating skill code.
 """
 
-import os
-
 import requests
+
+from _fin_url import resolve_base
 
 
 def fetch_existing() -> list[dict]:
-    base = os.environ.get("FIN_API_URL", "http://localhost:8899")
+    base = resolve_base()
     r = requests.get(base + "/api/accounts", timeout=10)
     r.raise_for_status()
     body = r.json()
@@ -37,7 +37,7 @@ def create(
     cutoff_date: str | None = None,
     note: str | None = None,
 ) -> dict:
-    base = os.environ.get("FIN_API_URL", "http://localhost:8899")
+    base = resolve_base()
     payload: dict = {"name": name, "currency": currency}
     if balance_account_id:
         payload["balance_account_id"] = balance_account_id

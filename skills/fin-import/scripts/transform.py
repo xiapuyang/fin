@@ -2,8 +2,17 @@
 
 Gaps (unmapped column, missing required, ambiguous date) are returned in the
 result for the caller to ask the user about — we never silently guess.
+
+CLI usage (matches SKILL.md contract):
+    python transform.py --type <domain> --rows <path|json> \\
+        [--default-account NAME] [--snapshot-id N]
+    --rows accepts either a file path or an inline JSON list.
+    Output is JSON {"rows": [...], "gaps": [...]} to stdout.
 """
 
+import argparse
+import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,9 +34,30 @@ class TransformResult:
     gaps: list[Gap] = field(default_factory=list)
 
 
-def _invert(aliases: dict[str, list[str]]) -> dict[str, str]:
-    """Build a lowercase alias -> canonical lookup."""
+def _invert(
+    aliases: dict[str, list[str]],
+    properties: dict[str, Any] | None = None,
+    extra_fields: list[str] | None = None,
+) -> dict[str, str]:
+    """Build a lowercase alias -> canonical lookup.
+
+    Schema property names are auto-registered as identity aliases so a CSV
+    column literally named like a canonical field (e.g. `currency`) maps even
+    when the template's `aliases` dict omits an entry for it. Without this,
+    such columns are silently dropped and the schema default takes over —
+    a data-corruption hazard (e.g. HKD overwritten by USD default).
+
+    `extra_fields` enables pass-through of non-schema columns the skill needs
+    for resolution steps (e.g. balance items carry `account` / `sub_account`
+    names before the skill swaps them for `account_id` / `sub_account_id`).
+    """
     out: dict[str, str] = {}
+    if properties:
+        for canonical in properties:
+            out[canonical.lower()] = canonical
+    if extra_fields:
+        for canonical in extra_fields:
+            out[canonical.lower()] = canonical
     for canonical, syns in aliases.items():
         out[canonical.lower()] = canonical
         for s in syns:
@@ -73,7 +103,8 @@ def transform(
     schema = template["schema"]
     properties = schema.get("properties", {})
     required = set(schema.get("required", []))
-    alias_map = _invert(aliases)
+    extra_fields = template.get("extra_fields", []) or []
+    alias_map = _invert(aliases, properties, extra_fields)
 
     result = TransformResult()
 
@@ -139,3 +170,59 @@ def transform(
 
         result.rows.append(canonical)
     return result
+
+
+def _load_rows(arg: str) -> list[dict]:
+    """Accept either an inline JSON list or a file path."""
+    stripped = arg.lstrip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        return json.loads(arg)
+    return json.loads(Path(arg).read_text())
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument(
+        "--type",
+        required=True,
+        help="domain name (alerts, transactions, holdings, income, ledger, balance, watchlist)",
+    )
+    p.add_argument("--rows", required=True, help="path to JSON list or inline JSON")
+    p.add_argument("--default-account", default=None)
+    p.add_argument("--snapshot-id", type=int, default=None)
+    args = p.parse_args()
+
+    template_path = TEMPLATES_DIR / f"{args.type}.json"
+    if not template_path.exists():
+        print(
+            f"error: no template for type {args.type!r} at {template_path}",
+            file=sys.stderr,
+        )
+        return 2
+    template = json.loads(template_path.read_text())
+    rows = _load_rows(args.rows)
+    result = transform(
+        rows=rows,
+        template=template,
+        default_account=args.default_account,
+        snapshot_id=args.snapshot_id,
+    )
+    out = {
+        "rows": result.rows,
+        "gaps": [
+            {
+                "kind": g.kind,
+                "field": g.field,
+                "row_index": g.row_index,
+                "message": g.message,
+            }
+            for g in result.gaps
+        ],
+    }
+    json.dump(out, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

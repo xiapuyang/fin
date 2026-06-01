@@ -4,12 +4,12 @@
 def test_bulk_create_balance_accounts_flat(client):
     r = client.post(
         "/api/balance/accounts/bulk",
-        json=[{"name": "IB"}, {"name": "WealthSimple"}],
+        json=[{"name": "IB"}, {"name": "汇丰银行"}],
     )
     assert r.status_code == 201, r.text
     assert r.json() == {"created": 2, "skipped": 0, "errors": []}
     accts = client.get("/api/balance/accounts").json()
-    assert {a["name"] for a in accts} == {"IB", "WealthSimple"}
+    assert {a["name"] for a in accts} == {"IB", "汇丰银行"}
 
 
 def test_bulk_create_balance_accounts_tree(client):
@@ -54,7 +54,7 @@ def test_bulk_create_balance_accounts_skip_duplicate(client):
     client.post("/api/balance/accounts", json={"name": "IB"})
     r = client.post(
         "/api/balance/accounts/bulk",
-        json=[{"name": "IB"}, {"name": "WealthSimple"}],
+        json=[{"name": "IB"}, {"name": "汇丰银行"}],
     )
     assert r.status_code == 201, r.text
     assert r.json() == {"created": 1, "skipped": 1, "errors": []}

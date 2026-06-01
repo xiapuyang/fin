@@ -1,3 +1,3 @@
-WealthSimple > Chequing
-WealthSimple > Savings
+汇丰银行 > 活期
+汇丰银行 > 定期
 招商银行 > 港币

@@ -7,9 +7,9 @@ from parse_accounts import parse_text, parse_csv
 
 
 def test_parse_text_plain_root():
-    assert parse_text("IB\nWealthSimple") == [
+    assert parse_text("IB\n汇丰银行") == [
         {"name": "IB"},
-        {"name": "WealthSimple"},
+        {"name": "汇丰银行"},
     ]
 
 
@@ -22,9 +22,9 @@ def test_parse_text_slash_separator():
 
 
 def test_parse_text_arrow_separator():
-    assert parse_text("WealthSimple > Chequing") == [
-        {"name": "WealthSimple"},
-        {"name": "Chequing", "parent_name": "WealthSimple"},
+    assert parse_text("汇丰银行 > 港币") == [
+        {"name": "汇丰银行"},
+        {"name": "港币", "parent_name": "汇丰银行"},
     ]
 
 
@@ -36,15 +36,15 @@ def test_parse_text_dedups_parent():
 
 
 def test_parse_text_skips_blanks_and_comments():
-    text = "\nIB\n# comment\n  \nWealthSimple"
-    assert parse_text(text) == [{"name": "IB"}, {"name": "WealthSimple"}]
+    text = "\nIB\n# comment\n  \n汇丰银行"
+    assert parse_text(text) == [{"name": "IB"}, {"name": "汇丰银行"}]
 
 
 def test_parse_csv():
-    text = "parent,sub\nIB,股票账户\nIB,现金\nWealthSimple,"
+    text = "parent,sub\nIB,股票账户\nIB,现金\n汇丰银行,"
     assert parse_csv(text) == [
         {"name": "IB"},
         {"name": "股票账户", "parent_name": "IB"},
         {"name": "现金", "parent_name": "IB"},
-        {"name": "WealthSimple"},
+        {"name": "汇丰银行"},
     ]
