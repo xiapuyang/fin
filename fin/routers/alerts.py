@@ -72,7 +72,7 @@ def get_market_states():
     Falls back to an empty dict if the file is missing or unreadable.
     """
     try:
-        return json.loads(MARKET_STATE_PATH.read_text())
+        return json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -110,7 +110,7 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):
 def get_symbols():
     if not SYMBOLS_PATH.exists():
         raise HTTPException(status_code=404, detail="symbols.json not found")
-    return json.loads(SYMBOLS_PATH.read_text())
+    return json.loads(SYMBOLS_PATH.read_text(encoding="utf-8"))
 
 
 @router.get("/alerts", response_model=list[AlertResponse])

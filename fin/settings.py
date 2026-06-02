@@ -34,7 +34,7 @@ def load() -> dict:
     if not SETTINGS_PATH.exists():
         return dict(_DEFAULTS)
     try:
-        return {**_DEFAULTS, **json.loads(SETTINGS_PATH.read_text())}
+        return {**_DEFAULTS, **json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))}
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to load settings, using defaults: %s", exc)
         return dict(_DEFAULTS)

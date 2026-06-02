@@ -21,7 +21,7 @@ def _load_custom() -> list[dict]:
     if not LEDGER_CATEGORIES_PATH.exists():
         return []
     try:
-        data = json.loads(LEDGER_CATEGORIES_PATH.read_text())
+        data = json.loads(LEDGER_CATEGORIES_PATH.read_text(encoding="utf-8"))
         return data if isinstance(data, list) else []
     except json.JSONDecodeError:
         logger.error(
