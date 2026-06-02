@@ -7,12 +7,14 @@ entrypoint so that multiprocessing.freeze_support() runs before anything else.
 """
 
 import asyncio
+import importlib
 import logging
 import multiprocessing
 import socket
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -240,13 +242,43 @@ def main() -> None:
             )
             sys.exit(1)
 
+    def _log(msg: str) -> None:
+        """Write directly to log file — survives logging.basicConfig being reset."""
+        with open(str(_LOG_FILE), "a") as _f:
+            _f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+
+    _IMPORT_STEPS = [
+        "fin.config",
+        "fin.database",
+        "fin.logger",
+        "fin.middleware",
+        "fin.routers.alerts",
+        "fin.routers.balance",
+        "fin.routers.categories",
+        "fin.routers.holdings",
+        "fin.routers.ledger",
+        "fin.routers.settings",
+        "fin.routers.watchlist",
+        "fin.services.alert_scheduler",
+        "fin.services.market_state_updater",
+        "fin.services.price_updater",
+    ]
+    for _step in _IMPORT_STEPS:
+        _log(f"importing {_step}")
+        try:
+            importlib.import_module(_step)
+            _log(f"ok {_step}")
+        except Exception as _exc:
+            _log(f"FAILED {_step}: {_exc}")
+            raise
+
+    _log("importing fin.api")
     try:
-        logger.info("importing fin.api")
         from fin.api import app
 
-        logger.info("fin.api imported ok")
-    except Exception:
-        logger.exception("failed to import fin.api")
+        _log("fin.api ok")
+    except Exception as _exc:
+        _log(f"fin.api FAILED: {_exc}")
         raise
 
     server = uvicorn.Server(
@@ -255,10 +287,10 @@ def main() -> None:
 
     def _run_server() -> None:
         try:
-            logger.info("uvicorn starting on %s:%s", HOST, PORT)
+            _log("uvicorn starting")
             asyncio.run(server.serve())
-        except Exception:
-            logger.exception("uvicorn crashed")
+        except Exception as exc:
+            _log(f"uvicorn crashed: {exc}")
 
     threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
 
