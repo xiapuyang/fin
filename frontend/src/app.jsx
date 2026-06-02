@@ -308,6 +308,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             value={displayName}
             onChange={setDisplayName}
             placeholder="例如 Alice — 留空显示通用问候语"
+            autoComplete="off"
           />
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语（早上好 / 下午好 / 晚上好，xxx）</div>
         </div>
@@ -356,6 +357,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
                   type={showKey ? "text" : "password"}
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
+                  autoComplete="new-password"
                   style={{
                     width: "100%", padding: "6px 34px 6px 10px", fontSize: 13, borderRadius: 7,
                     border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
