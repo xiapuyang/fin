@@ -94,21 +94,11 @@ def _open_browser() -> None:
 
 
 def _on_tray_ready(icon) -> None:
-    """Called by pystray in a background thread once the icon is running."""
-    if _port_is_open():
-        if _health_ok():
-            logger.info("Fin already running on port %d — opening browser", PORT)
-            _open_browser()
-            return
-        else:
-            _show_error(
-                "Fin",
-                f"Port {PORT} is occupied by another process. Close it and try again.",
-            )
-            icon.stop()
-            sys.exit(1)
+    """Called by pystray in a background thread once the icon is running.
 
-    # Port is free — start the server.
+    By the time this runs, the port-conflict check in main() has already
+    passed, so the port is guaranteed free and we can start the server.
+    """
     from fin.api import app  # import here so config.py already ran with frozen flag
 
     server = uvicorn.Server(
@@ -151,6 +141,20 @@ def _open_action(icon, item) -> None:
 def main() -> None:
     """Entry point. Must be called before any other application code."""
     multiprocessing.freeze_support()
+
+    # Resolve port conflicts before creating the tray icon so a second launch
+    # never leaves a ghost icon with no server behind it.
+    if _port_is_open():
+        if _health_ok():
+            logger.info("Fin already running on port %d — opening browser", PORT)
+            _open_browser()
+            return
+        else:
+            _show_error(
+                "Fin",
+                f"Port {PORT} is occupied by another process. Close it and try again.",
+            )
+            sys.exit(1)
 
     import pystray
     from PIL import Image

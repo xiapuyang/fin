@@ -101,39 +101,37 @@ def test_wait_for_server_returns_false_on_timeout(monkeypatch):
     assert launcher._wait_for_server() is False
 
 
-# ── port conflict handling ────────────────────────────────────────────────────
+# ── port conflict handling (resolved in main() before tray icon is created) ───
 
 
-def test_on_tray_ready_opens_browser_when_fin_already_running(monkeypatch):
-    """When port is occupied and health is OK, open browser without starting server."""
+def test_main_opens_browser_when_fin_already_running(monkeypatch):
+    """When port is occupied and health is OK, open browser and return — no tray icon."""
     import launcher
 
     monkeypatch.setattr(launcher, "_port_is_open", lambda: True)
     monkeypatch.setattr(launcher, "_health_ok", lambda: True)
+    monkeypatch.setattr(launcher, "multiprocessing", MagicMock())
 
     opened = []
     monkeypatch.setattr(launcher, "_open_browser", lambda: opened.append(1))
 
-    mock_icon = MagicMock()
-    launcher._on_tray_ready(mock_icon)
+    launcher.main()
 
     assert opened == [1]
-    mock_icon.stop.assert_not_called()
 
 
-def test_on_tray_ready_shows_error_when_port_conflicts(monkeypatch):
-    """When port is occupied by a non-fin process, show error and exit."""
+def test_main_shows_error_when_port_conflicts(monkeypatch):
+    """When port is occupied by a non-fin process, show error and exit before tray."""
     import launcher
 
     monkeypatch.setattr(launcher, "_port_is_open", lambda: True)
     monkeypatch.setattr(launcher, "_health_ok", lambda: False)
+    monkeypatch.setattr(launcher, "multiprocessing", MagicMock())
 
     errors = []
     monkeypatch.setattr(launcher, "_show_error", lambda t, m: errors.append((t, m)))
 
-    mock_icon = MagicMock()
     with pytest.raises(SystemExit):
-        launcher._on_tray_ready(mock_icon)
+        launcher.main()
 
-    assert errors  # an error dialog was shown
-    mock_icon.stop.assert_called_once()
+    assert errors  # an error dialog was shown before any tray icon was created
