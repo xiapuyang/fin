@@ -29,6 +29,7 @@ binaries_pandas = collect_all("pandas")[0]
 
 datas += collect_data_files("exchange_calendars")
 datas += collect_all("akshare")[1]  # data files only
+datas += collect_data_files("certifi")  # CA bundle for HTTPS in frozen app
 
 binaries = binaries_pandas
 
@@ -39,6 +40,8 @@ hiddenimports = [
     "pydantic_core",
     # pystray: backend modules are loaded lazily so PyInstaller cannot trace them.
     "pystray._util",
+    # certifi: CA bundle for HTTPS requests in frozen app
+    "certifi",
 ]
 
 # Platform-specific pystray backends (each backend only exists on its target OS)
