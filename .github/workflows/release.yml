@@ -90,7 +90,7 @@ jobs:
         if: matrix.platform == 'windows'
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
-          filepath: installer/fin.iss
+          path: installer/fin.iss
           options: /DMyAppVersion=${{ github.ref_name || 'dev' }}
 
       # ── Upload artifacts ─────────────────────────────────────────────────────
