@@ -100,43 +100,7 @@ def _open_browser() -> None:
 
 
 def _on_tray_ready(icon) -> None:
-    """Called by pystray in a background thread once the icon is running.
-
-    By the time this runs, the port-conflict check in main() has already
-    passed, so the port is guaranteed free and we can start the server.
-    """
-    try:
-        from fin.api import app  # import here so config.py already ran with frozen flag
-
-        server = uvicorn.Server(
-            uvicorn.Config(
-                app,
-                host=HOST,
-                port=PORT,
-                workers=1,
-                log_level="warning",
-            )
-        )
-
-        # Store on icon so Quit handler can reach it.
-        icon._fin_server = server
-
-        t = threading.Thread(
-            target=lambda: asyncio.run(server.serve()),
-            daemon=True,
-            name="uvicorn",
-        )
-        t.start()
-
-        icon.visible = True
-
-        if not _wait_for_server():
-            logger.warning("Server did not respond in time — opening browser anyway")
-        _open_browser()
-    except Exception:
-        logger.exception("Failed to start Fin server")
-        _show_error("Fin", "启动失败，请重新打开应用。")
-        icon.stop()
+    icon.visible = True
 
 
 def _quit(icon, item) -> None:
@@ -268,6 +232,22 @@ def main() -> None:
             )
             sys.exit(1)
 
+    from fin.api import app
+
+    server = uvicorn.Server(
+        uvicorn.Config(app, host=HOST, port=PORT, workers=1, log_level="warning")
+    )
+    threading.Thread(
+        target=lambda: asyncio.run(server.serve()), daemon=True, name="uvicorn"
+    ).start()
+
+    def _open_when_ready() -> None:
+        if not _wait_for_server():
+            logger.warning("Server did not respond in time — opening browser anyway")
+        _open_browser()
+
+    threading.Thread(target=_open_when_ready, daemon=True, name="browser-open").start()
+
     import pystray
     from PIL import Image
 
@@ -275,7 +255,6 @@ def main() -> None:
     try:
         image = Image.open(icon_path)
     except Exception:
-        # Fallback: 32×32 solid square if icon file is missing.
         image = Image.new("RGB", (32, 32), color=(30, 120, 200))
 
     menu = pystray.Menu(
@@ -286,6 +265,7 @@ def main() -> None:
         pystray.MenuItem("Quit", _quit),
     )
     icon = pystray.Icon("fin", image, "Fin", menu)
+    icon._fin_server = server
     icon.run(setup=_on_tray_ready)
 
 
