@@ -35,7 +35,7 @@ def _market_for_symbol(symbol: str) -> str:
 
 def _read_market_states() -> dict:
     try:
-        return json.loads(MARKET_STATE_PATH.read_text())
+        return json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
         return {}
 

@@ -79,7 +79,7 @@ _STATIC_VER = str(int(time.time()))
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    html = (FRONTEND_DIR / "index.html").read_text()
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     return html.replace("__VER__", _STATIC_VER)
 
 

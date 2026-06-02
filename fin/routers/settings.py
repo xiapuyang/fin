@@ -85,7 +85,7 @@ def get_last_check():
     if not LAST_CHECK_PATH.exists():
         return {"checked_at": None}
     try:
-        return json.loads(LAST_CHECK_PATH.read_text())
+        return json.loads(LAST_CHECK_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {"checked_at": None}
 

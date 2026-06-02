@@ -50,7 +50,7 @@ def collect_symbols() -> set[str]:
     if SYMBOLS_PATH.exists():
         import json
 
-        groups = json.loads(SYMBOLS_PATH.read_text())
+        groups = json.loads(SYMBOLS_PATH.read_text(encoding="utf-8"))
         for group in groups.values():
             for entry in group:
                 symbols.add(normalize_symbol(entry["code"]))
