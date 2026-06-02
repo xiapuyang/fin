@@ -318,7 +318,11 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
           const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
           return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
         })()}</div>
-        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{displayName ? `下午好，${displayName}` : "下午好"}</h1>
+        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{(() => {
+          const h = new Date(now.toLocaleString("en-US", { timeZone: timezone })).getHours();
+          const salut = h < 6 ? "凌晨好" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好";
+          return displayName ? `${salut}，${displayName}` : salut;
+        })()}</h1>
         <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
       </div>
 

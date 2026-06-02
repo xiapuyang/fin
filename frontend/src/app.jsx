@@ -305,7 +305,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             onChange={setDisplayName}
             placeholder="例如 Alice — 留空显示通用问候语"
           />
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语「下午好，xxx」</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语（早上好 / 下午好 / 晚上好，xxx）</div>
         </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>出生日期 Birth Date</div>
