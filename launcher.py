@@ -283,7 +283,15 @@ def main() -> None:
 
     _log("creating uvicorn config")
     server = uvicorn.Server(
-        uvicorn.Config(app, host=HOST, port=PORT, workers=1, log_level="warning")
+        uvicorn.Config(
+            app,
+            host=HOST,
+            port=PORT,
+            workers=1,
+            log_level="warning",
+            loop="asyncio",
+            http="h11",
+        )
     )
     _log("uvicorn config ok")
 
