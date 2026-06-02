@@ -94,7 +94,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ### 启动
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/xiapuyang/fin
 cd fin
 uv sync
 uv run python serve.py     # http://localhost:8888
@@ -117,4 +117,9 @@ uv run python serve.py     # http://localhost:8888
 
 ## Stack
 
-Python 3.11+, FastAPI, SQLAlchemy, SQLite, yfinance / akshare · React 18 + Babel standalone
+| | |
+|---|---|
+| **Python** | 3.11+，[uv](https://github.com/astral-sh/uv) 管理环境 |
+| **后台** | [FastAPI](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/encode/uvicorn) · [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) · SQLite |
+| **数据源** | [yfinance](https://github.com/ranaroussi/yfinance) · [akshare](https://github.com/akfamily/akshare) · [exchange-calendars](https://github.com/gerrymanoim/exchange_calendars) · [AgentMail](https://agentmail.to) |
+| **前端** | React 18 · Babel standalone（无构建步骤，JSX 在浏览器运行时转译） |
