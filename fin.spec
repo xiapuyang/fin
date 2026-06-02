@@ -8,7 +8,7 @@ Output (Win): dist/Fin/
 
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules, collect_dynamic_libs
 
 ROOT = Path(SPECPATH)
 
@@ -21,9 +21,8 @@ datas = [
     (str(ROOT / "assets" / "fin.icns"), "assets"),
 ]
 
-# pandas: .so binaries only — built-in PyInstaller hook handles hiddenimports
-# (collect_submodules would pull in pandas.tests, wasting ~15 MB)
-binaries_pandas = collect_all("pandas")[0]
+# pandas: actual .so files only — collect_all()[0] misclassifies .py as BINARY
+binaries_pandas = collect_dynamic_libs("pandas")
 
 # scipy is not used by fin — omit entirely
 
