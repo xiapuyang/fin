@@ -57,7 +57,7 @@ hiddenimports = [
     "PyObjCTools",
     "PyObjCTools.MachSignals",
 ]
-hiddenimports += collect_submodules("pandas._libs")
+# pandas hiddenimports handled by hooks/hook-pandas.py
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
@@ -66,7 +66,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=["hooks"],
     hooksconfig={},
     runtime_hooks=[],
     excludes=["matplotlib", "tkinter", "_tkinter"],
