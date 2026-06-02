@@ -82,6 +82,7 @@ done
 
 if [ "$SUCCESS" = "1" ]; then
     echo "$LABEL server started (PID: $(cat "$PID_FILE")). Listening on http://localhost:$PORT"
+    open "http://localhost:$PORT"
     exit 0
 else
     if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then

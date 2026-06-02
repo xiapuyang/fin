@@ -1,13 +1,15 @@
 import json
 import logging
+import os
 from typing import Any
 
+from dotenv import set_key
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import LAST_CHECK_PATH, SUPPORTED_CURRENCIES
+from fin.config import DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -86,3 +88,32 @@ def get_last_check():
         return json.loads(LAST_CHECK_PATH.read_text())
     except (json.JSONDecodeError, OSError):
         return {"checked_at": None}
+
+
+class CredentialsPayload(BaseModel):
+    agentmail_api_key: str | None = None
+    agentmail_inbox: str | None = None
+
+
+@router.get("/settings/credentials")
+def get_credentials():
+    """Return stored AgentMail credentials (localhost-only; values are not secrets on this machine)."""
+    return {
+        "agentmail_api_key": os.environ.get("AGENTMAIL_API_KEY", ""),
+        "agentmail_inbox": os.environ.get("FIN_AGENTMAIL_INBOX", ""),
+    }
+
+
+@router.put("/settings/credentials")
+def put_credentials(data: CredentialsPayload):
+    """Write AgentMail credentials to DATA_DIR/.env and update os.environ in place."""
+    env_path = DATA_DIR / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.touch(exist_ok=True)
+    if data.agentmail_api_key is not None:
+        set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+        os.environ["AGENTMAIL_API_KEY"] = data.agentmail_api_key
+    if data.agentmail_inbox is not None:
+        set_key(str(env_path), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
+        os.environ["FIN_AGENTMAIL_INBOX"] = data.agentmail_inbox
+    return {"saved": True, "restart_required": False}

@@ -93,7 +93,7 @@ const App = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} onCurrencyChange={c => {
+        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} displayName={settings.display_name || ""} onCurrencyChange={c => {
           setCurrency(c);
           fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
         }} onOpenSettings={() => setShowSettings(true)} onTogglePrivacy={next => {
@@ -155,7 +155,7 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
+const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayName = "", onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
@@ -213,7 +213,11 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrency
           title={masked ? "显示金额 Show amounts" : "隐藏金额 Hide amounts (demo mode)"}
         />
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
-        <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>S</div>
+        {(() => {
+          const ch = displayName ? displayName.trim()[0] : "?";
+          const isCJK = ch.codePointAt(0) >= 0x4E00;
+          return <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: isCJK ? 13 : 11, fontWeight: 600 }}>{isCJK ? ch : ch.toUpperCase()}</div>;
+        })()}
       </div>
     </div>
   );
@@ -239,6 +243,26 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [notifyEnabled, setNotifyEnabled] = React.useState(settings.notify_enabled !== false);
   const [saving, setSaving]       = React.useState(false);
   const [emailError, setEmailError] = React.useState("");
+  const [apiKey, setApiKey]         = React.useState("");
+  const [apiInbox, setApiInbox]     = React.useState("");
+  const [origApiKey, setOrigApiKey] = React.useState("");
+  const [origApiInbox, setOrigApiInbox] = React.useState("");
+  const [apiKeySaved, setApiKeySaved] = React.useState(false);
+  const [showKey, setShowKey]       = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/settings/credentials")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          setApiKey(d.agentmail_api_key || "");
+          setApiInbox(d.agentmail_inbox || "");
+          setOrigApiKey(d.agentmail_api_key || "");
+          setOrigApiInbox(d.agentmail_inbox || "");
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const save = async () => {
     const trimmed = notifyEmail.trim();
@@ -249,13 +273,24 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
     setEmailError("");
     setSaving(true);
     try {
+      const credPayload = {};
+      if (apiKey !== origApiKey) credPayload.agentmail_api_key = apiKey;
+      if (apiInbox !== origApiInbox) credPayload.agentmail_inbox = apiInbox;
+      if (Object.keys(credPayload).length > 0) {
+        const kr = await fetch("/api/settings/credentials", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(credPayload),
+        });
+        if (kr.ok) { setOrigApiKey(apiKey); setOrigApiInbox(apiInbox); setApiKeySaved(true); }
+      }
       const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.ok) { onSaved(payload); onClose(); }
+      if (res.ok) { onSaved(payload); if (!apiKeySaved) onClose(); else onClose(); }
     } finally { setSaving(false); }
   };
 
@@ -273,8 +308,9 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             value={displayName}
             onChange={setDisplayName}
             placeholder="例如 Alice — 留空显示通用问候语"
+            autoComplete="off"
           />
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语「下午好，xxx」</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语（早上好 / 下午好 / 晚上好，xxx）</div>
         </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>出生日期 Birth Date</div>
@@ -310,6 +346,53 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             </div>
             <Toggle value={notifyEnabled} onChange={() => setNotifyEnabled(!notifyEnabled)} />
           </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>AgentMail</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>API Key</div>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  autoComplete="new-password"
+                  style={{
+                    width: "100%", padding: "6px 34px 6px 10px", fontSize: 13, borderRadius: 7,
+                    border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(v => !v)}
+                  style={{
+                    position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer", padding: 2,
+                    color: "var(--ink-4)", display: "flex", alignItems: "center",
+                  }}
+                >
+                  <Icon name={showKey ? "eye-off" : "eye"} size={14}/>
+                </button>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>Inbox ID</div>
+              <input
+                type="text"
+                value={apiInbox}
+                onChange={e => setApiInbox(e.target.value)}
+                style={{
+                  width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+                  border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。两项均需设置，留空保持不变。</div>
+          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>

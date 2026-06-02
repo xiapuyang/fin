@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from check_alerts import _check_condition
+from fin.services.alert_checker import check_condition as _check_condition
 from fin.database import Base
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
 from fin.schemas.alert import AlertCreate
@@ -92,9 +92,13 @@ def _make_quote(price, change_pct, market_state):
     }
 
 
+_MOD = "fin.services.alert_checker"
+
+
 def _run_main_with_quote(db, quote, alert_condition="price_lte", alert_value=200.0):
-    """Run check_alerts.main() with a mocked QuoteService and return fired alert IDs."""
+    """Run run_check() with a mocked QuoteService and return fired alert IDs."""
     from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
+    from fin.services.alert_checker import run_check
 
     alert_repo = AlertSQLiteRepository(db)
     alert_repo.create(
@@ -116,35 +120,25 @@ def _run_main_with_quote(db, quote, alert_condition="price_lte", alert_value=200
 
     fire_repo.create = track_create
 
-    with patch("check_alerts.SessionLocal", return_value=db):
-        with patch("check_alerts.init_db"):
-            with patch("check_alerts.QuoteService", return_value=mock_qs):
-                with patch("check_alerts.build_default_providers", return_value=[]):
-                    with patch(
-                        "check_alerts.AlertSQLiteRepository", return_value=alert_repo
-                    ):
-                        with patch(
-                            "check_alerts.AlertFireSQLiteRepository",
-                            return_value=fire_repo,
-                        ):
-                            with patch(
-                                "check_alerts.settings_store.load",
-                                return_value={
-                                    "notify_email": "",
-                                    "notify_enabled": False,
-                                },
-                            ):
-                                with patch("check_alerts.LAST_CHECK_PATH") as mock_path:
-                                    mock_path.write_text = MagicMock()
-                                    import argparse
-
-                                    with patch(
-                                        "argparse.ArgumentParser.parse_args",
-                                        return_value=argparse.Namespace(force=False),
-                                    ):
-                                        from check_alerts import main
-
-                                        main()
+    with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
+        patch(f"{_MOD}.SessionLocal", return_value=db),
+        patch(f"{_MOD}.init_db"),
+        patch(f"{_MOD}.QuoteService", return_value=mock_qs),
+        patch(f"{_MOD}.build_default_providers", return_value=[]),
+        patch(f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo),
+        patch(f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo),
+        patch(
+            f"{_MOD}.settings_store.load",
+            return_value={"notify_email": "", "notify_enabled": False},
+        ),
+        patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path,
+    ):
+        mock_path.write_text = MagicMock()
+        run_check(force=False)
 
     return fired_ids
 
@@ -224,34 +218,26 @@ def test_force_flag_bypasses_market_state_gate(db):
 
     fire_repo.create = track_create
 
-    with patch("check_alerts.SessionLocal", return_value=db):
-        with patch("check_alerts.init_db"):
-            with patch("check_alerts.QuoteService", return_value=mock_qs):
-                with patch("check_alerts.build_default_providers", return_value=[]):
-                    with patch(
-                        "check_alerts.AlertSQLiteRepository", return_value=alert_repo
-                    ):
-                        with patch(
-                            "check_alerts.AlertFireSQLiteRepository",
-                            return_value=fire_repo,
-                        ):
-                            with patch(
-                                "check_alerts.settings_store.load",
-                                return_value={
-                                    "notify_email": "",
-                                    "notify_enabled": False,
-                                },
-                            ):
-                                with patch("check_alerts.LAST_CHECK_PATH") as mock_path:
-                                    mock_path.write_text = MagicMock()
-                                    import argparse
+    from fin.services.alert_checker import run_check
 
-                                    with patch(
-                                        "argparse.ArgumentParser.parse_args",
-                                        return_value=argparse.Namespace(force=True),
-                                    ):
-                                        from check_alerts import main
-
-                                        main()
+    with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
+        patch(f"{_MOD}.SessionLocal", return_value=db),
+        patch(f"{_MOD}.init_db"),
+        patch(f"{_MOD}.QuoteService", return_value=mock_qs),
+        patch(f"{_MOD}.build_default_providers", return_value=[]),
+        patch(f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo),
+        patch(f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo),
+        patch(
+            f"{_MOD}.settings_store.load",
+            return_value={"notify_email": "", "notify_enabled": False},
+        ),
+        patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path,
+    ):
+        mock_path.write_text = MagicMock()
+        run_check(force=True)
 
     assert len(fired_ids) == 1

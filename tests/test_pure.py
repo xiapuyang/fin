@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from fin.routers.alerts import _normalize_symbol
-from check_alerts import _check_condition
+from fin.services.alert_checker import check_condition as _check_condition
 from fin.alert_email import build_summary_email
 
 

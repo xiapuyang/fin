@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -18,20 +19,29 @@ from fin.routers.holdings import router as holdings_router
 from fin.routers.ledger import router as ledger_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
+from fin.services.alert_scheduler import start_alert_scheduler, stop_alert_scheduler
 from fin.services.market_state_updater import start_market_state_updater
 from fin.services.price_updater import start_price_updater
 
 setup_logging("fin-api")
 logger = logging.getLogger(__name__)
 
+_ALERT_SCHEDULER_STOP = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _ALERT_SCHEDULER_STOP
     init_db()
     logger.info("Database initialized")
     start_market_state_updater()
     start_price_updater()
+    if getattr(sys, "frozen", False):
+        _ALERT_SCHEDULER_STOP = start_alert_scheduler()
+        logger.info("Alert scheduler started (frozen mode)")
     yield
+    if _ALERT_SCHEDULER_STOP is not None:
+        stop_alert_scheduler(_ALERT_SCHEDULER_STOP)
     logger.info("Shutting down")
 
 
@@ -71,6 +81,11 @@ _STATIC_VER = str(int(time.time()))
 async def index():
     html = (FRONTEND_DIR / "index.html").read_text()
     return html.replace("__VER__", _STATIC_VER)
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.exception_handler(Exception)

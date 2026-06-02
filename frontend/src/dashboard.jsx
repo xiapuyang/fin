@@ -211,10 +211,10 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
 
   // ── Derived: FIRE ────────────────────────────────────────────────────────────
   const birthDate   = fireSettings?.birth_date   || "";
-  const manualAge   = fireSettings?.fire_manual_age ?? 32;
+  const manualAge   = fireSettings?.fire_manual_age ?? null;  // null = never set
   const age = birthDate
     ? Math.max(1, Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000)))
-    : manualAge;
+    : (manualAge ?? 32);  // 32 is only a display fallback, not used for requiredCagr
 
   const fireMonthlyExp  = fireSettings?.fire_monthly_exp  ?? 0;
   const fireSwr         = fireSettings?.fire_swr          ?? 4.0;
@@ -242,6 +242,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
   // Binary search for required nominal CAGR (deterministic) to hit fireTarget by fireTargetAge
   const requiredCagr = React.useMemo(() => {
     if (fireTarget <= 0 || investable >= fireTarget) return 0;
+    if (!birthDate) return null;  // need real age to compute target years
     const targetYears = Math.max(1, fireTargetAge - age);
     const test = (nomCagr) => {
       const real = nomCagr - fireInflation;
@@ -291,18 +292,19 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
     {
       id: "fire", icon: "spark", kicker: "MODULE 05", title: "退休计划", en: "FIRE",
       color: "var(--down)",
-      stat: fireTarget > 0
-        ? yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
+      stat: !birthDate ? "请先设置生日"
+        : fireTarget <= 0 ? "请先设置月支出"
+        : yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
         : yearsToFire != null ? `${yearsToFire}y to 财务自由`
-        : "目标不可达"
-        : "请先设置月支出",
+        : "目标不可达",
       blurb: "FIRE 数字 & 复利推演 & 里程碑",
     },
   ];
 
-  const fireSubtitle = fireTarget > 0 && yearsToFire != null && yearsToFire > 0
+  const fireReady = fireTarget > 0 && !!birthDate;
+  const fireSubtitle = fireReady && yearsToFire != null && yearsToFire > 0
     ? `Net worth tracking toward FIRE · ${yearsToFire}y to 财务自由`
-    : fireTarget > 0 && yearsToFire === 0
+    : fireReady && yearsToFire === 0
     ? "FIRE 目标已达成 🎉"
     : "Net worth tracking toward FIRE";
 
@@ -318,7 +320,11 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
           const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
           return `${y} · WEEK ${String(week).padStart(2,"0")} · ${months[tzDate.getMonth()]} ${String(tzDate.getDate()).padStart(2,"0")}`;
         })()}</div>
-        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{displayName ? `下午好，${displayName}` : "下午好"}</h1>
+        <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{(() => {
+          const h = new Date(now.toLocaleString("en-US", { timeZone: timezone })).getHours();
+          const salut = h < 6 ? "凌晨好" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好";
+          return displayName ? `${salut}，${displayName}` : salut;
+        })()}</h1>
         <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
       </div>
 
@@ -429,10 +435,15 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         {/* FIRE Target */}
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>FIRE TARGET · 财务自由</div>
-          {fireTarget <= 0 ? (
+          {!fireReady ? (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>请在退休计划页设置月支出以计算 FIRE 目标</div>
-              <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
+              <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
+                {!birthDate ? "请在应用设置中填写生日以启用 FIRE 计算" : "请在退休计划页设置月支出以计算 FIRE 目标"}
+              </div>
+              {!birthDate
+                ? null
+                : <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
+              }
             </div>
           ) : (
             <>

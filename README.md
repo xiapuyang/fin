@@ -44,108 +44,100 @@
 |---|---|
 | ![Balance](assets/screenshots/balance.png) | ![FIRE](assets/screenshots/fire.png) |
 
-## Quickstart
+## 安装（桌面应用）
+
+### macOS
+
+1. 下载 `Fin-vX.X.X-arm64.dmg`（Apple Silicon）或 `Fin-vX.X.X-intel.dmg`（Intel）
+2. 打开 DMG，将 **Fin.app** 拖入 Applications
+3. 首次启动前在终端运行：
+
+```bash
+xattr -cr /Applications/Fin.app
+```
+
+4. 双击启动，菜单栏右上角出现 Fin 图标，浏览器自动打开
+
+> `xattr -cr` 是因为 App 未经 Apple 公证，macOS 会阻止未知来源的应用运行。这是本地工具的正常步骤。
+
+### Windows
+
+1. 下载 `Fin-Setup-vX.X.X.exe`
+2. 运行安装程序（需要 Windows 10 或更高版本）
+3. 从开始菜单启动 Fin
+
+---
+
+## 开发
 
 ### 前置：安装 uv
 
-依赖 [`uv`](https://github.com/astral-sh/uv) 管理 Python 环境（替代 pip / venv / pipx，速度快一个数量级）。先确认本机已装：
-
-```bash
-uv --version    # 已装 → 跳过下一步
-```
-
-如果命令找不到，按平台二选一安装：
+依赖 [`uv`](https://github.com/astral-sh/uv) 管理 Python 环境：
 
 ```bash
 # macOS / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 或者 Homebrew
-brew install uv
+# or: brew install uv
 
 # Windows (PowerShell)
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-装完重开 shell 让 `uv` 进 PATH，再 `uv --version` 验证。
-
 ### 启动
-
-前端无构建步骤（React + Babel standalone 走 CDN），后端一条 `uv run` 起服务：
 
 ```bash
 git clone <repo-url>
 cd fin
-cp .env.example .env       # 填邮件相关变量，全空也能跑（仅跳过邮件发送）
-uv sync                    # install Python deps
+uv sync
 uv run python serve.py     # http://localhost:8888
 ```
 
-打开浏览器访问 [http://localhost:8888](http://localhost:8888) 即可。首次访问会自动建库（`data/fin.db`）。
-
-### Server scripts
-
-也可以用仓库根目录的脚本以后台方式管理服务，PID 写到 `fin.pid`，日志输出到 `logs/fin.log`：
+脚本方式（后台运行，日志写到 `~/.fin/logs/fin.log`）：
 
 ```bash
-./run.sh        # 启动（后台），等待端口 8888 绑定成功
-./stop.sh       # 优雅停止（SIGTERM → 等待 → 必要时 SIGKILL）
-./restart.sh    # 先 stop 后 run
+./run.sh      # 启动，等待端口绑定后自动打开浏览器
+./stop.sh     # 停止
+./restart.sh  # 重启
 ```
 
-## Email Alerts (optional)
+### 打包
 
-价格提醒可以在触发时发邮件。完整通路需要三件事：AgentMail 账号 + 环境变量 + cron。三件都不配也能跑 —— 提醒照常触发并写入 DB，只是不发邮件。
+```bash
+./build.sh                   # Mac DMG，当前架构
+./build.sh --target mac-arm64
+./build.sh --target mac-intel
+./build.sh --target windows  # 仅 Windows 环境
+```
 
-### 1. 申请 AgentMail
+依赖：`pyinstaller`（已在 uv 环境中）、`create-dmg`（macOS：`brew install create-dmg`）、Inno Setup（Windows）。
 
-前往 [agentmail.to](https://agentmail.to) 注册，拿到：
+### 邮件提醒（可选）
 
-- **API key**（格式 `am_xxx`）
-- **Inbox id**（格式 `agent_xxx@agentmail.to`，作为发件邮箱）
+价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
 
-AgentMail 是这个项目用的邮件发送服务。也可以自己改 `check_alerts.py` 的 `_send_email` 接其他 provider。
-
-### 2. 填 `.env`
+1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
+2. 写入 `~/.fin/data/.env`（或在应用设置中填写）：
 
 ```env
 AGENTMAIL_API_KEY=am_xxx
 FIN_AGENTMAIL_INBOX=agent_xxx@agentmail.to
 ```
 
-任一空 → 跳过发送（仍记 fire 到 DB）。
+3. 在应用设置中填写**通知邮箱**并打开通知开关
+4. 注册 cron（server 模式）：
 
-### 3. 注册 cron
-
-`check_alerts.py` 是独立脚本，靠 cron 周期调用。推荐每 20 分钟一次：
-
-```cron
+```bash
 # crontab -e
 */20 * * * * cd /path/to/fin && /path/to/uv run python check_alerts.py
 ```
 
-### 4. UI 启用
-
-TopBar 齿轮 → 应用设置 → 填**通知邮箱** + 打开**触发提醒通知** 开关 → 保存。这是收件地址，跟 .env 里的发件 inbox 是两回事。
-
-### 5. 端到端验证
-
-`verify_email.py` 一次性自检整条链路：`.env` 凭据、`settings.json` 收件人、SQLite DB、crontab 注册、发一封真模板的预览邮件（合成 2 条示例触发，让你看到红涨绿跌的最终样式）。
+验证整条链路：
 
 ```bash
 uv run python verify_email.py            # 全检 + 发预览邮件
-uv run python verify_email.py --no-send  # 只检查，不发邮件
-uv run python verify_email.py --to a@b.com  # 临时覆盖收件人
+uv run python verify_email.py --no-send  # 只检查
 ```
-
-任何一步 FAIL → 退出码 1；crontab 缺失只 WARN（你可能用 launchd / systemd 调度）。
 
 ## Stack
 
-- **Backend** — Python 3.11+, FastAPI, SQLAlchemy, SQLite, yfinance, AgentMail
-- **Frontend** — React 18 + Babel standalone（无构建步骤）
-- **Data** — `data/fin.db`（SQLite，启动时自动建库）
-
-## License
-
-[MIT](LICENSE)
+Python 3.11+, FastAPI, SQLAlchemy, SQLite, yfinance / akshare · React 18 + Babel standalone（无构建步骤）
