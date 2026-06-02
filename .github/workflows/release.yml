@@ -15,9 +15,6 @@ jobs:
           - os: macos-latest
             platform: mac
             arch: arm64
-          - os: macos-13
-            platform: mac
-            arch: intel
           - os: windows-latest
             platform: windows
             arch: x64
