@@ -23,12 +23,13 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=dist\installer
+OutputDir=..\dist\installer
 OutputBaseFilename=Fin-Setup-{#MyAppVersion}
-SetupIconFile=..\assets\tray_icon.png
+SetupIconFile=..\assets\tray_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+MinVersion=10.0
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 
@@ -52,17 +53,3 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 [UninstallDelete]
 ; Do NOT delete user data in %LOCALAPPDATA%\Fin — it survives uninstall.
 Type: filesandordirs; Name: "{app}"
-
-[Code]
-function InitializeSetup(): Boolean;
-begin
-  if not IsWindowsVersionOrLater(10, 0) then begin
-    MsgBox(
-      'Fin 需要 Windows 10 或更高版本，当前系统不支持。' + #13#10 +
-      'Fin requires Windows 10 or later.',
-      mbError, MB_OK
-    );
-    Result := False;
-  end else
-    Result := True;
-end;

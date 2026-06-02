@@ -11,9 +11,7 @@ import json
 import logging
 import threading
 import time
-
-import exchange_calendars as xcals
-import pandas as pd
+from datetime import timedelta
 
 from fin.config import MARKET_STATE_PATH
 
@@ -23,14 +21,16 @@ UPDATE_INTERVAL: int = 300  # 5 minutes
 
 _CALENDARS: dict | None = None
 
-_US_PRE_OFFSET = pd.Timedelta(hours=5, minutes=30)  # open − 5h30m = 4:00 AM EDT
-_US_POST_OFFSET = pd.Timedelta(hours=4)  # close + 4h = 8:00 PM EDT
+_US_PRE_OFFSET = timedelta(hours=5, minutes=30)  # open − 5h30m = 4:00 AM EDT
+_US_POST_OFFSET = timedelta(hours=4)  # close + 4h = 8:00 PM EDT
 
 
 def _get_calendars() -> dict:
     """Return exchange calendar instances, initializing lazily on first call."""
     global _CALENDARS
     if _CALENDARS is None:
+        import exchange_calendars as xcals
+
         _CALENDARS = {
             "US": xcals.get_calendar("XNYS"),
             "HK": xcals.get_calendar("XHKG"),
@@ -40,7 +40,7 @@ def _get_calendars() -> dict:
     return _CALENDARS
 
 
-def _et_state(market: str, now: pd.Timestamp) -> str:
+def _et_state(market: str, now) -> str:
     """Return ET-style market state (CLOSED/PRE/REGULAR/POST) for an Eastern Time exchange."""
     cal = _get_calendars()[market]
     try:
@@ -60,7 +60,7 @@ def _et_state(market: str, now: pd.Timestamp) -> str:
     return "POST"
 
 
-def _simple_state(market: str, now: pd.Timestamp) -> str:
+def _simple_state(market: str, now) -> str:
     """Return REGULAR if the given market is open at now, else CLOSED."""
     try:
         return (
@@ -72,6 +72,8 @@ def _simple_state(market: str, now: pd.Timestamp) -> str:
 
 def compute_and_write() -> None:
     """Compute current market states and write them atomically to MARKET_STATE_PATH."""
+    import pandas as pd
+
     now = pd.Timestamp.now(tz="UTC")
     states = {
         "US": _et_state("US", now),

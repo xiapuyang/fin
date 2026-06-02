@@ -6,12 +6,13 @@ and opens the browser once the server is ready. Must be the PyInstaller
 entrypoint so that multiprocessing.freeze_support() runs before anything else.
 """
 
-import asyncio
 import logging
 import multiprocessing
 import socket
 import sys
+import tempfile
 import threading
+import time
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -20,6 +21,13 @@ import uvicorn
 
 from fin._version import __version__ as APP_VERSION
 
+# Write to a temp log file so errors are visible even with console=False
+_LOG_FILE = Path(tempfile.gettempdir()) / "fin_launcher.log"
+logging.basicConfig(
+    filename=str(_LOG_FILE),
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 GITHUB_REPO = "xiapuyang/fin"
@@ -100,43 +108,7 @@ def _open_browser() -> None:
 
 
 def _on_tray_ready(icon) -> None:
-    """Called by pystray in a background thread once the icon is running.
-
-    By the time this runs, the port-conflict check in main() has already
-    passed, so the port is guaranteed free and we can start the server.
-    """
-    try:
-        from fin.api import app  # import here so config.py already ran with frozen flag
-
-        server = uvicorn.Server(
-            uvicorn.Config(
-                app,
-                host=HOST,
-                port=PORT,
-                workers=1,
-                log_level="warning",
-            )
-        )
-
-        # Store on icon so Quit handler can reach it.
-        icon._fin_server = server
-
-        t = threading.Thread(
-            target=lambda: asyncio.run(server.serve()),
-            daemon=True,
-            name="uvicorn",
-        )
-        t.start()
-
-        icon.visible = True
-
-        if not _wait_for_server():
-            logger.warning("Server did not respond in time — opening browser anyway")
-        _open_browser()
-    except Exception:
-        logger.exception("Failed to start Fin server")
-        _show_error("Fin", "启动失败，请重新打开应用。")
-        icon.stop()
+    icon.visible = True
 
 
 def _quit(icon, item) -> None:
@@ -236,6 +208,13 @@ def _check_for_updates(icon, item) -> None:
                 _prompt_update(latest_tag, data.get("body", ""))
             else:
                 _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # No releases published yet — treat as up to date
+                _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+            else:
+                logger.warning("Update check failed: %s", exc)
+                _show_error("Fin", "检查更新失败，请稍后重试。")
         except Exception as exc:
             logger.warning("Update check failed: %s", exc)
             _show_error("Fin", "检查更新失败，请稍后重试。")
@@ -261,6 +240,43 @@ def main() -> None:
             )
             sys.exit(1)
 
+    def _log(msg: str) -> None:
+        """Write directly to log file — survives logging.basicConfig being reset."""
+        with open(str(_LOG_FILE), "a") as _f:
+            _f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+
+    from fin.api import app
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host=HOST,
+            port=PORT,
+            workers=1,
+            log_level="warning",
+            loop="asyncio",
+            http="h11",
+            log_config=None,  # skip dictConfig — factory import hangs in frozen app
+        )
+    )
+
+    def _run_server() -> None:
+        try:
+            _log("uvicorn started")
+            server.run()  # uses config's loop_factory (ProactorEventLoop on Windows)
+            _log("uvicorn stopped")
+        except Exception as exc:
+            _log(f"uvicorn error: {exc}")
+
+    threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
+
+    def _open_when_ready() -> None:
+        if not _wait_for_server():
+            logger.warning("Server did not respond in time — opening browser anyway")
+        _open_browser()
+
+    threading.Thread(target=_open_when_ready, daemon=True, name="browser-open").start()
+
     import pystray
     from PIL import Image
 
@@ -268,7 +284,6 @@ def main() -> None:
     try:
         image = Image.open(icon_path)
     except Exception:
-        # Fallback: 32×32 solid square if icon file is missing.
         image = Image.new("RGB", (32, 32), color=(30, 120, 200))
 
     menu = pystray.Menu(
@@ -279,6 +294,7 @@ def main() -> None:
         pystray.MenuItem("Quit", _quit),
     )
     icon = pystray.Icon("fin", image, "Fin", menu)
+    icon._fin_server = server
     icon.run(setup=_on_tray_ready)
 
 
