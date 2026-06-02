@@ -83,6 +83,11 @@ async def index():
     return html.replace("__VER__", _STATIC_VER)
 
 
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
