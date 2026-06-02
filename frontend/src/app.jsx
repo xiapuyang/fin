@@ -345,29 +345,35 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
         </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>AgentMail</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder={keyConfigured ? "API Key •••••••• 已设置" : "API Key — Enter to configure"}
-              style={{
-                width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
-                border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
-                boxSizing: "border-box",
-              }}
-            />
-            <input
-              type="text"
-              value={apiInbox}
-              onChange={e => setApiInbox(e.target.value)}
-              placeholder={inboxConfigured ? "Inbox ID 已设置" : "Inbox ID — agent_xxx@agentmail.to"}
-              style={{
-                width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
-                border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
-                boxSizing: "border-box",
-              }}
-            />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>API Key</div>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder={keyConfigured ? "••••••••" : ""}
+                style={{
+                  width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+                  border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>Inbox ID</div>
+              <input
+                type="password"
+                value={apiInbox}
+                onChange={e => setApiInbox(e.target.value)}
+                placeholder={inboxConfigured ? "••••••••" : ""}
+                style={{
+                  width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+                  border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
           </div>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。两项均需设置，留空保持不变。</div>
           {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存，重启生效 · Restart required</div>}
