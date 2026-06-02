@@ -46,25 +46,33 @@
 
 ## 安装（桌面应用）
 
+| 平台 | 芯片 | 系统要求 | 版本 | 安装包大小 |
+|------|------|----------|------|------------|
+| macOS | Apple Silicon (M1+) | macOS 11+ | [v0.1.0](#) | — |
+| macOS | Intel | macOS 10.15+ | [v0.1.0](#) | — |
+| Windows | x86\_64 | Windows 10+ | [v0.1.0](#) | — |
+
 ### macOS
 
-1. 下载 `Fin-vX.X.X-arm64.dmg`（Apple Silicon）或 `Fin-vX.X.X-intel.dmg`（Intel）
-2. 打开 DMG，将 **Fin.app** 拖入 Applications
-3. 首次启动前在终端运行：
+1. 下载对应芯片的 `.dmg`，打开后将 **Fin.app** 拖入 Applications
+2. 首次启动前在终端运行：
 
 ```bash
 xattr -cr /Applications/Fin.app
 ```
 
-4. 双击启动，菜单栏右上角出现 Fin 图标，浏览器自动打开
-
-> `xattr -cr` 是因为 App 未经 Apple 公证，macOS 会阻止未知来源的应用运行。这是本地工具的正常步骤。
+3. 双击启动，菜单栏右上角出现 Fin 图标，浏览器自动打开
 
 ### Windows
 
-1. 下载 `Fin-Setup-vX.X.X.exe`
-2. 运行安装程序（需要 Windows 10 或更高版本）
-3. 从开始菜单启动 Fin
+1. 下载 `.exe` 安装程序，运行后从开始菜单启动 Fin
+
+### 邮件提醒（可选）
+
+价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
+
+1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
+2. 在应用**设置**中填写 API Key、Inbox 地址和**通知邮箱**，打开通知开关
 
 ---
 
@@ -100,44 +108,13 @@ uv run python serve.py     # http://localhost:8888
 ./restart.sh  # 重启
 ```
 
-### 打包
-
-```bash
-./build.sh                   # Mac DMG，当前架构
-./build.sh --target mac-arm64
-./build.sh --target mac-intel
-./build.sh --target windows  # 仅 Windows 环境
-```
-
-依赖：`pyinstaller`（已在 uv 环境中）、`create-dmg`（macOS：`brew install create-dmg`）、Inno Setup（Windows）。
-
-### 邮件提醒（可选）
-
-价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
-
-1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
-2. 写入 `~/.fin/data/.env`（或在应用设置中填写）：
-
-```env
-AGENTMAIL_API_KEY=am_xxx
-FIN_AGENTMAIL_INBOX=agent_xxx@agentmail.to
-```
-
-3. 在应用设置中填写**通知邮箱**并打开通知开关
-4. 注册 cron（server 模式）：
+### 价格提醒 cron（server 模式）
 
 ```bash
 # crontab -e
 */20 * * * * cd /path/to/fin && /path/to/uv run python check_alerts.py
 ```
 
-验证整条链路：
-
-```bash
-uv run python verify_email.py            # 全检 + 发预览邮件
-uv run python verify_email.py --no-send  # 只检查
-```
-
 ## Stack
 
-Python 3.11+, FastAPI, SQLAlchemy, SQLite, yfinance / akshare · React 18 + Babel standalone（无构建步骤）
+Python 3.11+, FastAPI, SQLAlchemy, SQLite, yfinance / akshare · React 18 + Babel standalone

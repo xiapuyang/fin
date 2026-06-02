@@ -47,15 +47,19 @@ jobs:
         run: |
           $proc = Start-Process -FilePath "dist\Fin\Fin.exe" -PassThru -WindowStyle Hidden
           $ok = $false
-          for ($i = 0; $i -lt 30; $i++) {
+          for ($i = 0; $i -lt 45; $i++) {
             Start-Sleep -Seconds 2
+            if ($proc.HasExited) {
+              Write-Error "Process exited early (code $($proc.ExitCode))"
+              exit 1
+            }
             try {
               $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8888/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
               if ($resp.StatusCode -eq 200) { $ok = $true; break }
             } catch {}
           }
           Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-          if (-not $ok) { Write-Error "Health check never responded"; exit 1 }
+          if (-not $ok) { Write-Error "Health check never responded after 90s"; exit 1 }
           Write-Output "Smoke test passed"
 
       # ── Mac DMG ──────────────────────────────────────────────────────────────

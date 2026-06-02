@@ -47,16 +47,23 @@ hiddenimports = [
     "uvicorn.lifespan.on",
     "sqlalchemy.dialects.sqlite",
     "pydantic_core",
-    # pystray: _darwin is loaded lazily inside a function so PyInstaller
-    # cannot trace it; AppKit/Foundation/objc/PyObjCTools are its imports.
+    # pystray: backend modules are loaded lazily so PyInstaller cannot trace them.
     "pystray._util",
-    "pystray._darwin",
-    "AppKit",
-    "Foundation",
-    "objc",
-    "PyObjCTools",
-    "PyObjCTools.MachSignals",
 ]
+
+# Platform-specific pystray backends (each backend only exists on its target OS)
+if sys.platform == "darwin":
+    hiddenimports += [
+        "pystray._darwin",
+        "AppKit",
+        "Foundation",
+        "objc",
+        "PyObjCTools",
+        "PyObjCTools.MachSignals",
+    ]
+elif sys.platform == "win32":
+    hiddenimports += ["pystray._win32"]
+
 # pandas hiddenimports handled by hooks/hook-pandas.py
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
