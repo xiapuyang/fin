@@ -69,10 +69,12 @@ a = Analysis(
     hookspath=["hooks"],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["matplotlib", "tkinter", "_tkinter"],
+    excludes=["matplotlib", "tkinter", "_tkinter", "pandas.tests", "pandas._testing"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     noarchive=False,
+    # "pyz" = compiled into PYZ only, no .py source files as external DATA (~15 MB saved)
+    module_collection_mode={"pandas": "pyz"},
 )
 
 pyz = PYZ(a.pure)
