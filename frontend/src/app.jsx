@@ -386,7 +386,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             </div>
           </div>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。两项均需设置，留空保持不变。</div>
-          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存，重启生效 · Restart required</div>}
+          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>

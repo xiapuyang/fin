@@ -7,9 +7,10 @@ cron script.
 
 import json
 import logging
+import os
 from datetime import datetime
 
-from fin.config import AGENTMAIL_API_KEY, AGENTMAIL_INBOX, LAST_CHECK_PATH
+from fin.config import LAST_CHECK_PATH
 from fin.database import SessionLocal, init_db
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
@@ -38,21 +39,23 @@ def check_condition(
 
 
 def _get_agentmail_client():
-    if not AGENTMAIL_API_KEY:
+    key = os.environ.get("AGENTMAIL_API_KEY", "")
+    if not key:
         return None
     from agentmail import AgentMail
 
-    return AgentMail(api_key=AGENTMAIL_API_KEY)
+    return AgentMail(api_key=key)
 
 
 def _send_email(
     am, subject: str, html_body: str, text_body: str, notify_email: str
 ) -> None:
-    if not AGENTMAIL_INBOX:
+    inbox = os.environ.get("FIN_AGENTMAIL_INBOX", "")
+    if not inbox:
         logger.warning("FIN_AGENTMAIL_INBOX not set; skipping email send")
         return
     am.inboxes.messages.send(
-        inbox_id=AGENTMAIL_INBOX,
+        inbox_id=inbox,
         to=notify_email,
         subject=subject,
         text=text_body,
@@ -72,7 +75,9 @@ def run_check(force: bool = False) -> None:
     Args:
         force: Skip market-state REGULAR check (useful for testing).
     """
-    if not AGENTMAIL_API_KEY or not AGENTMAIL_INBOX:
+    if not os.environ.get("AGENTMAIL_API_KEY") or not os.environ.get(
+        "FIN_AGENTMAIL_INBOX"
+    ):
         logger.info(
             "AgentMail not configured (AGENTMAIL_API_KEY / FIN_AGENTMAIL_INBOX); skipping check"
         )
