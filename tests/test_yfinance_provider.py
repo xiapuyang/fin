@@ -1,8 +1,10 @@
 """Tests for YFinanceProvider."""
 
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from fin.services.providers.yfinance_provider import YFinanceProvider
@@ -24,6 +26,14 @@ def _make_fast_info(price=150.0, prev_close=148.0, market_state="REGULAR"):
     fi.currency = "USD"
     fi.market_state = market_state
     return fi
+
+
+def _make_history(close=150.0, prev_close=148.0, today=True):
+    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = now - timedelta(days=1)
+    last = now if today else yesterday
+    dates = [yesterday - timedelta(days=1) if not today else yesterday, last]
+    return pd.DataFrame({"Close": [prev_close, close]}, index=pd.DatetimeIndex(dates))
 
 
 # ── supports ─────────────────────────────────────────────────────────────────
@@ -48,8 +58,10 @@ def test_supports_rejects_cn_fund_codes(provider):
 
 def test_fetch_live_returns_price_dict(provider):
     fi = _make_fast_info()
+    hist = _make_history()
     with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
         mock_yf.Ticker.return_value.fast_info = fi
+        mock_yf.Ticker.return_value.history.return_value = hist
         result = provider.fetch_live("AAPL")
 
     assert result["price"] == 150.0
@@ -60,23 +72,28 @@ def test_fetch_live_returns_price_dict(provider):
 
 def test_fetch_live_returns_empty_on_zero_price(provider):
     fi = _make_fast_info(price=0.0)
+    hist = _make_history(close=0.0)
     with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
         mock_yf.Ticker.return_value.fast_info = fi
+        mock_yf.Ticker.return_value.history.return_value = hist
         result = provider.fetch_live("AAPL")
     assert result == {}
 
 
 def test_fetch_live_dot_to_dash_retry(provider):
     fi = _make_fast_info()
+    hist = _make_history()
     call_count = {"n": 0}
 
     def make_ticker(sym):
         t = MagicMock()
         call_count["n"] += 1
         if sym == "BRK.B":
-            t.fast_info = _make_fast_info(price=0.0)  # first call fails
+            t.fast_info = _make_fast_info(price=0.0)
+            t.history.return_value = pd.DataFrame()  # empty → returns {}
         else:
             t.fast_info = fi
+            t.history.return_value = hist
         return t
 
     with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:

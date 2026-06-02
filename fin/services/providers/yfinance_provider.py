@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timezone
 
 import yfinance as yf
 
@@ -44,21 +45,29 @@ class YFinanceProvider(QuoteProvider):
         try:
             ticker = yf.Ticker(symbol)
             fi = ticker.fast_info
-            price = fi.last_price
+
+            hist = ticker.history(period="2d")
+            if hist.empty:
+                return {}
+            regular_close = float(hist["Close"].iloc[-1])
             prev_close = (
-                getattr(fi, "regular_market_previous_close", None) or fi.previous_close
+                float(hist["Close"].iloc[-2]) if len(hist) >= 2 else regular_close
             )
-            if not price or not prev_close or prev_close == 0:
+            if not regular_close or not prev_close or prev_close == 0:
                 return {}
 
+            hist_date = hist.index[-1].astimezone(timezone.utc).date()
+            market_is_open_today = hist_date == datetime.now(timezone.utc).date()
             market_state = getattr(fi, "market_state", None)
-            regular_close = None
 
-            # fast_info lacks extended-hours price and sometimes market_state.
-            # Call .info to fill both when needed.
+            if market_is_open_today:
+                price = fi.last_price or regular_close
+            else:
+                price = regular_close
+
             if not market_state or market_state in ("PRE", "POST"):
                 try:
-                    market_state, regular_close, price = self._enrich_extended_hours(
+                    market_state, _, price = self._enrich_extended_hours(
                         ticker, market_state, price
                     )
                 except Exception as e:
