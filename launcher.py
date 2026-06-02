@@ -105,33 +105,38 @@ def _on_tray_ready(icon) -> None:
     By the time this runs, the port-conflict check in main() has already
     passed, so the port is guaranteed free and we can start the server.
     """
-    icon.visible = True  # pystray won't show the icon unless we set this explicitly
+    try:
+        from fin.api import app  # import here so config.py already ran with frozen flag
 
-    from fin.api import app  # import here so config.py already ran with frozen flag
-
-    server = uvicorn.Server(
-        uvicorn.Config(
-            app,
-            host=HOST,
-            port=PORT,
-            workers=1,
-            log_level="warning",
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host=HOST,
+                port=PORT,
+                workers=1,
+                log_level="warning",
+            )
         )
-    )
 
-    # Store on icon so Quit handler can reach it.
-    icon._fin_server = server
+        # Store on icon so Quit handler can reach it.
+        icon._fin_server = server
 
-    t = threading.Thread(
-        target=lambda: asyncio.run(server.serve()),
-        daemon=True,
-        name="uvicorn",
-    )
-    t.start()
+        t = threading.Thread(
+            target=lambda: asyncio.run(server.serve()),
+            daemon=True,
+            name="uvicorn",
+        )
+        t.start()
 
-    if not _wait_for_server():
-        logger.warning("Server did not respond in time — opening browser anyway")
-    _open_browser()
+        icon.visible = True
+
+        if not _wait_for_server():
+            logger.warning("Server did not respond in time — opening browser anyway")
+        _open_browser()
+    except Exception:
+        logger.exception("Failed to start Fin server")
+        _show_error("Fin", "启动失败，请重新打开应用。")
+        icon.stop()
 
 
 def _quit(icon, item) -> None:
@@ -146,17 +151,23 @@ def _open_action(icon, item) -> None:
     _open_browser()
 
 
-def _version_tuple(v: str) -> tuple:
+def _version_tuple(v: str) -> tuple[int, ...]:
     try:
-        return tuple(int(x) for x in v.lstrip("v").split("."))
+        return tuple(int(x.split("-")[0]) for x in v.lstrip("v").split("."))
     except ValueError:
         return (0,)
+
+
+def _sanitize_for_applescript(s: str) -> str:
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _show_info(title: str, message: str) -> None:
     if sys.platform == "darwin":
         import subprocess
 
+        safe_title = _sanitize_for_applescript(title)
+        safe_message = _sanitize_for_applescript(message)
         icon_path = _resource_path("assets/fin.icns")
         icon_clause = (
             f' with icon file POSIX file "{icon_path}"' if icon_path.exists() else ""
@@ -165,7 +176,7 @@ def _show_info(title: str, message: str) -> None:
             [
                 "osascript",
                 "-e",
-                f'display dialog "{message}" with title "{title}" buttons {{"OK"}} default button "OK"{icon_clause}',
+                f'display dialog "{safe_message}" with title "{safe_title}" buttons {{"OK"}} default button "OK"{icon_clause}',
             ],
             check=False,
         )
@@ -178,8 +189,10 @@ def _show_info(title: str, message: str) -> None:
 
 
 def _prompt_update(latest_tag: str, release_notes: str = "") -> None:
-    notes_line = f"\n\n{release_notes[:300]}" if release_notes else ""
-    message = f"发现新版本 {latest_tag}（当前 v{APP_VERSION}）。{notes_line}\n\n是否前往下载页面？"
+    safe_tag = _sanitize_for_applescript(latest_tag)
+    safe_notes = _sanitize_for_applescript(release_notes[:300])
+    notes_line = f"\n\n{safe_notes}" if release_notes else ""
+    message = f"发现新版本 {safe_tag}（当前 v{APP_VERSION}）。{notes_line}\n\n是否前往下载页面？"
     should_open = False
     if sys.platform == "darwin":
         import subprocess
