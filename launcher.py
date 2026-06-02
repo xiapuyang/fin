@@ -236,6 +236,13 @@ def _check_for_updates(icon, item) -> None:
                 _prompt_update(latest_tag, data.get("body", ""))
             else:
                 _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # No releases published yet — treat as up to date
+                _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+            else:
+                logger.warning("Update check failed: %s", exc)
+                _show_error("Fin", "检查更新失败，请稍后重试。")
         except Exception as exc:
             logger.warning("Update check failed: %s", exc)
             _show_error("Fin", "检查更新失败，请稍后重试。")
