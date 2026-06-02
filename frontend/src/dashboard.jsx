@@ -211,10 +211,10 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
 
   // ── Derived: FIRE ────────────────────────────────────────────────────────────
   const birthDate   = fireSettings?.birth_date   || "";
-  const manualAge   = fireSettings?.fire_manual_age ?? 32;
+  const manualAge   = fireSettings?.fire_manual_age ?? null;  // null = never set
   const age = birthDate
     ? Math.max(1, Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000)))
-    : manualAge;
+    : (manualAge ?? 32);  // 32 is only a display fallback, not used for requiredCagr
 
   const fireMonthlyExp  = fireSettings?.fire_monthly_exp  ?? 0;
   const fireSwr         = fireSettings?.fire_swr          ?? 4.0;
@@ -242,6 +242,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
   // Binary search for required nominal CAGR (deterministic) to hit fireTarget by fireTargetAge
   const requiredCagr = React.useMemo(() => {
     if (fireTarget <= 0 || investable >= fireTarget) return 0;
+    if (!birthDate && manualAge === null) return null;  // age unknown — don't fabricate a number
     const targetYears = Math.max(1, fireTargetAge - age);
     const test = (nomCagr) => {
       const real = nomCagr - fireInflation;
