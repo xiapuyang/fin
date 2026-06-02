@@ -100,6 +100,10 @@ def _run_with_quote(
     fire_repo.create = track_create
 
     with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
         patch(f"{_MOD}.SessionLocal", return_value=db),
         patch(f"{_MOD}.init_db"),
         patch(f"{_MOD}.QuoteService", return_value=mock_qs),
@@ -130,6 +134,10 @@ def _make_quote(price, change_pct, market_state):
 def test_run_check_no_alerts_returns_without_error(db):
     """run_check with no enabled alerts completes without error."""
     with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
         patch(f"{_MOD}.SessionLocal", return_value=db),
         patch(f"{_MOD}.init_db"),
         patch(f"{_MOD}.AlertSQLiteRepository") as mock_repo_cls,

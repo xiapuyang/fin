@@ -120,26 +120,25 @@ def _run_main_with_quote(db, quote, alert_condition="price_lte", alert_value=200
 
     fire_repo.create = track_create
 
-    with patch(f"{_MOD}.SessionLocal", return_value=db):
-        with patch(f"{_MOD}.init_db"):
-            with patch(f"{_MOD}.QuoteService", return_value=mock_qs):
-                with patch(f"{_MOD}.build_default_providers", return_value=[]):
-                    with patch(
-                        f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo
-                    ):
-                        with patch(
-                            f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo
-                        ):
-                            with patch(
-                                f"{_MOD}.settings_store.load",
-                                return_value={
-                                    "notify_email": "",
-                                    "notify_enabled": False,
-                                },
-                            ):
-                                with patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path:
-                                    mock_path.write_text = MagicMock()
-                                    run_check(force=False)
+    with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
+        patch(f"{_MOD}.SessionLocal", return_value=db),
+        patch(f"{_MOD}.init_db"),
+        patch(f"{_MOD}.QuoteService", return_value=mock_qs),
+        patch(f"{_MOD}.build_default_providers", return_value=[]),
+        patch(f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo),
+        patch(f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo),
+        patch(
+            f"{_MOD}.settings_store.load",
+            return_value={"notify_email": "", "notify_enabled": False},
+        ),
+        patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path,
+    ):
+        mock_path.write_text = MagicMock()
+        run_check(force=False)
 
     return fired_ids
 
@@ -221,25 +220,24 @@ def test_force_flag_bypasses_market_state_gate(db):
 
     from fin.services.alert_checker import run_check
 
-    with patch(f"{_MOD}.SessionLocal", return_value=db):
-        with patch(f"{_MOD}.init_db"):
-            with patch(f"{_MOD}.QuoteService", return_value=mock_qs):
-                with patch(f"{_MOD}.build_default_providers", return_value=[]):
-                    with patch(
-                        f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo
-                    ):
-                        with patch(
-                            f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo
-                        ):
-                            with patch(
-                                f"{_MOD}.settings_store.load",
-                                return_value={
-                                    "notify_email": "",
-                                    "notify_enabled": False,
-                                },
-                            ):
-                                with patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path:
-                                    mock_path.write_text = MagicMock()
-                                    run_check(force=True)
+    with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
+        patch(f"{_MOD}.SessionLocal", return_value=db),
+        patch(f"{_MOD}.init_db"),
+        patch(f"{_MOD}.QuoteService", return_value=mock_qs),
+        patch(f"{_MOD}.build_default_providers", return_value=[]),
+        patch(f"{_MOD}.AlertSQLiteRepository", return_value=alert_repo),
+        patch(f"{_MOD}.AlertFireSQLiteRepository", return_value=fire_repo),
+        patch(
+            f"{_MOD}.settings_store.load",
+            return_value={"notify_email": "", "notify_enabled": False},
+        ),
+        patch(f"{_MOD}.LAST_CHECK_PATH") as mock_path,
+    ):
+        mock_path.write_text = MagicMock()
+        run_check(force=True)
 
     assert len(fired_ids) == 1
