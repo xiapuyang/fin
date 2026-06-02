@@ -22,9 +22,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.12"
 
@@ -117,14 +117,14 @@ jobs:
       # ── Upload artifacts ─────────────────────────────────────────────────────
       - name: Upload DMG artifact
         if: matrix.platform == 'mac'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: Fin-mac-${{ matrix.arch }}
           path: dist/*.dmg
 
       - name: Upload installer artifact (Windows)
         if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: Fin-windows
           path: dist/installer/*.exe
