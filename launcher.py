@@ -6,7 +6,6 @@ and opens the browser once the server is ready. Must be the PyInstaller
 entrypoint so that multiprocessing.freeze_support() runs before anything else.
 """
 
-import importlib
 import logging
 import multiprocessing
 import socket
@@ -246,65 +245,30 @@ def main() -> None:
         with open(str(_LOG_FILE), "a") as _f:
             _f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
 
-    _IMPORT_STEPS = [
-        "fin.config",
-        "fin.database",
-        "fin.logger",
-        "fin.middleware",
-        "fin.routers.alerts",
-        "fin.routers.balance",
-        "fin.routers.categories",
-        "fin.routers.holdings",
-        "fin.routers.ledger",
-        "fin.routers.settings",
-        "fin.routers.watchlist",
-        "fin.services.alert_scheduler",
-        "fin.services.market_state_updater",
-        "fin.services.price_updater",
-    ]
-    for _step in _IMPORT_STEPS:
-        _log(f"importing {_step}")
-        try:
-            importlib.import_module(_step)
-            _log(f"ok {_step}")
-        except Exception as _exc:
-            _log(f"FAILED {_step}: {_exc}")
-            raise
+    from fin.api import app
 
-    _log("importing fin.api")
-    try:
-        from fin.api import app
-
-        _log("fin.api ok")
-    except Exception as _exc:
-        _log(f"fin.api FAILED: {_exc}")
-        raise
-
-    _log("creating uvicorn config")
-    _cfg = uvicorn.Config(
-        app,
-        host=HOST,
-        port=PORT,
-        workers=1,
-        log_level="warning",
-        loop="asyncio",
-        http="h11",
-        log_config=None,  # skip dictConfig — avoids factory import hang in frozen app
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host=HOST,
+            port=PORT,
+            workers=1,
+            log_level="warning",
+            loop="asyncio",
+            http="h11",
+            log_config=None,  # skip dictConfig — factory import hangs in frozen app
+        )
     )
-    _log("uvicorn config ok")
-    server = uvicorn.Server(_cfg)
-    _log("uvicorn server ok")
 
     def _run_server() -> None:
         try:
-            _log("uvicorn thread started")
+            _log("uvicorn started")
             server.run()  # uses config's loop_factory (ProactorEventLoop on Windows)
-            _log("uvicorn exited normally")
+            _log("uvicorn stopped")
         except Exception as exc:
-            _log(f"uvicorn crashed: {exc}")
+            _log(f"uvicorn error: {exc}")
 
     threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
-    _log("uvicorn thread launched")
 
     def _open_when_ready() -> None:
         if not _wait_for_server():
@@ -313,13 +277,9 @@ def main() -> None:
 
     threading.Thread(target=_open_when_ready, daemon=True, name="browser-open").start()
 
-    _log("importing pystray")
     import pystray
-
-    _log("importing PIL")
     from PIL import Image
 
-    _log("pystray+PIL ok, building icon")
     icon_path = _resource_path("assets/tray_icon.png")
     try:
         image = Image.open(icon_path)
@@ -335,9 +295,7 @@ def main() -> None:
     )
     icon = pystray.Icon("fin", image, "Fin", menu)
     icon._fin_server = server
-    _log("icon.run starting")
     icon.run(setup=_on_tray_ready)
-    _log("icon.run returned")
 
 
 if __name__ == "__main__":
