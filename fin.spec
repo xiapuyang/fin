@@ -16,6 +16,7 @@ ROOT = Path(SPECPATH)
 datas = [
     (str(ROOT / "frontend"), "frontend"),
     (str(ROOT / "config"), "config"),
+    (str(ROOT / "assets"), "assets"),
 ]
 
 # Heavy packages that ship binary extensions + data
@@ -43,7 +44,15 @@ hiddenimports = [
     "uvicorn.lifespan.on",
     "sqlalchemy.dialects.sqlite",
     "pydantic_core",
+    # pystray: _darwin is loaded lazily inside a function so PyInstaller
+    # cannot trace it; AppKit/Foundation/objc/PyObjCTools are its imports.
     "pystray._util",
+    "pystray._darwin",
+    "AppKit",
+    "Foundation",
+    "objc",
+    "PyObjCTools",
+    "PyObjCTools.MachSignals",
 ]
 hiddenimports += hiddenimports_pandas + hiddenimports_scipy
 
