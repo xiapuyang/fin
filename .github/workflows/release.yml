@@ -59,6 +59,8 @@ jobs:
             } catch {}
           }
           Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          $logFile = "$env:TEMP\fin_launcher.log"
+          if (Test-Path $logFile) { Write-Output "=== fin_launcher.log ==="; Get-Content $logFile }
           if (-not $ok) { Write-Error "Health check never responded after 90s"; exit 1 }
           Write-Output "Smoke test passed"
 

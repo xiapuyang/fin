@@ -11,6 +11,7 @@ import logging
 import multiprocessing
 import socket
 import sys
+import tempfile
 import threading
 import urllib.request
 import webbrowser
@@ -20,6 +21,13 @@ import uvicorn
 
 from fin._version import __version__ as APP_VERSION
 
+# Write to a temp log file so errors are visible even with console=False
+_LOG_FILE = Path(tempfile.gettempdir()) / "fin_launcher.log"
+logging.basicConfig(
+    filename=str(_LOG_FILE),
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 GITHUB_REPO = "xiapuyang/fin"
@@ -232,14 +240,27 @@ def main() -> None:
             )
             sys.exit(1)
 
-    from fin.api import app
+    try:
+        logger.info("importing fin.api")
+        from fin.api import app
+
+        logger.info("fin.api imported ok")
+    except Exception:
+        logger.exception("failed to import fin.api")
+        raise
 
     server = uvicorn.Server(
         uvicorn.Config(app, host=HOST, port=PORT, workers=1, log_level="warning")
     )
-    threading.Thread(
-        target=lambda: asyncio.run(server.serve()), daemon=True, name="uvicorn"
-    ).start()
+
+    def _run_server() -> None:
+        try:
+            logger.info("uvicorn starting on %s:%s", HOST, PORT)
+            asyncio.run(server.serve())
+        except Exception:
+            logger.exception("uvicorn crashed")
+
+    threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
 
     def _open_when_ready() -> None:
         if not _wait_for_server():
