@@ -93,7 +93,7 @@ const App = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} onCurrencyChange={c => {
+        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} displayName={settings.display_name || ""} onCurrencyChange={c => {
           setCurrency(c);
           fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
         }} onOpenSettings={() => setShowSettings(true)} onTogglePrivacy={next => {
@@ -155,7 +155,7 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
+const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayName = "", onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
   const cur = NAV.find(n => n.id === route);
   const usd = fxRates.USD ?? 7.24;
   const hkd = fxRates.HKD ?? 0.93;
@@ -213,7 +213,7 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, onCurrency
           title={masked ? "显示金额 Show amounts" : "隐藏金额 Hide amounts (demo mode)"}
         />
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
-        <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>S</div>
+        <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>{displayName ? displayName.trim()[0].toUpperCase() : "?"}</div>
       </div>
     </div>
   );
