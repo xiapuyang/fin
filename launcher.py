@@ -281,18 +281,22 @@ def main() -> None:
         _log(f"fin.api FAILED: {_exc}")
         raise
 
+    _log("creating uvicorn config")
     server = uvicorn.Server(
         uvicorn.Config(app, host=HOST, port=PORT, workers=1, log_level="warning")
     )
+    _log("uvicorn config ok")
 
     def _run_server() -> None:
         try:
-            _log("uvicorn starting")
+            _log("uvicorn thread started")
             asyncio.run(server.serve())
+            _log("uvicorn exited normally")
         except Exception as exc:
             _log(f"uvicorn crashed: {exc}")
 
     threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
+    _log("uvicorn thread launched")
 
     def _open_when_ready() -> None:
         if not _wait_for_server():
@@ -301,9 +305,13 @@ def main() -> None:
 
     threading.Thread(target=_open_when_ready, daemon=True, name="browser-open").start()
 
+    _log("importing pystray")
     import pystray
+
+    _log("importing PIL")
     from PIL import Image
 
+    _log("pystray+PIL ok, building icon")
     icon_path = _resource_path("assets/tray_icon.png")
     try:
         image = Image.open(icon_path)
@@ -319,7 +327,9 @@ def main() -> None:
     )
     icon = pystray.Icon("fin", image, "Fin", menu)
     icon._fin_server = server
+    _log("icon.run starting")
     icon.run(setup=_on_tray_ready)
+    _log("icon.run returned")
 
 
 if __name__ == "__main__":
