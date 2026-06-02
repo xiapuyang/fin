@@ -292,18 +292,19 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
     {
       id: "fire", icon: "spark", kicker: "MODULE 05", title: "退休计划", en: "FIRE",
       color: "var(--down)",
-      stat: fireTarget > 0
-        ? yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
+      stat: !birthDate ? "请先设置生日"
+        : fireTarget <= 0 ? "请先设置月支出"
+        : yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
         : yearsToFire != null ? `${yearsToFire}y to 财务自由`
-        : "目标不可达"
-        : "请先设置月支出",
+        : "目标不可达",
       blurb: "FIRE 数字 & 复利推演 & 里程碑",
     },
   ];
 
-  const fireSubtitle = fireTarget > 0 && yearsToFire != null && yearsToFire > 0
+  const fireReady = fireTarget > 0 && !!birthDate;
+  const fireSubtitle = fireReady && yearsToFire != null && yearsToFire > 0
     ? `Net worth tracking toward FIRE · ${yearsToFire}y to 财务自由`
-    : fireTarget > 0 && yearsToFire === 0
+    : fireReady && yearsToFire === 0
     ? "FIRE 目标已达成 🎉"
     : "Net worth tracking toward FIRE";
 
@@ -434,10 +435,15 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         {/* FIRE Target */}
         <Card padding={20}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>FIRE TARGET · 财务自由</div>
-          {fireTarget <= 0 ? (
+          {!fireReady ? (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>请在退休计划页设置月支出以计算 FIRE 目标</div>
-              <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
+              <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
+                {!birthDate ? "请在应用设置中填写生日以启用 FIRE 计算" : "请在退休计划页设置月支出以计算 FIRE 目标"}
+              </div>
+              {!birthDate
+                ? null
+                : <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
+              }
             </div>
           ) : (
             <>
