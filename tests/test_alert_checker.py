@@ -211,6 +211,10 @@ def test_run_check_continues_after_single_symbol_exception(db):
     fire_repo.create = track_create
 
     with (
+        patch.dict(
+            "os.environ",
+            {"AGENTMAIL_API_KEY": "test-key", "FIN_AGENTMAIL_INBOX": "test-inbox"},
+        ),
         patch(f"{_MOD}.SessionLocal", return_value=db),
         patch(f"{_MOD}.init_db"),
         patch(f"{_MOD}.QuoteService", return_value=mock_qs),
