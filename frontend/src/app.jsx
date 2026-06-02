@@ -241,8 +241,8 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [emailError, setEmailError] = React.useState("");
   const [apiKey, setApiKey]         = React.useState("");
   const [apiInbox, setApiInbox]     = React.useState("");
-  const [keyConfigured, setKeyConfigured]     = React.useState(false);
-  const [inboxConfigured, setInboxConfigured] = React.useState(false);
+  const [origApiKey, setOrigApiKey] = React.useState("");
+  const [origApiInbox, setOrigApiInbox] = React.useState("");
   const [apiKeySaved, setApiKeySaved] = React.useState(false);
   const [showKey, setShowKey]       = React.useState(false);
 
@@ -251,8 +251,10 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) {
-          setKeyConfigured(d.agentmail_key_configured);
-          setInboxConfigured(d.agentmail_inbox_configured);
+          setApiKey(d.agentmail_api_key || "");
+          setApiInbox(d.agentmail_inbox || "");
+          setOrigApiKey(d.agentmail_api_key || "");
+          setOrigApiInbox(d.agentmail_inbox || "");
         }
       })
       .catch(() => {});
@@ -267,20 +269,16 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
     setEmailError("");
     setSaving(true);
     try {
-      if (apiKey.trim() || apiInbox.trim()) {
-        const payload = {};
-        if (apiKey.trim()) payload.agentmail_api_key = apiKey.trim();
-        if (apiInbox.trim()) payload.agentmail_inbox = apiInbox.trim();
+      const credPayload = {};
+      if (apiKey !== origApiKey) credPayload.agentmail_api_key = apiKey;
+      if (apiInbox !== origApiInbox) credPayload.agentmail_inbox = apiInbox;
+      if (Object.keys(credPayload).length > 0) {
         const kr = await fetch("/api/settings/credentials", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(credPayload),
         });
-        if (kr.ok) {
-          if (apiKey.trim()) { setKeyConfigured(true); setApiKey(""); }
-          if (apiInbox.trim()) { setInboxConfigured(true); setApiInbox(""); }
-          setApiKeySaved(true);
-        }
+        if (kr.ok) { setOrigApiKey(apiKey); setOrigApiInbox(apiInbox); setApiKeySaved(true); }
       }
       const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
@@ -354,7 +352,6 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
                   type={showKey ? "text" : "password"}
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  placeholder={keyConfigured ? "••••••••" : ""}
                   style={{
                     width: "100%", padding: "6px 34px 6px 10px", fontSize: 13, borderRadius: 7,
                     border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
@@ -380,7 +377,6 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
                 type="text"
                 value={apiInbox}
                 onChange={e => setApiInbox(e.target.value)}
-                placeholder={inboxConfigured ? "••••••••" : ""}
                 style={{
                   width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
                   border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",

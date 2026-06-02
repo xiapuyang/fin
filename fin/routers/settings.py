@@ -97,10 +97,10 @@ class CredentialsPayload(BaseModel):
 
 @router.get("/settings/credentials")
 def get_credentials():
-    """Return which credentials are configured — never returns key values."""
+    """Return stored AgentMail credentials (localhost-only; values are not secrets on this machine)."""
     return {
-        "agentmail_key_configured": bool(os.environ.get("AGENTMAIL_API_KEY")),
-        "agentmail_inbox_configured": bool(os.environ.get("FIN_AGENTMAIL_INBOX")),
+        "agentmail_api_key": os.environ.get("AGENTMAIL_API_KEY", ""),
+        "agentmail_inbox": os.environ.get("FIN_AGENTMAIL_INBOX", ""),
     }
 
 
