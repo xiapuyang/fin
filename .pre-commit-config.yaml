@@ -8,7 +8,8 @@ repos:
       - id: detect-private-key          # PRE_COMMIT_BLOCK_PRIVATE_KEY (partial, gitleaks covers more)
       - id: trailing-whitespace         # PRE_COMMIT_BLOCK_TRAILING_WS
       - id: check-added-large-files     # PRE_COMMIT_BLOCK_LARGE_FILES
-        args: [--maxkb=5120]
+        args: [--maxkb=1024]
+        exclude: ^frontend/vendor/
       - id: end-of-file-fixer
       - id: check-ast
       - id: debug-statements
