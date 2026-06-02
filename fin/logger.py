@@ -1,9 +1,15 @@
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 
+import platformdirs
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_LOG_DIR = os.path.join(_PROJECT_ROOT, "logs")
+if getattr(sys, "frozen", False):
+    DEFAULT_LOG_DIR = platformdirs.user_log_dir("Fin")
+else:
+    DEFAULT_LOG_DIR = os.path.join(_PROJECT_ROOT, "logs")
 
 
 def get_log_dir() -> str:
