@@ -8,7 +8,7 @@ Output (Win): dist/Fin/
 
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH)
 
@@ -16,18 +16,23 @@ ROOT = Path(SPECPATH)
 datas = [
     (str(ROOT / "frontend"), "frontend"),
     (str(ROOT / "config"), "config"),
-    (str(ROOT / "assets"), "assets"),
+    # assets/ without screenshots — runtime only needs the tray icon and icns
+    (str(ROOT / "assets" / "tray_icon.png"), "assets"),
+    (str(ROOT / "assets" / "fin.icns"), "assets"),
 ]
 
-# Heavy packages that ship binary extensions + data
-binaries_pandas, datas_pandas, hiddenimports_pandas = collect_all("pandas")
-binaries_scipy, datas_scipy, hiddenimports_scipy = collect_all("scipy")
+# pandas: binaries (C extensions) + data files, but skip tests (~15 MB)
+binaries_pandas, _, hiddenimports_pandas = collect_all("pandas")
+datas_pandas = collect_data_files("pandas", excludes=["**/tests/**", "**/testing/**"])
 
-datas += datas_pandas + datas_scipy
+# scipy is not used — omit entirely
+binaries_scipy, hiddenimports_scipy = [], []
+
+datas += datas_pandas
 datas += collect_data_files("exchange_calendars")
 datas += collect_all("akshare")[1]  # data files only
 
-binaries = binaries_pandas + binaries_scipy
+binaries = binaries_pandas
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 hiddenimports = [
@@ -54,7 +59,7 @@ hiddenimports = [
     "PyObjCTools",
     "PyObjCTools.MachSignals",
 ]
-hiddenimports += hiddenimports_pandas + hiddenimports_scipy
+hiddenimports += hiddenimports_pandas
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
