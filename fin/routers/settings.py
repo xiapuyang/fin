@@ -91,20 +91,27 @@ def get_last_check():
 
 
 class CredentialsPayload(BaseModel):
-    agentmail_api_key: str
+    agentmail_api_key: str | None = None
+    agentmail_inbox: str | None = None
 
 
 @router.get("/settings/credentials")
 def get_credentials():
     """Return which credentials are configured — never returns key values."""
-    return {"agentmail_configured": bool(os.environ.get("AGENTMAIL_API_KEY"))}
+    return {
+        "agentmail_key_configured": bool(os.environ.get("AGENTMAIL_API_KEY")),
+        "agentmail_inbox_configured": bool(os.environ.get("FIN_AGENTMAIL_INBOX")),
+    }
 
 
 @router.put("/settings/credentials")
 def put_credentials(data: CredentialsPayload):
-    """Write API key to DATA_DIR/.env without touching other keys."""
+    """Write AgentMail credentials to DATA_DIR/.env without touching other keys."""
     env_path = DATA_DIR / ".env"
     env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.touch(exist_ok=True)
-    set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+    if data.agentmail_api_key is not None:
+        set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+    if data.agentmail_inbox is not None:
+        set_key(str(env_path), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
     return {"saved": True, "restart_required": True}

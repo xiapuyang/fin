@@ -61,7 +61,7 @@ SUPPORTED_CURRENCIES: list[str] = ["CNY", "USD", "HKD", "CAD"]
 
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 
-# Env-driven config. See .env.example for descriptions.
+# Env-driven config. See config/.env.example for descriptions.
 AGENTMAIL_API_KEY = os.environ.get("AGENTMAIL_API_KEY", "")
 AGENTMAIL_INBOX = os.environ.get("FIN_AGENTMAIL_INBOX", "")
 

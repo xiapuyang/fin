@@ -239,14 +239,21 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [notifyEnabled, setNotifyEnabled] = React.useState(settings.notify_enabled !== false);
   const [saving, setSaving]       = React.useState(false);
   const [emailError, setEmailError] = React.useState("");
-  const [apiKey, setApiKey]       = React.useState("");
-  const [apiKeyConfigured, setApiKeyConfigured] = React.useState(false);
+  const [apiKey, setApiKey]         = React.useState("");
+  const [apiInbox, setApiInbox]     = React.useState("");
+  const [keyConfigured, setKeyConfigured]     = React.useState(false);
+  const [inboxConfigured, setInboxConfigured] = React.useState(false);
   const [apiKeySaved, setApiKeySaved] = React.useState(false);
 
   React.useEffect(() => {
     fetch("/api/settings/credentials")
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setApiKeyConfigured(d.agentmail_configured); })
+      .then(d => {
+        if (d) {
+          setKeyConfigured(d.agentmail_key_configured);
+          setInboxConfigured(d.agentmail_inbox_configured);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -259,13 +266,20 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
     setEmailError("");
     setSaving(true);
     try {
-      if (apiKey.trim()) {
+      if (apiKey.trim() || apiInbox.trim()) {
+        const payload = {};
+        if (apiKey.trim()) payload.agentmail_api_key = apiKey.trim();
+        if (apiInbox.trim()) payload.agentmail_inbox = apiInbox.trim();
         const kr = await fetch("/api/settings/credentials", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentmail_api_key: apiKey.trim() }),
+          body: JSON.stringify(payload),
         });
-        if (kr.ok) { setApiKeyConfigured(true); setApiKeySaved(true); setApiKey(""); }
+        if (kr.ok) {
+          if (apiKey.trim()) { setKeyConfigured(true); setApiKey(""); }
+          if (apiInbox.trim()) { setInboxConfigured(true); setApiInbox(""); }
+          setApiKeySaved(true);
+        }
       }
       const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
@@ -330,20 +344,33 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>AgentMail API Key</div>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            placeholder={apiKeyConfigured ? "•••••••• 已设置" : "Enter key to configure"}
-            style={{
-              width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
-              border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
-              boxSizing: "border-box",
-            }}
-          />
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。留空保持不变。</div>
-          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>API Key 已保存，重启生效 · Restart required</div>}
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>AgentMail</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder={keyConfigured ? "API Key •••••••• 已设置" : "API Key — Enter to configure"}
+              style={{
+                width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+                border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                boxSizing: "border-box",
+              }}
+            />
+            <input
+              type="text"
+              value={apiInbox}
+              onChange={e => setApiInbox(e.target.value)}
+              placeholder={inboxConfigured ? "Inbox ID 已设置" : "Inbox ID — agent_xxx@agentmail.to"}
+              style={{
+                width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+                border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。两项均需设置，留空保持不变。</div>
+          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存，重启生效 · Restart required</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>

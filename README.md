@@ -76,8 +76,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ```bash
 git clone <repo-url>
 cd fin
-cp .env.example .env       # 填邮件相关变量，全空也能跑（仅跳过邮件发送）
 uv sync                    # install Python deps
+cp config/.env.example ~/.fin/data/.env  # 可选：填写 AgentMail 凭据
 uv run python serve.py     # http://localhost:8888
 ```
 

@@ -66,9 +66,18 @@ def run_check(force: bool = False) -> None:
     Safe to call repeatedly — creates and closes its own DB session.
     Exceptions are caught per-symbol so one failure doesn't abort the run.
 
+    Returns early without touching the DB when AgentMail is not configured,
+    to prevent alerts from firing and disabling themselves without notification.
+
     Args:
         force: Skip market-state REGULAR check (useful for testing).
     """
+    if not AGENTMAIL_API_KEY or not AGENTMAIL_INBOX:
+        logger.info(
+            "AgentMail not configured (AGENTMAIL_API_KEY / FIN_AGENTMAIL_INBOX); skipping check"
+        )
+        return
+
     app_settings = settings_store.load()
     notify_email = app_settings.get("notify_email", "")
     notify_enabled = app_settings.get("notify_enabled", True)
