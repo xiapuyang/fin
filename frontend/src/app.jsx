@@ -239,6 +239,16 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [notifyEnabled, setNotifyEnabled] = React.useState(settings.notify_enabled !== false);
   const [saving, setSaving]       = React.useState(false);
   const [emailError, setEmailError] = React.useState("");
+  const [apiKey, setApiKey]       = React.useState("");
+  const [apiKeyConfigured, setApiKeyConfigured] = React.useState(false);
+  const [apiKeySaved, setApiKeySaved] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/settings/credentials")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setApiKeyConfigured(d.agentmail_configured); })
+      .catch(() => {});
+  }, []);
 
   const save = async () => {
     const trimmed = notifyEmail.trim();
@@ -249,13 +259,21 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
     setEmailError("");
     setSaving(true);
     try {
+      if (apiKey.trim()) {
+        const kr = await fetch("/api/settings/credentials", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentmail_api_key: apiKey.trim() }),
+        });
+        if (kr.ok) { setApiKeyConfigured(true); setApiKeySaved(true); setApiKey(""); }
+      }
       const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.ok) { onSaved(payload); onClose(); }
+      if (res.ok) { onSaved(payload); if (!apiKeySaved) onClose(); else onClose(); }
     } finally { setSaving(false); }
   };
 
@@ -310,6 +328,22 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             </div>
             <Toggle value={notifyEnabled} onChange={() => setNotifyEnabled(!notifyEnabled)} />
           </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>AgentMail API Key</div>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder={apiKeyConfigured ? "•••••••• 已设置" : "Enter key to configure"}
+            style={{
+              width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
+              border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+              boxSizing: "border-box",
+            }}
+          />
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。留空保持不变。</div>
+          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>API Key 已保存，重启生效 · Restart required</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
           <Button variant="secondary" onClick={onClose}>取消</Button>

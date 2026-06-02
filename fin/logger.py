@@ -6,10 +6,11 @@ from logging.handlers import RotatingFileHandler
 import platformdirs
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if getattr(sys, "frozen", False):
+_HOME_FIN = os.path.join(os.path.expanduser("~"), ".fin")
+if getattr(sys, "frozen", False) and sys.platform == "win32":
     DEFAULT_LOG_DIR = platformdirs.user_log_dir("Fin")
 else:
-    DEFAULT_LOG_DIR = os.path.join(_PROJECT_ROOT, "logs")
+    DEFAULT_LOG_DIR = os.path.join(_HOME_FIN, "logs")
 
 
 def get_log_dir() -> str:

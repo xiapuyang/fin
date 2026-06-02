@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import platformdirs
+import pytest
 
 
 @contextmanager
@@ -40,11 +41,17 @@ def _frozen_sys(meipass_dir: Path):
 class TestDevMode:
     """Non-frozen (normal dev) mode keeps existing behaviour."""
 
-    def test_data_dir_is_under_project_root(self):
+    def test_data_dir_is_under_home_fin(self):
         import fin.config as cfg
 
-        project_root = Path(__file__).parent.parent
-        assert cfg.DATA_DIR in (project_root / "data", project_root / "data-dev")
+        home_fin = Path.home() / ".fin"
+        assert cfg.DATA_DIR in (home_fin / "data", home_fin / "data-dev")
+
+    def test_log_dir_is_under_home_fin(self):
+        import fin.config as cfg
+
+        home_fin = Path.home() / ".fin"
+        assert cfg.LOG_DIR == home_fin / "logs"
 
     def test_symbols_path_is_under_project_root(self):
         import fin.config as cfg
@@ -87,13 +94,26 @@ class TestFrozenMode:
         importlib.reload(cfg)
         return data_dir, log_dir, frontend_dir, symbols_path, fin_dev
 
-    def test_data_dir_uses_os_user_data_dir(self, tmp_path):
+    def test_data_dir_uses_home_fin_on_non_windows(self, tmp_path):
+        import sys as _sys
+
+        if _sys.platform == "win32":
+            pytest.skip("Windows frozen uses platformdirs")
+        data_dir, _, _, _, _ = self._reload_frozen(tmp_path / "bundle")
+        assert data_dir == Path.home() / ".fin" / "data"
+
+    def test_log_dir_uses_home_fin_on_non_windows(self, tmp_path):
+        import sys as _sys
+
+        if _sys.platform == "win32":
+            pytest.skip("Windows frozen uses platformdirs")
+        _, log_dir, _, _, _ = self._reload_frozen(tmp_path / "bundle")
+        assert log_dir == Path.home() / ".fin" / "logs"
+
+    def test_data_dir_uses_platformdirs_on_windows(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("sys.platform", "win32")
         data_dir, _, _, _, _ = self._reload_frozen(tmp_path / "bundle")
         assert data_dir == Path(platformdirs.user_data_dir("Fin"))
-
-    def test_log_dir_uses_os_user_log_dir(self, tmp_path):
-        _, log_dir, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert log_dir == Path(platformdirs.user_log_dir("Fin"))
 
     def test_frontend_dir_points_into_meipass(self, tmp_path):
         bundle_dir = tmp_path / "bundle"
@@ -126,7 +146,12 @@ class TestFrozenMode:
 class TestLoggerFrozenMode:
     """logger.py DEFAULT_LOG_DIR follows frozen-mode detection."""
 
-    def test_default_log_dir_uses_platformdirs_when_frozen(self):
+    def test_default_log_dir_uses_home_fin_when_frozen_non_windows(self):
+        import sys as _sys
+
+        if _sys.platform == "win32":
+            pytest.skip("Windows frozen uses platformdirs")
+
         import fin.logger as lg
 
         with _frozen_sys(Path("/fake/meipass")):
@@ -134,11 +159,12 @@ class TestLoggerFrozenMode:
             default_log_dir = lg.DEFAULT_LOG_DIR
 
         importlib.reload(lg)  # restore
-        assert default_log_dir == platformdirs.user_log_dir("Fin")
+        expected = os.path.join(os.path.expanduser("~"), ".fin", "logs")
+        assert default_log_dir == expected
 
-    def test_default_log_dir_uses_project_root_in_dev_mode(self):
+    def test_default_log_dir_uses_home_fin_in_dev_mode(self):
         import fin.logger as lg
 
         importlib.reload(lg)
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(lg.__file__)))
-        assert lg.DEFAULT_LOG_DIR == os.path.join(project_root, "logs")
+        expected = os.path.join(os.path.expanduser("~"), ".fin", "logs")
+        assert lg.DEFAULT_LOG_DIR == expected

@@ -14,8 +14,13 @@ jobs:
         include:
           - os: macos-latest
             platform: mac
+            arch: arm64
+          - os: macos-13
+            platform: mac
+            arch: intel
           - os: windows-latest
             platform: windows
+            arch: x64
 
     runs-on: ${{ matrix.os }}
 
@@ -71,7 +76,7 @@ jobs:
             --hide-extension "Fin.app" \
             --app-drop-link 425 190 \
             --skip-jenkins \
-            "dist/Fin-${VERSION}.dmg" \
+            "dist/Fin-${VERSION}-${{ matrix.arch }}.dmg" \
             "dist/Fin.app"
 
       # ── Windows installer ────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ jobs:
         if: matrix.platform == 'mac'
         uses: actions/upload-artifact@v4
         with:
-          name: Fin-mac
+          name: Fin-mac-${{ matrix.arch }}
           path: dist/*.dmg
 
       - name: Upload installer artifact

@@ -1,13 +1,15 @@
 import json
 import logging
+import os
 from typing import Any
 
+from dotenv import set_key
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import LAST_CHECK_PATH, SUPPORTED_CURRENCIES
+from fin.config import DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -86,3 +88,23 @@ def get_last_check():
         return json.loads(LAST_CHECK_PATH.read_text())
     except (json.JSONDecodeError, OSError):
         return {"checked_at": None}
+
+
+class CredentialsPayload(BaseModel):
+    agentmail_api_key: str
+
+
+@router.get("/settings/credentials")
+def get_credentials():
+    """Return which credentials are configured — never returns key values."""
+    return {"agentmail_configured": bool(os.environ.get("AGENTMAIL_API_KEY"))}
+
+
+@router.put("/settings/credentials")
+def put_credentials(data: CredentialsPayload):
+    """Write API key to DATA_DIR/.env without touching other keys."""
+    env_path = DATA_DIR / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.touch(exist_ok=True)
+    set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+    return {"saved": True, "restart_required": True}
