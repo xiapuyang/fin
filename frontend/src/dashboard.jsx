@@ -242,7 +242,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
   // Binary search for required nominal CAGR (deterministic) to hit fireTarget by fireTargetAge
   const requiredCagr = React.useMemo(() => {
     if (fireTarget <= 0 || investable >= fireTarget) return 0;
-    if (!birthDate && manualAge === null) return null;  // age unknown — don't fabricate a number
+    if (!birthDate) return null;  // need real age to compute target years
     const targetYears = Math.max(1, fireTargetAge - age);
     const test = (nomCagr) => {
       const real = nomCagr - fireInflation;
