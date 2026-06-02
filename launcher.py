@@ -99,6 +99,8 @@ def _on_tray_ready(icon) -> None:
     By the time this runs, the port-conflict check in main() has already
     passed, so the port is guaranteed free and we can start the server.
     """
+    icon.visible = True  # pystray won't show the icon unless we set this explicitly
+
     from fin.api import app  # import here so config.py already ran with frozen flag
 
     server = uvicorn.Server(
