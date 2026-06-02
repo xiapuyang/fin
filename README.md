@@ -53,7 +53,7 @@
 
 ### macOS
 
-1. 下载对应芯片的 `.dmg`，打开后将 **Fin.app** 拖入 Applications
+1. 下载 `.dmg`（仅支持 Apple Silicon），打开后将 **Fin.app** 拖入 Applications
 2. 首次启动前在终端运行：
 
 ```bash
