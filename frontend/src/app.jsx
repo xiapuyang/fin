@@ -213,7 +213,11 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayNam
           title={masked ? "显示金额 Show amounts" : "隐藏金额 Hide amounts (demo mode)"}
         />
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
-        <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>{displayName ? displayName.trim()[0].toUpperCase() : "?"}</div>
+        {(() => {
+          const ch = displayName ? displayName.trim()[0] : "?";
+          const isCJK = ch.codePointAt(0) >= 0x4E00;
+          return <div style={{ width: 28, height: 28, borderRadius: 14, background: "linear-gradient(135deg, #14161B, #5C6270)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: isCJK ? 13 : 11, fontWeight: 600 }}>{isCJK ? ch : ch.toUpperCase()}</div>;
+        })()}
       </div>
     </div>
   );
