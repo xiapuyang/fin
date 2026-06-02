@@ -107,7 +107,7 @@ if sys.platform == "darwin":
         info_plist={
             "NSHighResolutionCapable": True,
             "CFBundleShortVersionString": "1.0.0",
-            "LSUIElement": False,  # show Dock icon until tray icon is stable
+            "LSUIElement": True,  # hide Dock icon — menu bar only
             "NSAppTransportSecurity": {
                 "NSAllowsLocalNetworking": True,
             },
