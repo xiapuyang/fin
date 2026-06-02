@@ -35,13 +35,10 @@ def _run(*args: str, **kwargs) -> None:
 
 
 def _version() -> str:
-    try:
-        out = subprocess.check_output(
-            ["git", "describe", "--tags", "--abbrev=0"], cwd=ROOT, text=True
-        ).strip()
-        return out if out else "dev"
-    except subprocess.CalledProcessError:
-        return "dev"
+    sys.path.insert(0, str(ROOT))
+    from fin._version import __version__
+
+    return __version__
 
 
 def _native_arch() -> str:
