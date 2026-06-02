@@ -58,7 +58,7 @@
 2. 首次启动前在终端运行：
 
 ```bash
-xattr -cr /Applications/Fin.app
+xattr -d com.apple.quarantine /Applications/Fin.app
 ```
 
 3. 双击启动，菜单栏右上角出现 Fin 图标，浏览器自动打开
