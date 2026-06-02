@@ -281,18 +281,19 @@ def main() -> None:
         raise
 
     _log("creating uvicorn config")
-    server = uvicorn.Server(
-        uvicorn.Config(
-            app,
-            host=HOST,
-            port=PORT,
-            workers=1,
-            log_level="warning",
-            loop="asyncio",
-            http="h11",
-        )
+    _cfg = uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        workers=1,
+        log_level="warning",
+        loop="asyncio",
+        http="h11",
+        log_config=None,  # skip dictConfig — avoids factory import hang in frozen app
     )
     _log("uvicorn config ok")
+    server = uvicorn.Server(_cfg)
+    _log("uvicorn server ok")
 
     def _run_server() -> None:
         try:
