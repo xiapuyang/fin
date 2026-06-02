@@ -49,7 +49,6 @@
 | 平台 | 芯片 | 系统要求 | 版本 |
 |------|------|----------|------|
 | macOS | Apple Silicon (M1+) | macOS 11+ | [v0.1.0](#) |
-| macOS | Intel | macOS 10.15+ | [v0.1.0](#) |
 | Windows | x86\_64 | Windows 10+ | [v0.1.0](#) |
 
 ### macOS
