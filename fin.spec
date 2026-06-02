@@ -34,17 +34,7 @@ binaries = binaries_pandas
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 hiddenimports = [
-    "uvicorn",
-    "uvicorn.logging",
-    "uvicorn.loops",
-    "uvicorn.loops.auto",
-    "uvicorn.protocols",
-    "uvicorn.protocols.http",
-    "uvicorn.protocols.http.auto",
-    "uvicorn.protocols.websockets",
-    "uvicorn.protocols.websockets.auto",
-    "uvicorn.lifespan",
-    "uvicorn.lifespan.on",
+    # uvicorn: collected via hooks/hook-uvicorn.py (collect_submodules)
     "sqlalchemy.dialects.sqlite",
     "pydantic_core",
     # pystray: backend modules are loaded lazily so PyInstaller cannot trace them.

@@ -6,7 +6,6 @@ and opens the browser once the server is ready. Must be the PyInstaller
 entrypoint so that multiprocessing.freeze_support() runs before anything else.
 """
 
-import asyncio
 import importlib
 import logging
 import multiprocessing
@@ -298,7 +297,7 @@ def main() -> None:
     def _run_server() -> None:
         try:
             _log("uvicorn thread started")
-            asyncio.run(server.serve())
+            server.run()  # uses config's loop_factory (ProactorEventLoop on Windows)
             _log("uvicorn exited normally")
         except Exception as exc:
             _log(f"uvicorn crashed: {exc}")
