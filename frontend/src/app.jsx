@@ -244,6 +244,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [keyConfigured, setKeyConfigured]     = React.useState(false);
   const [inboxConfigured, setInboxConfigured] = React.useState(false);
   const [apiKeySaved, setApiKeySaved] = React.useState(false);
+  const [showKey, setShowKey]       = React.useState(false);
 
   React.useEffect(() => {
     fetch("/api/settings/credentials")
@@ -348,22 +349,35 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div>
               <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>API Key</div>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder={keyConfigured ? "••••••••" : ""}
-                style={{
-                  width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
-                  border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
-                  boxSizing: "border-box",
-                }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder={keyConfigured ? "••••••••" : ""}
+                  style={{
+                    width: "100%", padding: "6px 34px 6px 10px", fontSize: 13, borderRadius: 7,
+                    border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(v => !v)}
+                  style={{
+                    position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer", padding: 2,
+                    color: "var(--ink-4)", display: "flex", alignItems: "center",
+                  }}
+                >
+                  <Icon name={showKey ? "eye-off" : "eye"} size={14}/>
+                </button>
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 3 }}>Inbox ID</div>
               <input
-                type="password"
+                type="text"
                 value={apiInbox}
                 onChange={e => setApiInbox(e.target.value)}
                 placeholder={inboxConfigured ? "••••••••" : ""}
