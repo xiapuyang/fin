@@ -61,6 +61,30 @@ jobs:
           if (-not $ok) { Write-Error "Health check never responded after 90s"; exit 1 }
           Write-Output "Smoke test passed"
 
+      # ── Mac smoke test ───────────────────────────────────────────────────────
+      - name: Smoke test (Mac)
+        if: matrix.platform == 'mac'
+        run: |
+          dist/Fin.app/Contents/MacOS/Fin &
+          APP_PID=$!
+          OK=false
+          for i in $(seq 1 45); do
+            sleep 2
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "Process exited early"
+              cat /tmp/fin_launcher.log 2>/dev/null || true
+              exit 1
+            fi
+            if curl -sf --max-time 2 http://127.0.0.1:8888/api/health >/dev/null; then
+              OK=true
+              break
+            fi
+          done
+          kill "$APP_PID" 2>/dev/null || true
+          if [ -f /tmp/fin_launcher.log ]; then echo "=== fin_launcher.log ==="; cat /tmp/fin_launcher.log; fi
+          if [ "$OK" != "true" ]; then echo "Health check never responded after 90s"; exit 1; fi
+          echo "Smoke test passed"
+
       # ── Mac DMG ──────────────────────────────────────────────────────────────
       - name: Install create-dmg (Mac)
         if: matrix.platform == 'mac'
