@@ -21,14 +21,12 @@ datas = [
     (str(ROOT / "assets" / "fin.icns"), "assets"),
 ]
 
-# pandas: binaries (C extensions) + data files, but skip tests (~15 MB)
-binaries_pandas, _, hiddenimports_pandas = collect_all("pandas")
-datas_pandas = collect_data_files("pandas", excludes=["**/tests/**", "**/testing/**"])
+# pandas: .so binaries only — built-in PyInstaller hook handles hiddenimports
+# (collect_submodules would pull in pandas.tests, wasting ~15 MB)
+binaries_pandas = collect_all("pandas")[0]
 
-# scipy is not used — omit entirely
-binaries_scipy, hiddenimports_scipy = [], []
+# scipy is not used by fin — omit entirely
 
-datas += datas_pandas
 datas += collect_data_files("exchange_calendars")
 datas += collect_all("akshare")[1]  # data files only
 
@@ -59,7 +57,7 @@ hiddenimports = [
     "PyObjCTools",
     "PyObjCTools.MachSignals",
 ]
-hiddenimports += hiddenimports_pandas
+hiddenimports += collect_submodules("pandas._libs")
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
