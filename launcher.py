@@ -195,13 +195,17 @@ def _prompt_update(latest_tag: str, release_notes: str = "") -> None:
 
 def _check_for_updates(icon, item) -> None:
     import json
+    import ssl
+
+    import certifi
 
     def _do_check() -> None:
         try:
             req = urllib.request.Request(
                 RELEASES_API_URL, headers={"User-Agent": "fin-app"}
             )
-            with urllib.request.urlopen(req, timeout=10) as r:
+            ctx = ssl.create_default_context(cafile=certifi.where())
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
                 data = json.loads(r.read())
             latest_tag = data.get("tag_name", "")
             if _version_tuple(latest_tag) > _version_tuple(APP_VERSION):
