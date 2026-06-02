@@ -18,7 +18,13 @@ from pathlib import Path
 
 import uvicorn
 
+from fin._version import __version__ as APP_VERSION
+
 logger = logging.getLogger(__name__)
+
+GITHUB_REPO = "xiapuyang/fin"
+RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"
+RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 HOST = "127.0.0.1"
 PORT = 8888
@@ -140,6 +146,90 @@ def _open_action(icon, item) -> None:
     _open_browser()
 
 
+def _version_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(x) for x in v.lstrip("v").split("."))
+    except ValueError:
+        return (0,)
+
+
+def _show_info(title: str, message: str) -> None:
+    if sys.platform == "darwin":
+        import subprocess
+
+        icon_path = _resource_path("assets/fin.icns")
+        icon_clause = (
+            f' with icon file POSIX file "{icon_path}"' if icon_path.exists() else ""
+        )
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display dialog "{message}" with title "{title}" buttons {{"OK"}} default button "OK"{icon_clause}',
+            ],
+            check=False,
+        )
+    elif sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
+    else:
+        print(f"[{title}] {message}")
+
+
+def _prompt_update(latest_tag: str, release_notes: str = "") -> None:
+    notes_line = f"\n\n{release_notes[:300]}" if release_notes else ""
+    message = f"发现新版本 {latest_tag}（当前 v{APP_VERSION}）。{notes_line}\n\n是否前往下载页面？"
+    should_open = False
+    if sys.platform == "darwin":
+        import subprocess
+
+        icon_path = _resource_path("assets/fin.icns")
+        icon_clause = (
+            f' with icon file POSIX file "{icon_path}"' if icon_path.exists() else ""
+        )
+        result = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display dialog "{message}" buttons {{"稍后", "前往下载"}} default button "前往下载"{icon_clause}',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        should_open = "前往下载" in result.stdout
+    elif sys.platform == "win32":
+        import ctypes
+
+        ret = ctypes.windll.user32.MessageBoxW(0, message, "Fin 更新", 0x24)
+        should_open = ret == 6  # IDYES
+    if should_open:
+        webbrowser.open(RELEASES_URL)
+
+
+def _check_for_updates(icon, item) -> None:
+    import json
+
+    def _do_check() -> None:
+        try:
+            req = urllib.request.Request(
+                RELEASES_API_URL, headers={"User-Agent": "fin-app"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read())
+            latest_tag = data.get("tag_name", "")
+            if _version_tuple(latest_tag) > _version_tuple(APP_VERSION):
+                _prompt_update(latest_tag, data.get("body", ""))
+            else:
+                _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+        except Exception as exc:
+            logger.warning("Update check failed: %s", exc)
+            _show_error("Fin", "检查更新失败，请稍后重试。")
+
+    threading.Thread(target=_do_check, daemon=True, name="update-check").start()
+
+
 def main() -> None:
     """Entry point. Must be called before any other application code."""
     multiprocessing.freeze_support()
@@ -170,6 +260,8 @@ def main() -> None:
 
     menu = pystray.Menu(
         pystray.MenuItem("Open Fin", _open_action, default=True),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Check for Updates…", _check_for_updates),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", _quit),
     )

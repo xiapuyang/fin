@@ -1,6 +1,6 @@
 [project]
 name = "fin"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Personal financial management — alerts, holdings, ledger, FIRE"
 readme = "README.md"
 license = { text = "MIT" }
@@ -25,6 +25,9 @@ Homepage = "https://github.com/xiapuyang/fin"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "fin/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["fin"]

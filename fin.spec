@@ -9,6 +9,7 @@ Output (Win): dist/Fin/
 import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules, collect_dynamic_libs
+from fin._version import __version__ as APP_VERSION
 
 ROOT = Path(SPECPATH)
 
@@ -108,7 +109,7 @@ if sys.platform == "darwin":
         bundle_identifier="com.fin.app",
         info_plist={
             "NSHighResolutionCapable": True,
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleShortVersionString": APP_VERSION,
             "LSUIElement": True,  # hide Dock icon — menu bar only
             "NSAppTransportSecurity": {
                 "NSAllowsLocalNetworking": True,
