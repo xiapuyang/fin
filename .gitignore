@@ -58,6 +58,6 @@ htmlcov/
 # Screenshot artifacts
 *.png
 # README screenshots and app icons are intentional and committed
-!assets/screenshots/*.png
+!assets/screenshots/**/*.png
 !assets/tray_icon.png
 !assets/fin.icns
