@@ -47,7 +47,7 @@ const computePositions = (holdings, transactions, prices = {}, accounts = []) =>
   const virtualHoldings = txnOnlyCodes.map(code => {
     const ref = sorted.find(t => t.code === code);
     return { id: `virtual_${code}`, code, name: code, shares: 0, avg_cost: 0,
-             as_of_date: null, account: ref.account, currency: ref.currency || "USD",
+             account: ref.account, currency: ref.currency || "USD",
              market: SYMBOL_INDEX[code]?.market || null };
   });
   const allHoldings = virtualHoldings.length ? [...holdings, ...virtualHoldings] : holdings;
@@ -83,7 +83,7 @@ const computePositions = (holdings, transactions, prices = {}, accounts = []) =>
     };
     const currency = h.currency || "USD";
     const fx = FX[currency] || 1;
-    const cutoff = h.as_of_date || null;
+    const cutoff = h.snapshot_name || null;
     const isCash = h.code === "CASH";
 
     let dShares = 0, dCost = 0, realized = 0;
@@ -208,7 +208,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       if (!h.code || h.code === "CASH") return;
       const key = `${h.account}|${h.code}`;
       net[key] = (net[key] || 0) + (h.shares || 0);
-      if (h.as_of_date && (!cutoff[key] || h.as_of_date > cutoff[key])) cutoff[key] = h.as_of_date;
+      if (h.snapshot_name && (!cutoff[key] || h.snapshot_name > cutoff[key])) cutoff[key] = h.snapshot_name;
     });
     transactions.forEach(t => {
       if (!t.code || t.code === "CASH") return;
@@ -277,7 +277,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     const best = {};
     holdings.forEach(h => {
       const key = `${h.account || "__none__"}|${h.code}`;
-      if (!best[key] || (h.as_of_date || "") > (best[key].as_of_date || "")) best[key] = h;
+      if (!best[key] || (h.snapshot_name || "") > (best[key].snapshot_name || "")) best[key] = h;
     });
     return Object.values(best);
   }, [holdings]);
@@ -1383,6 +1383,7 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
                 value={codesTexts[i]}
                 onChange={e => setCodesTexts(t => t.map((v, j) => j === i ? e.target.value : v))}
                 placeholder="013308, TEC.TO"
+                autoComplete="off"
                 style={{ flex: 1, fontSize: 11.5, border: "1px solid var(--line-2)", borderRadius: 5, padding: "3px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}
               />
             </div>
@@ -1749,7 +1750,7 @@ const _guessMarket = (code) => {
   if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
   if (code.endsWith(".SS") || code.endsWith(".SZ")) return "CN";
   if (code.endsWith(".TO") || code.endsWith(".V")) return "CA";
-  if (/^\d{6}$/.test(code)) return "CN"; // bare 6-digit = A-share / CN-listed fund
+  if (/^\d{6}$/.test(code)) return "CN"; // bare 6-digit = CN stock / fund code
   return "US";
 };
 
@@ -1836,8 +1837,13 @@ const useForm = (initial) => {
   return [form, set, setForm];
 };
 
+const _ADV_KEY = "fin_acct_adv";
+const _getAdv = () => localStorage.getItem(_ADV_KEY) === "1";
+const _setAdv = (v) => localStorage.setItem(_ADV_KEY, v ? "1" : "0");
+
 const AccountModal = ({ onClose, onSaved }) => {
   const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "" });
+  const [advOpen, setAdvOpen] = React.useState(_getAdv);
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const submit = async (e) => {
@@ -1856,15 +1862,30 @@ const AccountModal = ({ onClose, onSaved }) => {
   };
   return (
     <Modal open={true} onClose={onClose} title={I18N.t("holdings.acct.new.title")} width={400}>
-      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+      <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
         <FormRow label={I18N.t("holdings.acct.new.name")}><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / Questrade / Wealthsimple"/></FormRow>
         <FormRow label={I18N.t("holdings.acct.new.currency")}>
           <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
-        <FormRow label={I18N.t("holdings.acct.new.cutoff")}>
-          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
-        </FormRow>
         <FormRow label={I18N.t("holdings.acct.new.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
+        <div style={{ marginBottom: 14 }}>
+          <button type="button" onClick={() => setAdvOpen(v => { _setAdv(!v); return !v; })}
+            style={{ background: "none", border: "none", padding: "4px 0", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+            <span style={{ fontSize: 8, display: "inline-block", transform: advOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
+            {I18N.t("holdings.acct.advanced")}
+          </button>
+          {advOpen && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+                {I18N.t("holdings.acct.new.cutoff")}
+              </div>
+              <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)} style={{ marginBottom: 6 }}/>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 4, lineHeight: 1.5 }}>
+                {I18N.t("holdings.acct.cutoff.hint")}
+              </div>
+            </div>
+          )}
+        </div>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
@@ -1883,6 +1904,10 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     cutoff_date: account.cutoff_date || "",
     balance_account_id: account.balance_account_id ? String(account.balance_account_id) : "",
     balance_sub_account_id: account.balance_sub_account_id ? String(account.balance_sub_account_id) : "",
+  });
+  const [advOpen, setAdvOpen] = React.useState(() => {
+    const stored = localStorage.getItem(_ADV_KEY);
+    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length;
   });
   // symbol_markets edited as [{code, market}] rows for convenience
   const [smRows, setSmRows] = React.useState(() =>
@@ -1924,17 +1949,11 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
 
   return (
     <Modal open={true} onClose={onClose} title={`${I18N.t("holdings.acct.edit.title")} · ${account.name}`} width={420}>
-      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+      <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
         <FormRow label={I18N.t("holdings.acct.edit.name")}><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
         <FormRow label={I18N.t("holdings.acct.edit.currency")}>
           <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
-        <FormRow label={I18N.t("holdings.acct.edit.cutoff")}>
-          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
-        </FormRow>
-        <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
-          {I18N.t("holdings.acct.edit.cutoff.hint")}
-        </div>
         <FormRow label={I18N.t("holdings.acct.edit.balAcct")}>
           <Select value={form.balance_account_id} onChange={v => { set("balance_account_id", v); set("balance_sub_account_id", ""); }}
             options={[{ value: "", label: I18N.t("holdings.acct.noSelect") }, ...balParents.map(a => ({ value: String(a.id), label: a.name }))]}/>
@@ -1949,39 +1968,54 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
         </div>
         <FormRow label={I18N.t("holdings.acct.edit.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
 
-        {/* Symbol market overrides */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
-            {I18N.t("holdings.acct.edit.marketOverride")}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, lineHeight: 1.5 }}>
-            {I18N.t("holdings.acct.edit.marketOverride.hint")}
-          </div>
-          {smRows.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 28px", gap: 6, marginBottom: 6 }}>
-              {smRows.map((r, i) => (
-                <React.Fragment key={i}>
-                  <input value={r.code} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, code: e.target.value } : x))}
-                    placeholder="symbol"
-                    style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}/>
-                  <select value={r.market} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, market: e.target.value } : x))}
-                    style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
-                    <option value="US">{I18N.t("base.market.us")}</option>
-                    <option value="HK">{I18N.t("base.market.hk")}</option>
-                    <option value="CN">{I18N.t("base.market.cn")}</option>
-                    <option value="CA">{I18N.t("base.market.ca")}</option>
-                    <option value="CRYPTO">{I18N.t("base.market.crypto")}</option>
-                  </select>
-                  <button type="button" onClick={() => setSmRows(rows => rows.filter((_, j) => j !== i))}
-                    style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: "pointer", fontSize: 15, padding: 0 }}>✕</button>
-                </React.Fragment>
-              ))}
+          <button type="button" onClick={() => setAdvOpen(v => { _setAdv(!v); return !v; })}
+            style={{ background: "none", border: "none", padding: "4px 0", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+            <span style={{ fontSize: 8, display: "inline-block", transform: advOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
+            {I18N.t("holdings.acct.advanced")}
+          </button>
+          {advOpen && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+                {I18N.t("holdings.acct.edit.cutoff")}
+              </div>
+              <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)} style={{ marginBottom: 6 }}/>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 14, lineHeight: 1.5 }}>
+                {I18N.t("holdings.acct.cutoff.hint")}
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
+                {I18N.t("holdings.acct.edit.marketOverride")}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, lineHeight: 1.5 }}>
+                {I18N.t("holdings.acct.edit.marketOverride.hint")}
+              </div>
+              {smRows.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 28px", gap: 6, marginBottom: 6 }}>
+                  {smRows.map((r, i) => (
+                    <React.Fragment key={i}>
+                      <input value={r.code} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, code: e.target.value } : x))}
+                        placeholder="symbol" autoComplete="off"
+                        style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}/>
+                      <select value={r.market} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, market: e.target.value } : x))}
+                        style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
+                        <option value="US">{I18N.t("base.market.us")}</option>
+                        <option value="HK">{I18N.t("base.market.hk")}</option>
+                        <option value="CN">{I18N.t("base.market.cn")}</option>
+                        <option value="CA">{I18N.t("base.market.ca")}</option>
+                        <option value="CRYPTO">{I18N.t("base.market.crypto")}</option>
+                      </select>
+                      <button type="button" onClick={() => setSmRows(rows => rows.filter((_, j) => j !== i))}
+                        style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: "pointer", fontSize: 15, padding: 0 }}>✕</button>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+              <button type="button" onClick={() => setSmRows(rows => [...rows, { code: "", market: "HK" }])}
+                style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
+                {I18N.t("holdings.acct.edit.addMapping")}
+              </button>
             </div>
           )}
-          <button type="button" onClick={() => setSmRows(rows => [...rows, { code: "", market: "HK" }])}
-            style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
-            {I18N.t("holdings.acct.edit.addMapping")}
-          </button>
         </div>
 
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
@@ -2013,14 +2047,14 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
   const initMarket = editing?.market || inferMarket(initCode) || CCY_MARKET[acctCcy] || "US";
   const today = new Date().toISOString().slice(0, 10);
-  const initDate = editing?.as_of_date || today;
+  const initDate = editing?.snapshot_name || today;
   const [isCash, setIsCash] = React.useState(editing?.code === "CASH");
   const [form, set, setForm] = useForm({
     code: initCode,
     market: initMarket,
     currency: editing?.currency || MARKET_CCY[initMarket],
     account: editing?.account || defaultAccount || "",
-    as_of_date: initDate,
+    snapshot_name: initDate,
     shares: editing?.shares ?? "",
     avg_cost: editing?.avg_cost ?? "",
     note: editing?.note || "",
@@ -2053,7 +2087,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
       if (!form.shares || parseFloat(form.shares) <= 0) { setErr(I18N.t("holdings.holding.shares").replace(" *","") + " > 0"); return; }
       if (form.avg_cost === "" || parseFloat(form.avg_cost) < 0) { setErr(I18N.t("holdings.holding.avgCost").replace(" *","") + " required"); return; }
     }
-    if (!form.as_of_date.trim()) { setErr(I18N.t("holdings.holding.snapDate").replace(" *","") + " required"); return; }
+    if (!form.snapshot_name.trim()) { setErr(I18N.t("holdings.holding.snapDate").replace(" *","") + " required"); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -2061,7 +2095,6 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
         shares: parseFloat(form.shares),
         avg_cost: isCash ? 1 : parseFloat(form.avg_cost),
         account: form.account || null,
-        snapshot_name: form.as_of_date.trim(),
       };
       const isVirtual = editing && String(editing.id).startsWith("virtual_");
       const saved = (editing && !isVirtual) ? await apiUpdateHolding(editing.id, payload) : await apiCreateHolding(payload);
@@ -2072,7 +2105,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
 
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.holding.edit.title") : I18N.t("holdings.holding.add.title")} width={440}>
-      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+      <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
         <FormRow label={I18N.t("holdings.holding.type")}>
           <Tabs variant="pill" value={isCash ? "cash" : "stock"} onChange={v => toggleCash(v === "cash")}
             tabs={[{id:"stock",label:I18N.t("holdings.holding.type.stock")},{id:"cash",label:I18N.t("holdings.holding.type.cash")}]}/>
@@ -2099,7 +2132,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
           </>
         )}
         <FormRow label={I18N.t("holdings.holding.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label={I18N.t("holdings.holding.snapDate")}><DateInput value={form.as_of_date} onChange={v => set("as_of_date", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.holding.snapDate")}><DateInput value={form.snapshot_name} onChange={v => set("snapshot_name", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.holding.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -2131,6 +2164,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   });
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
+  const [realizedUnknown, setRealizedUnknown] = React.useState(editing ? editing.realized == null && editing.side === "sell" : false);
 
   const setCode = (sym) => {
     const c = (typeof sym === "string" ? sym : sym.code || "").toUpperCase();
@@ -2145,6 +2179,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
     if (!form.shares || parseFloat(form.shares) <= 0) { setErr(I18N.t("holdings.txn.shares").replace(" *","") + " > 0"); return; }
     if (form.price === "" || parseFloat(form.price) < 0) { setErr(I18N.t("holdings.txn.price").replace(" *","") + " required"); return; }
     const realizedStr = String(form.realized).trim();
+    if (form.side === "sell" && !realizedUnknown && realizedStr === "") { setErr(I18N.t("holdings.txn.realized") + " required on sell"); return; }
     if (realizedStr !== "" && Number.isNaN(parseFloat(realizedStr))) { setErr(I18N.t("holdings.txn.realized") + " must be a number"); return; }
     setSaving(true); setErr(null);
     try {
@@ -2164,16 +2199,27 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
 
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.txn.edit.title") : I18N.t("holdings.txn.add.title")} width={440}>
-      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+      <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
         <FormRow label={I18N.t("holdings.txn.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
-        <FormRow label={I18N.t("holdings.txn.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.txn.side")}>
           <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:I18N.t("holdings.txn.side.buy")},{value:"sell",label:I18N.t("holdings.txn.side.sell")}]}/>
         </FormRow>
+        <FormRow label={I18N.t("holdings.txn.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
         <FormRow label={I18N.t("holdings.txn.shares")}><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
         <FormRow label={I18N.t("holdings.txn.price")}><Input value={form.price} onChange={v => set("price", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
-        <FormRow label={I18N.t("holdings.txn.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label={I18N.t("holdings.txn.realized")}><Input value={form.realized} onChange={v => set("realized", v)} inputMode="decimal" placeholder={I18N.t("holdings.txn.realized.ph")} suffix={form.currency}/></FormRow>
+        {form.side === "sell" && (
+          <FormRow label={I18N.t("holdings.txn.realized") + (!realizedUnknown ? " *" : "")}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Input value={realizedUnknown ? "" : form.realized} onChange={v => set("realized", v)} inputMode="decimal" placeholder={I18N.t("holdings.txn.realized.ph.sell")} suffix={form.currency} disabled={realizedUnknown}/>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-3)", cursor: "pointer", userSelect: "none" }}>
+                <input type="checkbox" checked={realizedUnknown} onChange={e => { setRealizedUnknown(e.target.checked); if (e.target.checked) set("realized", ""); }} style={{ cursor: "pointer", margin: 0 }}/>
+                {I18N.t("holdings.txn.realized.unknown")}
+                {realizedUnknown && <span style={{ color: "var(--ink-4)" }}>— {I18N.t("holdings.txn.realized.unknown.warn")}</span>}
+              </label>
+            </div>
+          </FormRow>
+        )}
         <FormRow label={I18N.t("holdings.txn.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -2237,7 +2283,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
 
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.income.edit.title") : I18N.t("holdings.income.add.title")} width={440}>
-      <form onSubmit={submit} style={{ padding: "18px 20px" }}>
+      <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
         <FormRow label={I18N.t("holdings.income.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.income.type")}>
           <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).map(([value,label]) => ({value,label}))}/>

@@ -500,7 +500,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
                 { id: "expense", label: I18N.t("ledger.tab.expense") },
               ]}
             />
-            <form onSubmit={handleSearch} style={{ display: "flex", gap: 6, flex: 1, maxWidth: 320 }}>
+            <form onSubmit={handleSearch} autoComplete="off" style={{ display: "flex", gap: 6, flex: 1, maxWidth: 320 }}>
               <Input
                 value={searchInput}
                 onChange={v => { setSearchInput(v); if (!v) { setSearch(""); setPage(1); } }}
@@ -1029,13 +1029,15 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
               { value: "every_4months", label: I18N.t("ledger.record.recur.every_4months") },
             ]} />
         </FieldRow>
-        <FieldRow label={I18N.t("ledger.record.subcategory")}>
-          <Input
-            value={form.subcategory}
-            onChange={v => set("subcategory", v)}
-            placeholder={form.recurring_type ? I18N.t("ledger.record.subcategory.ph.recurring") : I18N.t("ledger.record.subcategory.ph")}
-          />
-        </FieldRow>
+        {form.recurring_type && (
+          <FieldRow label={I18N.t("ledger.record.subcategory")}>
+            <Input
+              value={form.subcategory}
+              onChange={v => set("subcategory", v)}
+              placeholder={I18N.t("ledger.record.subcategory.ph.recurring")}
+            />
+          </FieldRow>
+        )}
         <FieldRow label={I18N.t("ledger.record.note")}>
           <Input value={form.note} onChange={v => set("note", v)} placeholder={I18N.t("ledger.record.note.ph")} />
         </FieldRow>

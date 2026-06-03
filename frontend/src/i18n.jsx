@@ -10,7 +10,7 @@ document.documentElement.lang = _FIN_LANG;
 const I18N = (() => {
   let _s = {}, _ready = false, _q = [];
 
-  fetch(`/config/i18n/${_FIN_LANG}.json`)
+  fetch(`/config/i18n/${_FIN_LANG}.json?_=${Date.now()}`)
     .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(d => { _s = d; _ready = true; _q.forEach(f => f()); _q = []; })
     .catch(err => {

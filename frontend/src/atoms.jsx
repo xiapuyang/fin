@@ -215,6 +215,7 @@ const Input = ({ value, onChange, placeholder, prefix, suffix, type = "text", in
       <input
         {...rest}
         type={type} inputMode={inputMode} value={value ?? ""} placeholder={placeholder}
+        autoComplete="off"
         onChange={e => onChange?.(e.target.value)}
         style={{ flex: 1, border: "none", background: "transparent", height: "100%", fontSize: 13, color: "var(--ink)" }}
       />
@@ -236,6 +237,7 @@ const DateInput = ({ value, onChange, style = {}, ...rest }) => {
         {...rest}
         ref={ref}
         type="date"
+        autoComplete="off"
         value={value ?? ""}
         onChange={e => onChange?.(e.target.value)}
         style={{
@@ -268,7 +270,7 @@ const Select = ({ value, onChange, options, style = {} }) => {
     }}>
       <select value={value} onChange={e => onChange(e.target.value)} style={{
         appearance: "none", border: "none", background: "transparent", paddingRight: 18,
-        fontSize: 13, color: "var(--ink)", height: "100%", cursor: "pointer",
+        fontSize: 13, color: "var(--ink)", height: "100%", cursor: "pointer", flex: 1, width: "100%",
       }}>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
