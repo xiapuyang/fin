@@ -171,6 +171,35 @@ def test_get_quote_stale_db_fallback_when_live_returns_empty(db):
     assert "market_state" in result
 
 
+def _seed_stock_no_price(db, symbol, prev_close=481.6, currency="HKD"):
+    """Seed a stock with only prev_close (price=NULL) — simulates NaN-poisoned DB row."""
+    repo = StockSQLiteRepository(db)
+    stock = repo.upsert(symbol, {"prev_close": prev_close, "currency": currency})
+    stock.updated_at = datetime.utcnow() - timedelta(seconds=400)
+    db.commit()
+    return stock
+
+
+def test_get_quote_uses_prev_close_when_db_price_null_and_live_fails(db):
+    # Regression: 0700.HK showed $0 / -100% when yfinance returned NaN close
+    # and poisoned the DB with NULL price but valid prev_close.
+    _seed_stock_no_price(db, "0700.HK", prev_close=481.6)
+    provider = _mock_provider(live_data={})
+    result = QuoteService(db, [provider]).get_quote("0700.HK")
+    assert result is not None
+    assert result["price"] == pytest.approx(481.6)
+
+
+def test_get_quote_returns_none_when_price_and_prev_close_both_null_and_live_fails(db):
+    repo = StockSQLiteRepository(db)
+    stock = repo.upsert("NEWSTOCK", {"currency": "USD"})
+    stock.updated_at = datetime.utcnow() - timedelta(seconds=400)
+    db.commit()
+    provider = _mock_provider(live_data={})
+    result = QuoteService(db, [provider]).get_quote("NEWSTOCK")
+    assert result is None
+
+
 # ── QuoteService.get_full_quote ───────────────────────────────────────────────
 
 

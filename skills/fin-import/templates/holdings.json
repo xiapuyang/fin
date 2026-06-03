@@ -46,33 +46,14 @@
         "title": "Account"
       },
       "snapshot_name": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Snapshot Name"
-      },
-      "as_of_date": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "As Of Date"
+        "title": "Snapshot Name",
+        "type": "string",
+        "description": "Required. Must be YYYY-MM-DD; acts as the cutoff date for stacked transactions."
       },
       "shares": {
-        "default": 0.0,
         "title": "Shares",
-        "type": "number"
+        "type": "number",
+        "exclusiveMinimum": 0
       },
       "avg_cost": {
         "default": 0.0,
@@ -94,7 +75,9 @@
     },
     "required": [
       "code",
-      "market"
+      "market",
+      "snapshot_name",
+      "shares"
     ],
     "title": "HoldingCreate",
     "type": "object"
@@ -140,7 +123,7 @@
       "shares": 50,
       "avg_cost": 150.0,
       "account": "IBKR",
-      "snapshot_name": "current"
+      "snapshot_name": "2024-01-01"
     }
   ]
 }

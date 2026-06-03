@@ -1,4 +1,10 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from fin.schemas._validators import (
+    validate_date,
+    validate_nonempty,
+    validate_optional_date,
+)
 
 
 class LedgerCreate(BaseModel):
@@ -15,6 +21,26 @@ class LedgerCreate(BaseModel):
     expiry_date: str | None = None
     note: str | None = None
     amounts_json: str | None = None  # JSON: {CNY, USD, CAD, HKD} at entry time
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: str) -> str:
+        return validate_date(v)
+
+    @field_validator("expiry_date")
+    @classmethod
+    def expiry_date_is_valid(cls, v: str | None) -> str | None:
+        return validate_optional_date(v)
+
+    @field_validator("name")
+    @classmethod
+    def name_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
+
+    @field_validator("category")
+    @classmethod
+    def category_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerCreate":
@@ -37,6 +63,16 @@ class LedgerUpdate(BaseModel):
     expiry_date: str | None = None
     note: str | None = None
     amounts_json: str | None = None
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: str | None) -> str | None:
+        return validate_optional_date(v)
+
+    @field_validator("expiry_date")
+    @classmethod
+    def expiry_date_is_valid(cls, v: str | None) -> str | None:
+        return validate_optional_date(v)
 
     @model_validator(mode="after")
     def check_positive(self) -> "LedgerUpdate":

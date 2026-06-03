@@ -454,6 +454,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
                 type="text"
                 value={apiInbox}
                 onChange={e => setApiInbox(e.target.value)}
+                autoComplete="off"
                 style={{
                   width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
                   border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",

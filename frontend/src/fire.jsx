@@ -584,7 +584,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               <div>{I18N.tf("fire.params.ssi.hint", { amount: `${sym}${fmtNum(ssiMonthly, 0)}` })}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5 }}>
                 <span style={{ fontSize: 9.5, color: "#92400E" }}>{sym}</span>
-                <input type="number" value={ssiInputStr} min={0} step={100}
+                <input type="number" value={ssiInputStr} min={0} step={100} autoComplete="off"
                   onChange={e => {
                     setSsiInputStr(e.target.value);
                     const n = parseInt(e.target.value, 10);

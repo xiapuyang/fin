@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 from datetime import datetime, timezone
 
@@ -53,7 +54,13 @@ class YFinanceProvider(QuoteProvider):
             prev_close = (
                 float(hist["Close"].iloc[-2]) if len(hist) >= 2 else regular_close
             )
-            if not regular_close or not prev_close or prev_close == 0:
+            if (
+                not regular_close
+                or math.isnan(regular_close)
+                or not prev_close
+                or prev_close == 0
+                or math.isnan(prev_close)
+            ):
                 return {}
 
             hist_date = hist.index[-1].astimezone(timezone.utc).date()
@@ -61,7 +68,11 @@ class YFinanceProvider(QuoteProvider):
             market_state = getattr(fi, "market_state", None)
 
             if market_is_open_today:
-                price = fi.last_price or regular_close
+                last_price = getattr(fi, "last_price", None)
+                if last_price is None or math.isnan(last_price) or not last_price:
+                    price = regular_close
+                else:
+                    price = last_price
             else:
                 price = regular_close
 

@@ -9,7 +9,13 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
+    connect_args={
+        "check_same_thread": False,
+        # Wait up to 5s for a write lock instead of raising SQLITE_BUSY.
+        # Required because /api/prices fans out to a ThreadPoolExecutor where
+        # each worker opens its own SessionLocal and upserts the stock cache.
+        "timeout": 5.0,
+    },
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -409,6 +415,35 @@ def _migrate_balance_indexes(db: "Session") -> None:
     db.commit()
 
 
+def _drop_holdings_as_of_date(db: "Session") -> None:
+    """Drop the as_of_date column from holdings.
+
+    The column is no longer read by application code; snapshot_name now
+    carries the cutoff date directly. This helper is idempotent: it checks
+    for the column with PRAGMA before issuing ALTER TABLE.
+
+    Requires SQLite >= 3.35.0 for DROP COLUMN support. On older runtimes,
+    or when the database file is locked by another process, the ALTER will
+    raise — caught here and logged so server startup is never blocked by a
+    schema-cleanup step that can be re-run on the next boot.
+    """
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(holdings)"))]
+    if "as_of_date" not in cols:
+        return
+    try:
+        db.execute(text("ALTER TABLE holdings DROP COLUMN as_of_date"))
+        db.commit()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Dropping holdings.as_of_date skipped: %s", exc
+        )
+        db.rollback()
+
+
 def init_db() -> None:
     import fin.models.alert  # noqa: F401
     import fin.models.stock  # noqa: F401
@@ -444,5 +479,6 @@ def init_db() -> None:
         _backfill_alert_fire_snapshot(db)
         _migrate_indexes(db)
         _migrate_balance_indexes(db)
+        _drop_holdings_as_of_date(db)
     finally:
         db.close()

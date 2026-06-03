@@ -1,5 +1,7 @@
 from pydantic import BaseModel, field_validator
 
+from fin.schemas._validators import validate_nonempty
+
 
 class BalanceAccountCreate(BaseModel):
     name: str
@@ -8,9 +10,7 @@ class BalanceAccountCreate(BaseModel):
     @field_validator("name")
     @classmethod
     def name_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("name must not be blank")
-        return v
+        return validate_nonempty(v)
 
 
 class BalanceAccountUpdate(BaseModel):
@@ -40,6 +40,4 @@ class BalanceAccountBulkItem(BaseModel):
     @field_validator("name")
     @classmethod
     def name_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("name must not be blank")
-        return v
+        return validate_nonempty(v)

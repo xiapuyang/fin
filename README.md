@@ -14,12 +14,12 @@ Everything feeds into a FIRE calculator that estimates your financial independen
 
 **Consolidating all accounts into one view** is the core purpose. Most tools cover only one market or one function — stock tracking, or expense logging, or crypto. People with assets spread across US / HK / CN end up with N spreadsheets plus a manual summary. fin puts them into one database and one UI:
 
-- **Cross-market portfolios** — A-shares, HK stocks, US equities, ETFs, indices; watchlist with live quotes across all markets.
+- **Cross-market portfolios** — CN stocks, HK stocks, US equities, ETFs, indices; watchlist with live quotes across all markets.
 - **Multi-currency FX** — Positions, income, and net worth all stored in account-native currency; CNY / USD / HKD / CAD converted via yfinance live rates with fallback to stored rates on failure.
 - **All account types** — Checking, savings, GIC, money market, credit card installments — all are just rows on the balance sheet, snapshotted and reconciled the same way.
 - **True rate of return (XIRR)** — Cash-flow-weighted IRR solved via Newton-Raphson from deposit/withdrawal history + current market value. Per-account and aggregate MWRR, more honest than simple gain %.
 - **Bulk import** — Load broker CSV exports, bank statements, position lists in one shot; with preview / dedup / confirmation gate; idempotent. Companion Claude Code skill (`skills/fin-import`) handles messy data via LLM.
-- **Price alerts** — Price and change-% conditions on US / HK / A-share / index symbols; cron checks every 20 minutes, triggers send email.
+- **Price alerts** — Price and change-% conditions on US / HK / CN / index symbols; cron checks every 20 minutes, triggers send email.
 
 ## Features
 

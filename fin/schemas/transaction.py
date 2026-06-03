@@ -1,6 +1,12 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from fin.schemas._validators import (
+    validate_date,
+    validate_nonempty,
+    validate_optional_date,
+)
 
 
 class TransactionCreate(BaseModel):
@@ -13,7 +19,22 @@ class TransactionCreate(BaseModel):
     currency: str = "USD"
     account: Optional[str] = None
     realized: Optional[float] = None
+    # Explicit acknowledgement that realized P&L on a sell is unavailable.
+    # Without this flag, a sell with realized=None is rejected (422) — mirrors
+    # the frontend's "realized unknown" checkbox so API agents face the same
+    # data-quality bar as UI users.
+    realized_unknown: bool = False
     note: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: str) -> str:
+        return validate_date(v)
+
+    @field_validator("code")
+    @classmethod
+    def code_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @model_validator(mode="after")
     def check_non_negative(self) -> "TransactionCreate":
@@ -21,6 +42,11 @@ class TransactionCreate(BaseModel):
             raise ValueError("shares must be >= 0")
         if self.price < 0:
             raise ValueError("price must be >= 0")
+        if self.side == "sell" and self.realized is None and not self.realized_unknown:
+            raise ValueError(
+                "sell transactions require realized P&L; "
+                "set realized_unknown=true to record without it"
+            )
         return self
 
 
@@ -35,6 +61,11 @@ class TransactionUpdate(BaseModel):
     account: Optional[str] = None
     realized: Optional[float] = None
     note: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_date(v)
 
     @model_validator(mode="after")
     def check_non_negative(self) -> "TransactionUpdate":

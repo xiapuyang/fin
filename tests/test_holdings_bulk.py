@@ -6,7 +6,7 @@ def _holding_payload(**kw):
         "shares": 10,
         "avg_cost": 150.0,
         "account": "IBKR",
-        "snapshot_name": "current",
+        "snapshot_name": "2024-01-01",
     }
     base.update(kw)
     return base

@@ -1,6 +1,8 @@
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from fin.schemas._validators import validate_nonempty
 
 
 def _check_change_value(condition: Optional[str], value: Optional[float]) -> None:
@@ -11,11 +13,19 @@ def _check_change_value(condition: Optional[str], value: Optional[float]) -> Non
         raise ValueError("涨幅超 (change_gte) 的 value 必须为正数")
 
 
+AlertCondition = Literal["price_gte", "price_lte", "change_gte", "change_lte"]
+
+
 class AlertCreate(BaseModel):
     symbol: str
     name: str
-    condition: str
+    condition: AlertCondition
     value: float
+
+    @field_validator("symbol", "name")
+    @classmethod
+    def fields_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @model_validator(mode="after")
     def check_condition_value(self) -> "AlertCreate":
@@ -25,7 +35,7 @@ class AlertCreate(BaseModel):
 
 class AlertUpdate(BaseModel):
     name: Optional[str] = None
-    condition: Optional[str] = None
+    condition: Optional[AlertCondition] = None
     value: Optional[float] = None
     enabled: Optional[bool] = None
 

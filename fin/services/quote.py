@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -12,6 +13,17 @@ from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 logger = logging.getLogger(__name__)
 
 STALE_SECONDS = 60
+
+# When True, /api/prices never blocks on live yfinance fetches — stale cache
+# entries are returned as-is and the background price_updater is the sole
+# refresh path. Eliminates slow first-load when many symbols are stale.
+# When False (default), a cache miss triggers an inline live fetch.
+# Toggle at process start via FIN_PRICES_CACHE_ONLY=1 in the environment.
+PRICES_CACHE_ONLY: bool = os.environ.get("FIN_PRICES_CACHE_ONLY", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
@@ -33,11 +45,30 @@ def _market_for_symbol(symbol: str) -> str:
     return "US"
 
 
+_MARKET_STATES_TTL = 5.0  # seconds
+_market_states_cache: tuple[float, dict] = (0.0, {})
+
+
 def _read_market_states() -> dict:
+    """Return the parsed market_state.json with a 5s TTL cache.
+
+    Called inside the /api/prices ThreadPoolExecutor where up to 10 workers
+    would otherwise re-read and re-parse the same file concurrently. The
+    underlying file is rewritten every ~5 minutes by market_state_updater,
+    so a 5s cache is well within freshness tolerance.
+    """
+    import time as _time
+
+    cached_at, cached = _market_states_cache
+    now = _time.monotonic()
+    if now - cached_at < _MARKET_STATES_TTL:
+        return cached
     try:
-        return json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
+        states = json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
-        return {}
+        states = {}
+    globals()["_market_states_cache"] = (now, states)
+    return states
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -97,7 +128,7 @@ class QuoteService:
                 return p
         raise ValueError(f"no provider supports symbol: {symbol!r}")
 
-    def get_quote(self, symbol: str) -> dict | None:
+    def get_quote(self, symbol: str, cache_only: bool = False) -> dict | None:
         symbol = normalize_symbol(symbol)
         stock = self._repo.get_by_symbol(symbol)
         market_key = _market_for_symbol(symbol)
@@ -106,6 +137,17 @@ class QuoteService:
             result = _stock_to_dict(stock)
             result["market_state"] = _read_market_states().get(market_key)
             return result
+
+        # In cache-only mode return whatever is in the DB without a live fetch.
+        # The background price_updater is responsible for keeping data fresh.
+        if cache_only or PRICES_CACHE_ONLY:
+            if stock and (stock.price or stock.prev_close):
+                result = _stock_to_dict(stock)
+                if not result.get("price") and stock.prev_close:
+                    result["price"] = stock.prev_close
+                result["market_state"] = _read_market_states().get(market_key)
+                return result
+            return None
 
         try:
             provider = self._select_provider(symbol)
@@ -124,8 +166,10 @@ class QuoteService:
             result["market_state"] = data.get("market_state") or states.get(market_key)
             return result
 
-        if stock and stock.price:
+        if stock and (stock.price or stock.prev_close):
             result = _stock_to_dict(stock)
+            if not result.get("price") and stock.prev_close:
+                result["price"] = stock.prev_close
             result["market_state"] = states.get(market_key)
             return result
 

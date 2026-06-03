@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS holdings (
     currency      VARCHAR NOT NULL,
     account       TEXT,
     snapshot_name TEXT,    -- groups rows into a named snapshot (e.g. "2024-09-01")
-    as_of_date    VARCHAR, -- baseline date; only transactions after this stack on top
     shares        FLOAT   NOT NULL DEFAULT 0.0,
     avg_cost      FLOAT   NOT NULL DEFAULT 0.0,
     note          VARCHAR,

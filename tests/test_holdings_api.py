@@ -10,6 +10,7 @@ def test_create_holding(client):
             "name": "Nvidia",
             "market": "US",
             "currency": "USD",
+            "snapshot_name": "2024-01-01",
             "shares": 100.0,
             "avg_cost": 120.0,
         },
@@ -24,11 +25,23 @@ def test_create_holding(client):
 def test_list_holdings(client):
     client.post(
         "/api/holdings",
-        json={"code": "AAPL", "market": "US", "shares": 10, "avg_cost": 200},
+        json={
+            "code": "AAPL",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 10,
+            "avg_cost": 200,
+        },
     )
     client.post(
         "/api/holdings",
-        json={"code": "GOOGL", "market": "US", "shares": 5, "avg_cost": 150},
+        json={
+            "code": "GOOGL",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 5,
+            "avg_cost": 150,
+        },
     )
     r = client.get("/api/holdings")
     assert r.status_code == 200
@@ -38,7 +51,13 @@ def test_list_holdings(client):
 def test_update_holding(client):
     r = client.post(
         "/api/holdings",
-        json={"code": "TSM", "market": "US", "shares": 50, "avg_cost": 180},
+        json={
+            "code": "TSM",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 50,
+            "avg_cost": 180,
+        },
     )
     holding_id = r.json()["id"]
     r = client.put(f"/api/holdings/{holding_id}", json={"shares": 75.0})
@@ -50,7 +69,13 @@ def test_update_holding(client):
 def test_delete_holding(client):
     r = client.post(
         "/api/holdings",
-        json={"code": "QQQ", "market": "US", "shares": 20, "avg_cost": 460},
+        json={
+            "code": "QQQ",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 20,
+            "avg_cost": 460,
+        },
     )
     holding_id = r.json()["id"]
     r = client.delete(f"/api/holdings/{holding_id}")
@@ -67,6 +92,7 @@ def test_create_holding_ca_market(client):
             "name": "Royal Bank",
             "market": "CA",
             "currency": "CAD",
+            "snapshot_name": "2024-01-01",
             "shares": 10.0,
             "avg_cost": 130.0,
         },
@@ -84,6 +110,7 @@ def test_create_holding_crypto_market(client):
             "name": "Bitcoin",
             "market": "CRYPTO",
             "currency": "USD",
+            "snapshot_name": "2024-01-01",
             "shares": 0.5,
             "avg_cost": 60000.0,
         },
@@ -96,7 +123,13 @@ def test_create_holding_crypto_market(client):
 def test_create_holding_invalid_market(client):
     r = client.post(
         "/api/holdings",
-        json={"code": "XYZ", "market": "JP", "shares": 10, "avg_cost": 100},
+        json={
+            "code": "XYZ",
+            "market": "JP",
+            "snapshot_name": "2024-01-01",
+            "shares": 10,
+            "avg_cost": 100,
+        },
     )
     assert r.status_code == 422
 
@@ -152,6 +185,7 @@ def test_list_transactions(client):
             "side": "sell",
             "shares": 1,
             "price": 20,
+            "realized": 10,
         },
     )
     r = client.get("/api/transactions")
@@ -331,7 +365,49 @@ def test_delete_account(client):
 def test_holding_negative_shares_invalid(client):
     r = client.post(
         "/api/holdings",
-        json={"code": "TSLA", "market": "US", "shares": -1, "avg_cost": 100},
+        json={
+            "code": "TSLA",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": -1,
+            "avg_cost": 100,
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_holding_zero_shares_invalid(client):
+    r = client.post(
+        "/api/holdings",
+        json={
+            "code": "TSLA",
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 0,
+            "avg_cost": 100,
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_holding_missing_snapshot_name_invalid(client):
+    r = client.post(
+        "/api/holdings",
+        json={"code": "TSLA", "market": "US", "shares": 10, "avg_cost": 100},
+    )
+    assert r.status_code == 422
+
+
+def test_holding_invalid_snapshot_name_format(client):
+    r = client.post(
+        "/api/holdings",
+        json={
+            "code": "TSLA",
+            "market": "US",
+            "snapshot_name": "Jan 2024",
+            "shares": 10,
+            "avg_cost": 100,
+        },
     )
     assert r.status_code == 422
 
@@ -403,7 +479,13 @@ def test_create_holding_for_code_with_existing_transactions(client):
     )
     r = client.post(
         "/api/holdings",
-        json={"code": "013308", "market": "CN", "shares": 100.0, "avg_cost": 1.0},
+        json={
+            "code": "013308",
+            "market": "CN",
+            "snapshot_name": "2024-01-01",
+            "shares": 100.0,
+            "avg_cost": 1.0,
+        },
     )
     assert r.status_code == 201
     assert r.json()["code"] == "013308"

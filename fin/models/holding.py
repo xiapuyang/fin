@@ -33,9 +33,6 @@ class HoldingModel(Base):
     snapshot_name = Column(
         String, nullable=True
     )  # snapshot group label (e.g. "2024-01-01")
-    as_of_date = Column(
-        String, nullable=True
-    )  # baseline date; only txns after this stack on top
     shares = Column(Float, nullable=False, default=0.0)
     avg_cost = Column(Float, nullable=False, default=0.0)
     note = Column(String, nullable=True)
