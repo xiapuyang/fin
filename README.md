@@ -50,8 +50,8 @@ Everything feeds into a FIRE calculator that estimates your financial independen
 
 | Platform | Chip | Requirement | Version |
 |---|---|---|---|
-| macOS | Apple Silicon (M1+) | macOS 11+ | [v0.1.0](https://github.com/xiapuyang/fin/releases/download/v0.1.0/Fin-v0.1.0-arm64.dmg) |
-| Windows | x86\_64 | Windows 10+ | [v0.1.0](https://github.com/xiapuyang/fin/releases/download/v0.1.0/Fin-Setup-v0.1.0.exe) |
+| macOS | Apple Silicon (M1+) | macOS 11+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-v0.2.2-arm64.dmg) |
+| Windows | x86\_64 | Windows 10+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-Setup-v0.2.2.exe) |
 
 ### macOS
 
