@@ -68,7 +68,11 @@ class YFinanceProvider(QuoteProvider):
             market_state = getattr(fi, "market_state", None)
 
             if market_is_open_today:
-                price = fi.last_price or regular_close
+                last_price = getattr(fi, "last_price", None)
+                if last_price is None or math.isnan(last_price) or not last_price:
+                    price = regular_close
+                else:
+                    price = last_price
             else:
                 price = regular_close
 

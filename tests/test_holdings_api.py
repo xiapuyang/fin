@@ -123,7 +123,13 @@ def test_create_holding_crypto_market(client):
 def test_create_holding_invalid_market(client):
     r = client.post(
         "/api/holdings",
-        json={"code": "XYZ", "market": "JP", "shares": 10, "avg_cost": 100},
+        json={
+            "code": "XYZ",
+            "market": "JP",
+            "snapshot_name": "2024-01-01",
+            "shares": 10,
+            "avg_cost": 100,
+        },
     )
     assert r.status_code == 422
 
@@ -179,6 +185,7 @@ def test_list_transactions(client):
             "side": "sell",
             "shares": 1,
             "price": 20,
+            "realized": 10,
         },
     )
     r = client.get("/api/transactions")

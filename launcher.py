@@ -108,6 +108,10 @@ def _open_browser() -> None:
 
 
 _WIN32_MUTEX_NAME = "Global\\FinAppSingleInstance"
+_WIN32_ERROR_ALREADY_EXISTS = 183
+_WIN32_GWL_EXSTYLE = -20
+_WIN32_WS_EX_TOOLWINDOW = 0x00000080
+_WIN32_WS_EX_APPWINDOW = 0x00040000
 _win32_mutex_handle = None  # keep alive for process lifetime
 
 
@@ -123,11 +127,10 @@ def _acquire_single_instance_mutex() -> bool:
         return True
     import ctypes
 
-    ERROR_ALREADY_EXISTS = 183
     handle = ctypes.windll.kernel32.CreateMutexW(None, False, _WIN32_MUTEX_NAME)
     if not handle:
         return True  # CreateMutex failed — allow launch
-    if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+    if ctypes.windll.kernel32.GetLastError() == _WIN32_ERROR_ALREADY_EXISTS:
         ctypes.windll.kernel32.CloseHandle(handle)
         return False
     _win32_mutex_handle = handle  # prevent GC
@@ -148,12 +151,9 @@ def _hide_from_taskbar(icon) -> None:
     hwnd = getattr(icon, "_hwnd", None)
     if not hwnd:
         return
-    GWL_EXSTYLE = -20
-    WS_EX_TOOLWINDOW = 0x00000080
-    WS_EX_APPWINDOW = 0x00040000
-    ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-    ex_style = (ex_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
-    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+    ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, _WIN32_GWL_EXSTYLE)
+    ex_style = (ex_style | _WIN32_WS_EX_TOOLWINDOW) & ~_WIN32_WS_EX_APPWINDOW
+    ctypes.windll.user32.SetWindowLongW(hwnd, _WIN32_GWL_EXSTYLE, ex_style)
 
 
 def _on_tray_ready(icon) -> None:

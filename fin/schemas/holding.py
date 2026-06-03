@@ -2,7 +2,11 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from fin.schemas._validators import validate_date
+from fin.schemas._validators import (
+    validate_date,
+    validate_nonempty,
+    validate_optional_date,
+)
 
 
 class HoldingCreate(BaseModel):
@@ -15,6 +19,11 @@ class HoldingCreate(BaseModel):
     shares: float
     avg_cost: float = 0.0
     note: Optional[str] = None
+
+    @field_validator("code")
+    @classmethod
+    def code_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @field_validator("snapshot_name")
     @classmethod
@@ -41,10 +50,15 @@ class HoldingUpdate(BaseModel):
     avg_cost: Optional[float] = None
     note: Optional[str] = None
 
+    @field_validator("snapshot_name")
+    @classmethod
+    def snapshot_name_is_date(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_date(v)
+
     @model_validator(mode="after")
     def check_non_negative(self) -> "HoldingUpdate":
-        if self.shares is not None and self.shares < 0:
-            raise ValueError("shares must be >= 0")
+        if self.shares is not None and self.shares <= 0:
+            raise ValueError("shares must be > 0")
         if self.avg_cost is not None and self.avg_cost < 0:
             raise ValueError("avg_cost must be >= 0")
         return self

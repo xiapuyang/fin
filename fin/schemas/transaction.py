@@ -19,6 +19,11 @@ class TransactionCreate(BaseModel):
     currency: str = "USD"
     account: Optional[str] = None
     realized: Optional[float] = None
+    # Explicit acknowledgement that realized P&L on a sell is unavailable.
+    # Without this flag, a sell with realized=None is rejected (422) — mirrors
+    # the frontend's "realized unknown" checkbox so API agents face the same
+    # data-quality bar as UI users.
+    realized_unknown: bool = False
     note: Optional[str] = None
 
     @field_validator("date")
@@ -37,6 +42,11 @@ class TransactionCreate(BaseModel):
             raise ValueError("shares must be >= 0")
         if self.price < 0:
             raise ValueError("price must be >= 0")
+        if self.side == "sell" and self.realized is None and not self.realized_unknown:
+            raise ValueError(
+                "sell transactions require realized P&L; "
+                "set realized_unknown=true to record without it"
+            )
         return self
 
 

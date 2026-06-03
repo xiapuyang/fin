@@ -106,7 +106,7 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):  # noqa: ARG00
     triggers a live yfinance call or returns stale DB data is controlled by
     ``PRICES_CACHE_ONLY`` in ``fin.services.quote``.
     """
-    codes = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    codes = [s.strip().upper() for s in symbols.split(",") if s.strip()][:200]
     if not codes:
         return {}
 
@@ -114,7 +114,12 @@ def get_prices(symbols: str = "", db: Session = Depends(get_db)):  # noqa: ARG00
     with ThreadPoolExecutor(max_workers=min(len(codes), 10)) as pool:
         futures = {pool.submit(_fetch_quote_for_code, code): code for code in codes}
         for future in as_completed(futures):
-            code, q = future.result()
+            symbol = futures[future]
+            try:
+                code, q = future.result()
+            except Exception as exc:
+                logger.warning("price fetch failed for %s: %s", symbol, exc)
+                continue
             if q:
                 result[code] = {
                     "price": q["price"],

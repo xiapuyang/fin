@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -16,8 +17,13 @@ STALE_SECONDS = 60
 # When True, /api/prices never blocks on live yfinance fetches — stale cache
 # entries are returned as-is and the background price_updater is the sole
 # refresh path. Eliminates slow first-load when many symbols are stale.
-# When False (default), a cache miss triggers an inline live fetch (old behaviour).
-PRICES_CACHE_ONLY = False
+# When False (default), a cache miss triggers an inline live fetch.
+# Toggle at process start via FIN_PRICES_CACHE_ONLY=1 in the environment.
+PRICES_CACHE_ONLY: bool = os.environ.get("FIN_PRICES_CACHE_ONLY", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
 
@@ -39,11 +45,30 @@ def _market_for_symbol(symbol: str) -> str:
     return "US"
 
 
+_MARKET_STATES_TTL = 5.0  # seconds
+_market_states_cache: tuple[float, dict] = (0.0, {})
+
+
 def _read_market_states() -> dict:
+    """Return the parsed market_state.json with a 5s TTL cache.
+
+    Called inside the /api/prices ThreadPoolExecutor where up to 10 workers
+    would otherwise re-read and re-parse the same file concurrently. The
+    underlying file is rewritten every ~5 minutes by market_state_updater,
+    so a 5s cache is well within freshness tolerance.
+    """
+    import time as _time
+
+    cached_at, cached = _market_states_cache
+    now = _time.monotonic()
+    if now - cached_at < _MARKET_STATES_TTL:
+        return cached
     try:
-        return json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
+        states = json.loads(MARKET_STATE_PATH.read_text(encoding="utf-8"))
     except Exception:
-        return {}
+        states = {}
+    globals()["_market_states_cache"] = (now, states)
+    return states
 
 
 def normalize_symbol(symbol: str) -> str:

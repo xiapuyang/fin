@@ -182,6 +182,8 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const [txnRefresh, setTxnRefresh] = React.useState(0);
   const [showIncomeModal, setShowIncomeModal] = React.useState(false);
   const [editingIncome, setEditingIncome] = React.useState(null);
+  const [incomeDefaultCat, setIncomeDefaultCat] = React.useState("dividend");
+  const [incomeAllowedCats, setIncomeAllowedCats] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState(null);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
@@ -573,7 +575,8 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         <Tabs variant="underline" value={tab} onChange={setTab} tabs={[
           { id: "positions",    label: I18N.t("holdings.positions.title"),   count: acctPositions.length },
           { id: "transactions", label: I18N.t("holdings.txns.title"),        count: acctTxns.length },
-          { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.length },
+          { id: "cashflows",    label: I18N.t("holdings.cashflows.title"),   count: acctIncome.filter(i => ["deposit","withdrawal"].includes(i.category)).length || null },
+          { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.filter(i => !["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "dividends",    label: I18N.t("holdings.calendar.title"),    count: acctIncome.filter(i => i.category === "dividend").length || null },
         ]}/>
       </div>
@@ -594,13 +597,20 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onDelete={id => apiDeleteTransaction(id).then(() => setTransactions(p => p.filter(t => t.id !== id))).catch(console.error)}
           onImportDone={txns => setTransactions(txns)}
         />}
-      {tab === "income"       && <IncomeTable items={acctIncome} total={acctIncomeTotal} acctCcy={acctCcy} acctFx={acctFx}
-          onAdd={() => { setEditingIncome(null); setShowIncomeModal(true); }}
-          onEdit={i => { setEditingIncome(i); setShowIncomeModal(true); }}
+      {tab === "cashflows"    && (() => { const cfItems = acctIncome.filter(i => ["deposit","withdrawal"].includes(i.category)); return <IncomeTable items={cfItems} total={cfItems.reduce((s,i) => s + i.amount*(FX[i.currency]||1)/acctFx*(i.category==="withdrawal"?-1:1), 0)} acctCcy={acctCcy} acctFx={acctFx} title={I18N.t("holdings.cashflows.title")} subtitle={I18N.t("holdings.cashflows.subtitle")}
+          onAdd={() => { setEditingIncome(null); setIncomeDefaultCat("deposit"); setIncomeAllowedCats(["deposit","withdrawal"]); setShowIncomeModal(true); }}
+          onEdit={i => { setEditingIncome(i); setIncomeAllowedCats(["deposit","withdrawal"]); setShowIncomeModal(true); }}
           onDelete={id => apiDeleteIncome(id).then(() => setIncome(p => p.filter(i => i.id !== id))).catch(console.error)}
           onImportDone={all => setIncome(all)}
           defaultAccount={acctName}
-        />}
+        />; })()}
+      {tab === "income"       && (() => { const divItems = acctIncome.filter(i => !["deposit","withdrawal"].includes(i.category)); return <IncomeTable items={divItems} total={divItems.reduce((s,i) => s + i.amount*(FX[i.currency]||1)/acctFx, 0)} acctCcy={acctCcy} acctFx={acctFx} title={I18N.t("holdings.income.title")} subtitle={I18N.t("holdings.income.subtitle")}
+          onAdd={() => { setEditingIncome(null); setIncomeDefaultCat("dividend"); setIncomeAllowedCats(["dividend","interest"]); setShowIncomeModal(true); }}
+          onEdit={i => { setEditingIncome(i); setIncomeAllowedCats(["dividend","interest"]); setShowIncomeModal(true); }}
+          onDelete={id => apiDeleteIncome(id).then(() => setIncome(p => p.filter(i => i.id !== id))).catch(console.error)}
+          onImportDone={all => setIncome(all)}
+          defaultAccount={acctName}
+        />; })()}
       {tab === "dividends"    && <DividendCalendar incomeItems={acctIncome} positions={acctPositions} acctCcy={acctCcy} acctFx={acctFx}/>}
 
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
@@ -614,7 +624,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           }}/>}
       {showTxnModal && <TransactionModal editing={editingTxn} accounts={accounts} defaultAccount={acctName} onClose={() => setShowTxnModal(false)}
           onSaved={t => { setTransactions(prev => editingTxn ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev]); setTxnRefresh(r => r + 1); setShowTxnModal(false); }}/>}
-      {showIncomeModal && <IncomeModal editing={editingIncome} accounts={accounts} defaultAccount={acctName} onClose={() => setShowIncomeModal(false)}
+      {showIncomeModal && <IncomeModal editing={editingIncome} accounts={accounts} defaultAccount={acctName} defaultCategory={incomeDefaultCat} allowedCategories={incomeAllowedCats} onClose={() => setShowIncomeModal(false)}
           onSaved={i => { setIncome(prev => editingIncome ? prev.map(x => x.id === i.id ? i : x) : [i, ...prev]); setShowIncomeModal(false); }}/>}
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
           onSaved={a => { setAccounts(prev => [...prev, a]); setSelectedAccountId(a.id); setShowAccountModal(false); }}/>}
@@ -826,7 +836,7 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
 };
 
 // ── Income / Transfer table ───────────────────────────────────────────────────
-const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit, onDelete, onImportDone, defaultAccount }) => {
+const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit, onDelete, onImportDone, defaultAccount, title, subtitle }) => {
   const sorted = [...items].sort((a,b) => b.date.localeCompare(a.date));
   const fileRef = React.useRef(null);
   const [importMsg, setImportMsg] = React.useState(null);
@@ -874,8 +884,8 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
       <Card padding={0}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("holdings.income.title")}</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{I18N.t("holdings.income.subtitle")} — {I18N.t("holdings.income.total")} <Private>{sym}{fmtNum(total, 0)}</Private></div>
+            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{title || I18N.t("holdings.income.title")}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{subtitle || I18N.t("holdings.income.subtitle")} — {I18N.t("holdings.income.total")} <Private>{sym}{fmtNum(Math.abs(total), 0)}</Private></div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>{I18N.t("holdings.income.add")}</Button>
@@ -2106,6 +2116,11 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.holding.edit.title") : I18N.t("holdings.holding.add.title")} width={440}>
       <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
+        <FormRow label={I18N.t("holdings.holding.account")}>
+          {!editing && defaultAccount
+            ? <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", padding: "7px 0" }}>{form.account}</div>
+            : <AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/>}
+        </FormRow>
         <FormRow label={I18N.t("holdings.holding.type")}>
           <Tabs variant="pill" value={isCash ? "cash" : "stock"} onChange={v => toggleCash(v === "cash")}
             tabs={[{id:"stock",label:I18N.t("holdings.holding.type.stock")},{id:"cash",label:I18N.t("holdings.holding.type.cash")}]}/>
@@ -2131,7 +2146,6 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
             <FormRow label={I18N.t("holdings.holding.avgCost")}><Input value={form.avg_cost} onChange={v => set("avg_cost", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
           </>
         )}
-        <FormRow label={I18N.t("holdings.holding.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.holding.snapDate")}><DateInput value={form.snapshot_name} onChange={v => set("snapshot_name", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.holding.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
@@ -2190,6 +2204,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
         price: parseFloat(form.price),
         account: form.account || null,
         realized: realizedStr === "" ? null : parseFloat(realizedStr),
+        realized_unknown: form.side === "sell" && realizedUnknown,
       };
       const saved = editing ? await apiUpdateTransaction(editing.id, payload) : await apiCreateTransaction(payload);
       onSaved(saved);
@@ -2200,8 +2215,12 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.txn.edit.title") : I18N.t("holdings.txn.add.title")} width={440}>
       <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
+        <FormRow label={I18N.t("holdings.txn.account")}>
+          {!editing && defaultAccount
+            ? <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", padding: "7px 0" }}>{form.account}</div>
+            : <AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/>}
+        </FormRow>
         <FormRow label={I18N.t("holdings.txn.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
-        <FormRow label={I18N.t("holdings.txn.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.txn.side")}>
           <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:I18N.t("holdings.txn.side.buy")},{value:"sell",label:I18N.t("holdings.txn.side.sell")}]}/>
         </FormRow>
@@ -2231,13 +2250,13 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   );
 };
 
-const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) => {
+const IncomeModal = ({ editing, accounts, defaultAccount, defaultCategory = "dividend", allowedCategories = null, onClose, onSaved }) => {
   const today = new Date().toISOString().slice(0, 10);
   const ccyFromCode = (code) => {
     const sym = SYMBOL_INDEX[(code || "").toUpperCase()];
     return sym ? (MARKET_CCY[sym.market] || "USD") : "USD";
   };
-  const catLabels = { dividend: I18N.t("holdings.income.cat.dividend"), interest: I18N.t("holdings.income.cat.interest"), deposit: I18N.t("holdings.income.cat.deposit"), withdrawal: I18N.t("holdings.income.cat.withdrawal") };
+  const catLabels = { dividend: I18N.t("holdings.income.cat.dividend"), interest: I18N.t("holdings.income.cat.interest"), option: I18N.t("holdings.income.cat.option"), deposit: I18N.t("holdings.income.cat.deposit"), withdrawal: I18N.t("holdings.income.cat.withdrawal") };
   const ccyOptions = CURRENCY_OPTIONS();
   const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
 
@@ -2245,7 +2264,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
     date: editing?.date || today,
     code: editing?.code || "",
     source: editing?.source || "",
-    category: editing?.category || "dividend",
+    category: editing?.category || defaultCategory,
     amount: editing?.amount ?? "",
     currency: editing?.currency || (editing?.code ? ccyFromCode(editing.code) : null) || acctCcy || "USD",
     account: editing?.account || defaultAccount || "",
@@ -2284,11 +2303,16 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.income.edit.title") : I18N.t("holdings.income.add.title")} width={440}>
       <form onSubmit={submit} autoComplete="off" style={{ padding: "18px 20px" }}>
+        <FormRow label={I18N.t("holdings.income.account")}>
+          {!editing && defaultAccount
+            ? <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", padding: "7px 0" }}>{form.account}</div>
+            : <AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/>}
+        </FormRow>
         <FormRow label={I18N.t("holdings.income.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.income.type")}>
-          <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).map(([value,label]) => ({value,label}))}/>
+          <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).filter(([value]) => !allowedCategories || allowedCategories.includes(value)).map(([value,label]) => ({value,label}))}/>
         </FormRow>
-        <FormRow label={I18N.t("holdings.income.source")}><Input value={form.source} onChange={v => set("source", v)} placeholder={I18N.t("holdings.income.source.ph")}/></FormRow>
+        <FormRow label={I18N.t("holdings.income.source")}><Input value={form.source} onChange={v => set("source", v)} placeholder={I18N.t(allowedCategories?.includes("deposit") ? "holdings.cashflows.source.ph" : "holdings.income.source.ph")}/></FormRow>
         {!isTransfer && <FormRow label={I18N.t("holdings.income.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>}
         <FormRow label={I18N.t("holdings.income.amount")}>
           <div style={{ display: "flex", gap: 8 }}>
@@ -2297,7 +2321,6 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
             {isTransfer && <Select value={form.currency} onChange={v => set("currency", v)} options={ccyOptions} style={{ width: 90 }}/>}
           </div>
         </FormRow>
-        <FormRow label={I18N.t("holdings.income.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.income.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
