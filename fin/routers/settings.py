@@ -39,6 +39,7 @@ class SettingsPayload(BaseModel):
     currency: str | None = None
     privacy_mask: bool | None = None
     language: str | None = None
+    enabled_markets: list[str] | None = None
 
 
 @router.get("/config")

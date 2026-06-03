@@ -51,11 +51,14 @@ Run scripts under `scripts/` via `python scripts/<name>.py`. Scripts that make H
 5b. **Category resolution (ledger only)** — for any row whose `category` value is a name (not an ID like `"0002"`):
    a. `category_resolver.py list` → array of `{id, direction, name}` from the **current env's API** (never read `data/` or `data-dev/` JSON directly — those may belong to a different instance).
    b. Exact `(direction, name)` match → swap `category` to the ID, continue.
-   c. No exact match → for each unmapped name, AskUserQuestion with options derived **at runtime** by inspecting the existing list against the unmapped name. Use semantic judgment, not a fixed similarity formula: e.g. `饮食` → suggest mapping to `餐饮`; `Uber` / `打车` → suggest `交通`; `Amazon` / `星巴克` → suggest `购物`. Always include "Create new custom category" and "Skip these N rows" as options. Pre-articulate: state the reasoning briefly in the option `description` so the user can audit ("`饮食` and `餐饮` both mean food/eating").
+   c. No exact match → resolve each unmapped name using this priority order:
+      1. **Built-in first** — check if the input semantically matches one of the 14 universal built-ins (table below). If yes, map to that built-in ID.
+      2. **Custom second** — if no built-in fits, check the custom categories returned by `category_resolver.py list` (those with IDs ≥ `0201`). The user's own custom categories reflect their actual spending vocabulary and are authoritative — a semantic match here is stronger than a guess. If yes, map to that custom ID.
+      3. **Create or skip as last resort** — only if neither built-in nor custom matches semantically, AskUserQuestion offering: best-guess built-in candidate (if any), "Create new custom category", "Skip these N rows".
 
-      English keyword reference for the 14 universal built-in categories (same on every install).
-      For anything not covered here, inspect the custom categories returned by `category_resolver.py list`
-      and use semantic judgment to pick the best match or suggest "Create new custom category".
+      Always include "Skip these N rows" as an option. Pre-articulate: state the reasoning briefly in the option `description` so the user can audit (e.g. "`饮食` and `餐饮` both mean food/eating").
+
+      Built-in reference (14 universal categories, same on every install):
 
       | English input keywords | Built-in category · id |
       |---|---|

@@ -77,6 +77,17 @@ Price alerts can send email when triggered. Without configuration alerts still r
 
 ---
 
+## Claude Code Skills
+
+For bulk data operations, two Claude Code skills are included in [`skills/`](skills/README.md):
+
+- **fin-import** — bulk-import transactions, holdings, income, ledger entries, balance items, alerts, and watchlist symbols from CSV exports or pasted text. Handles messy real-world bank/broker data via LLM normalization.
+- **fin-accounts** — batch create balance sheet accounts (parent + sub-accounts) from a description or the bundled template.
+
+See [`skills/README.md`](skills/README.md) for install instructions.
+
+---
+
 ## Development
 
 ### Prerequisites: install uv

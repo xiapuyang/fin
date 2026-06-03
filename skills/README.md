@@ -1,5 +1,7 @@
 # Skills
 
+> 中文文档: [README.zh.md](README.zh.md)
+
 Development source for Claude Code skills shipped with the fin project. Each subdirectory is one independently-installable skill.
 
 ## Skills shipped

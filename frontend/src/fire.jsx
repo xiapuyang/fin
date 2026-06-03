@@ -544,15 +544,17 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
 
           {/* Age — always derived from birthDate (page is gated on age != null) */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.age")}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                {I18N.t("fire.params.age")}
+                <span style={{ fontSize: 10, color: "var(--ink-5)", marginLeft: 4 }}>({I18N.t("fire.params.age.auto")})</span>
+              </span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{age}</span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("fire.params.age.auto")}</div>
           </div>
 
-          {/* Monthly expense — label row: [月支出] [3yr avg hint] [current value] */}
-          <div style={{ marginBottom: 12 }}>
+          {/* Monthly expense */}
+          <div style={{ marginBottom: 12, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.monthly")}</span>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -605,7 +607,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
           </div>
 
           {/* SWR — 3 compact cards */}
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.swr")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{swr}% · {multiplier}×</span>
@@ -636,7 +638,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
           </div>
 
           {/* CAGR — quick buttons + slider */}
-          <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 6, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.cagr")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}%</span>
@@ -654,9 +656,6 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             </div>
             <input type="range" min={3} max={20} step={0.5} value={cagr}
               onChange={e => setCagrP(parseFloat(e.target.value))} style={{ width: "100%" }}/>
-            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 4 }}>
-              {I18N.t("fire.params.realReturn")} <span className="mono" style={{ fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}% − {inflation}% = {realCagr.toFixed(1)}%</span>
-            </div>
             {portfolioMwrr != null && (
               <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3, marginBottom: 10 }}>
                 {I18N.t("fire.params.cagr.portfolio")} <span className="mono" style={{ fontWeight: 600 }}>{portfolioMwrr.toFixed(1)}%</span>
@@ -671,7 +670,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
           </div>
 
           {/* Inflation rate — quick buttons only */}
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.inflation")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{inflation}%</span>
@@ -687,10 +686,15 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                 }}>{v}%</button>
               ))}
             </div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6 }}>
+              {I18N.t("fire.params.realReturn")} <span className="mono" style={{ fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}% − {inflation}% = {realCagr.toFixed(1)}%</span>
+            </div>
           </div>
 
           {/* Monthly contribution */}
-          <FireSlider label={I18N.t("fire.params.contribution")} value={monthly} onChange={setMonthlyP} min={0} max={30000} step={500} suffix="¥"/>
+          <div style={{ paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
+            <FireSlider label={I18N.t("fire.params.contribution")} value={monthly} onChange={setMonthlyP} min={0} max={30000} step={500} suffix="¥"/>
+          </div>
 
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{I18N.t("fire.params.assets")}</div>

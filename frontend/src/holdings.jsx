@@ -1181,9 +1181,27 @@ const computeAge = (birthDate) => {
   return Math.max(1, Math.min(99, Math.floor(ms / (365.25 * 24 * 3600 * 1000))));
 };
 
+const _RB_LABEL_KEYS = {
+  "US Stocks": "holdings.rb.us", "US": "holdings.rb.us", "美股": "holdings.rb.us", "美股 US": "holdings.rb.us",
+  "HK Stocks": "holdings.rb.hk", "HK": "holdings.rb.hk", "港股": "holdings.rb.hk", "港股 HK": "holdings.rb.hk",
+  "CN Stocks": "holdings.rb.cn", "CN": "holdings.rb.cn", "A股": "holdings.rb.cn", "A股 CN": "holdings.rb.cn", "A 股 CN": "holdings.rb.cn",
+  "Bonds": "holdings.rb.bonds", "债券": "holdings.rb.bonds", "债券 Bonds": "holdings.rb.bonds",
+  "Cash": "holdings.rb.cash", "现金": "holdings.rb.cash", "现金 Cash": "holdings.rb.cash",
+  "Gold": "holdings.rb.gold", "黄金": "holdings.rb.gold", "黄金 Gold": "holdings.rb.gold",
+  "Equity": "holdings.rb.equity", "权益": "holdings.rb.equity", "股票 Equity": "holdings.rb.equity",
+  "Bonds / Cash": "holdings.rb.bonds_cash", "债券 / 现金": "holdings.rb.bonds_cash",
+  "LT Bonds": "holdings.rb.lt.bonds", "长债": "holdings.rb.lt.bonds",
+  "MT Bonds": "holdings.rb.mt.bonds", "中债": "holdings.rb.mt.bonds",
+  "Commodities": "holdings.rb.commodities", "大宗": "holdings.rb.commodities", "大宗 Commodities": "holdings.rb.commodities",
+};
+const _rbLabel = (b) => {
+  if (_RB_LABEL_KEYS[b.label]) return I18N.t(_RB_LABEL_KEYS[b.label]);
+  return b.label;
+};
+
 const computeAgeRuleBuckets = (age) => [
-  { label: "Equity",       pct: Math.max(0, 100 - age), color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, markets: [], isCash: false },
-  { label: "Bonds / Cash", pct: Math.min(100, age),     color: "#5C6270", codes: [], assetTypes: ["bond"],        markets: [], isCash: true  },
+  { get label() { return I18N.t("holdings.rb.equity"); },      pct: Math.max(0, 100 - age), color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, markets: [], isCash: false },
+  { get label() { return I18N.t("holdings.rb.bonds_cash"); },  pct: Math.min(100, age),     color: "#5C6270", codes: [], assetTypes: ["bond"],        markets: [], isCash: true  },
 ];
 
 const RB_PRESETS = [
@@ -1193,12 +1211,12 @@ const RB_PRESETS = [
     get author() { return I18N.t("holdings.rb.personal.author"); },
     get quote() { return I18N.t("holdings.rb.personal.quote"); },
     buckets: [
-      { label: "US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
-      { label: "HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
-      { label: "CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
-      { label: "Bonds", pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
-      { label: "Gold",  pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
-      { label: "Cash",  pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
+      { get label() { return I18N.t("holdings.rb.us"); },    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.hk"); },    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.cn"); },    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds"); }, pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
+      { get label() { return I18N.t("holdings.rb.gold"); },  pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
+      { get label() { return I18N.t("holdings.rb.cash"); },  pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
     ],
   },
   {
@@ -1207,8 +1225,8 @@ const RB_PRESETS = [
     author: "John Bogle",
     get quote() { return I18N.t("holdings.rb.6040.quote"); },
     buckets: [
-      { label: "Equity",        pct: 60, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "Bonds / Cash",  pct: 40, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); },     pct: 60, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds_cash"); }, pct: 40, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
     ],
   },
   {
@@ -1217,8 +1235,8 @@ const RB_PRESETS = [
     author: "Vanguard",
     get quote() { return I18N.t("holdings.rb.7030.quote"); },
     buckets: [
-      { label: "Equity",        pct: 70, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "Bonds / Cash",  pct: 30, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); },     pct: 70, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds_cash"); }, pct: 30, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
     ],
   },
   {
@@ -1227,7 +1245,7 @@ const RB_PRESETS = [
     author: "Ray Dalio",
     get quote() { return I18N.t("holdings.rb.allweather.quote"); },
     buckets: [
-      { label: "Equity",         pct: 30,  color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.equity"); }, pct: 30,  color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
       { get label() { return I18N.t("holdings.rb.lt.bonds"); },    pct: 40,  color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
       { get label() { return I18N.t("holdings.rb.mt.bonds"); },    pct: 15,  color: "#B8447B", codes: [], assetTypes: [],               isCash: false },
       { get label() { return I18N.t("holdings.rb.gold"); },        pct: 7.5, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
@@ -1240,9 +1258,9 @@ const RB_PRESETS = [
     author: "Harry Browne",
     get quote() { return I18N.t("holdings.rb.permanent.quote"); },
     buckets: [
-      { label: "Equity",         pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { get label() { return I18N.t("holdings.rb.lt.bonds"); }, pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
-      { label: "Cash",           pct: 25, color: "#5C6270", codes: [], assetTypes: [],               isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); },   pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.lt.bonds"); }, pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],        isCash: false },
+      { get label() { return I18N.t("holdings.rb.cash"); },     pct: 25, color: "#5C6270", codes: [], assetTypes: [],              isCash: true  },
       { get label() { return I18N.t("holdings.rb.gold"); },     pct: 25, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
     ],
   },
@@ -1355,7 +1373,7 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
           <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 64px 20px", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{ width: 10, height: 10, background: b.color, borderRadius: 2, display: "block" }}/>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{_rbLabel(b)}</span>
               <Input value={String(b.pct)} onChange={v => updateBucket(i, "pct", parseFloat(v) || 0)} inputMode="decimal" style={{ textAlign: "right" }}/>
               <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
             </div>
@@ -1557,7 +1575,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
         {/* Left: drift bars */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>Drift vs {I18N.t("holdings.rebalance.target")}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.driftVs")} {I18N.t("holdings.rebalance.target")}</div>
           {[...buckets].sort((a, b) => b.curPct - a.curPct).map((b, i) => {
             const fires = triggered.includes(b);
             const isExpanded = expandedBucket === i;
@@ -1570,7 +1588,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                     background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink)",
                   }}>
                     <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2 }}/>
-                    {b.label}
+                    {_rbLabel(b)}
                     <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
                   </button>
                   <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
@@ -1602,7 +1620,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                 {/* Drift row */}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, paddingLeft: 28 }}>
                   <span className="mono" style={{ color: fires ? "var(--up)" : "var(--ink-4)", fontWeight: fires ? 600 : 400 }}>
-                    drift {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp
+                    {I18N.t("holdings.rebalance.drift")} {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")}
                     {mode !== "calendar" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")}</span>}
                     {fires && " ⚠"}
                   </span>
@@ -1697,7 +1715,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#7A4D0E", marginBottom: 4 }}>⚠ {triggered.length} {I18N.t("holdings.rebalance.triggered")}</div>
                 {triggered.map((b, i) => (
                   <div key={i} style={{ fontSize: 11, color: "#7A4D0E" }}>
-                    {b.label}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
+                    {_rbLabel(b)}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")} ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
                   </div>
                 ))}
               </div>
@@ -1844,7 +1862,7 @@ const AccountModal = ({ onClose, onSaved }) => {
           <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
         <FormRow label={I18N.t("holdings.acct.new.cutoff")}>
-          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder={I18N.t("holdings.acct.new.cutoff.ph")}/>
+          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
         </FormRow>
         <FormRow label={I18N.t("holdings.acct.new.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
@@ -1912,7 +1930,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
           <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
         <FormRow label={I18N.t("holdings.acct.edit.cutoff")}>
-          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD"/>
+          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
         </FormRow>
         <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
           {I18N.t("holdings.acct.edit.cutoff.hint")}
@@ -2081,7 +2099,7 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
           </>
         )}
         <FormRow label={I18N.t("holdings.holding.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label={I18N.t("holdings.holding.snapDate")}><Input value={form.as_of_date} onChange={v => set("as_of_date", v)} placeholder="YYYY-MM-DD"/></FormRow>
+        <FormRow label={I18N.t("holdings.holding.snapDate")}><DateInput value={form.as_of_date} onChange={v => set("as_of_date", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.holding.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -2147,7 +2165,7 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.txn.edit.title") : I18N.t("holdings.txn.add.title")} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label={I18N.t("holdings.txn.date")}><Input value={form.date} onChange={v => set("date", v)} placeholder="YYYY-MM-DD"/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.txn.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
         <FormRow label={I18N.t("holdings.txn.side")}>
           <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:I18N.t("holdings.txn.side.buy")},{value:"sell",label:I18N.t("holdings.txn.side.sell")}]}/>
@@ -2220,7 +2238,7 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
   return (
     <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.income.edit.title") : I18N.t("holdings.income.add.title")} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label={I18N.t("holdings.income.date")}><Input value={form.date} onChange={v => set("date", v)} placeholder="YYYY-MM-DD"/></FormRow>
+        <FormRow label={I18N.t("holdings.income.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
         <FormRow label={I18N.t("holdings.income.type")}>
           <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).map(([value,label]) => ({value,label}))}/>
         </FormRow>

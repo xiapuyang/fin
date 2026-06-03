@@ -886,7 +886,7 @@ const EndRecurringModal = ({ name, onClose, onConfirm }) => {
           {I18N.tf("ledger.endTask.msg", { name })}
         </div>
         <FieldRow label={I18N.t("ledger.endTask.endDate")}>
-          <Input type="date" value={expiryDate} onChange={setExpiryDate} />
+          <DateInput value={expiryDate} onChange={setExpiryDate} />
         </FieldRow>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
@@ -996,7 +996,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
           <Input value={form.name} onChange={v => set("name", v)} placeholder={I18N.t("ledger.record.name.ph")} />
         </FieldRow>
         <FieldRow label={I18N.t("ledger.record.date")}>
-          <Input type="date" value={form.date} onChange={v => set("date", v)} />
+          <DateInput value={form.date} onChange={v => set("date", v)} />
         </FieldRow>
         <FieldRow label={I18N.t("ledger.record.amount")}>
           <div style={{ display: "flex", gap: 6 }}>
@@ -1113,7 +1113,7 @@ const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
           {fmt(item.amount, item.currency, 2)}
         </div>
         <FieldRow label={I18N.t("ledger.quickRecord.date")}>
-          <Input type="date" value={date} onChange={setDate} />
+          <DateInput value={date} onChange={setDate} />
         </FieldRow>
         {error && <div style={{ color: "var(--up)", fontSize: 13 }}>{error}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

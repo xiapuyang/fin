@@ -23,6 +23,7 @@ const AppInner = () => {
   const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
   const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "", display_name: "" });
+  const [enabledMarkets, setEnabledMarkets] = React.useState(["us"]);
   const [showSettings, setShowSettings] = React.useState(false);
   const [marketNow, setMarketNow] = React.useState(new Date());
   const [serverMarket, setServerMarket] = React.useState({});
@@ -34,6 +35,7 @@ const AppInner = () => {
       setSettings(prev => ({ ...prev, ...s }));
       if (s.currency && CURRENCIES.includes(s.currency)) setCurrency(s.currency);
       if (typeof s.privacy_mask === "boolean") setPrivacyMasked(s.privacy_mask);
+      if (Array.isArray(s.enabled_markets) && s.enabled_markets.length > 0) setEnabledMarkets(s.enabled_markets);
       // Only adopt backend language when user has no explicit localStorage preference
       if (s.language && s.language !== I18N.getLang() && !localStorage.getItem("fin_lang")) I18N.setLang(s.language);
     }).catch(() => {});
@@ -101,7 +103,7 @@ const AppInner = () => {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar route={route} setRoute={navigate}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
-        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} displayName={settings.display_name || ""} onCurrencyChange={c => {
+        <TopBar route={route} fxRates={fxRates} currency={currency} market={market} enabledMarkets={enabledMarkets} displayName={settings.display_name || ""} onCurrencyChange={c => {
           setCurrency(c);
           fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency: c }) }).catch(() => {});
         }} onOpenSettings={() => setShowSettings(true)} onTogglePrivacy={next => {
@@ -114,9 +116,9 @@ const AppInner = () => {
       </main>
       {showSettings && (
         <AppSettingsModal
-          settings={settings}
+          settings={{ ...settings, enabled_markets: enabledMarkets }}
           onClose={() => setShowSettings(false)}
-          onSaved={s => setSettings(prev => ({ ...prev, ...s }))}
+          onSaved={s => { setSettings(prev => ({ ...prev, ...s })); if (Array.isArray(s.enabled_markets)) setEnabledMarkets(s.enabled_markets); }}
         />
       )}
     </div>
@@ -162,12 +164,33 @@ const Sidebar = ({ route, setRoute }) => (
   </aside>
 );
 
-const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayName = "", onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
+// Market key (lowercase) → { currency, fxKey } mapping
+const MARKET_META = {
+  us: { currency: "USD", fxKey: "USD" },
+  hk: { currency: "HKD", fxKey: "HKD" },
+  cn: { currency: "CNY", fxKey: null },
+  ca: { currency: "CAD", fxKey: "CAD" },
+};
+
+const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, enabledMarkets = ["us"], displayName = "", onCurrencyChange, onOpenSettings, onTogglePrivacy }) => {
   const cur = NAV.find(n => n.id === route);
-  const usd = fxRates.USD ?? 7.24;
-  const hkd = fxRates.HKD ?? 0.93;
-  const cad = fxRates.CAD ?? 5.3;
   const masked = usePrivacyMasked();
+
+  // Filter market dots to only enabled markets
+  const visibleMarket = Object.fromEntries(
+    Object.entries(market).filter(([k]) => enabledMarkets.includes(k.toLowerCase()))
+  );
+
+  // Build FX string from enabled markets that have a fxKey
+  const fxParts = enabledMarkets
+    .filter(m => MARKET_META[m]?.fxKey)
+    .map(m => { const key = MARKET_META[m].fxKey; return `${key} ¥${(fxRates[key] ?? 0).toFixed(2)}`; });
+
+  // Currency buttons: CNY always + currencies for enabled non-CN markets
+  const visibleCurrencies = ["CNY", ...enabledMarkets
+    .filter(m => m !== "cn" && MARKET_META[m])
+    .map(m => MARKET_META[m].currency)
+  ];
   return (
     <div style={{
       height: 52, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -178,10 +201,10 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayNam
         <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{I18N.t(`nav.${route}`)}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {/* Market status dots */}
-        {Object.keys(market).length > 0 && (
+        {/* Market status dots — filtered to enabled markets */}
+        {Object.keys(visibleMarket).length > 0 && (
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            {Object.entries(market).map(([k, v]) => (
+            {Object.entries(visibleMarket).map(([k, v]) => (
               <div key={k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
                   <span style={{
@@ -197,11 +220,10 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayNam
             ))}
           </div>
         )}
-        <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
-        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>USD ¥{usd.toFixed(2)} · HKD ¥{hkd.toFixed(2)} · CAD ¥{cad.toFixed(2)}</span>
+        {fxParts.length > 0 && <><span style={{ width: 1, height: 16, background: "var(--line-2)" }}/><span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{fxParts.join(" · ")}</span></>}
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <div style={{ display: "flex", gap: 2 }}>
-          {CURRENCIES.map(c => (
+          {visibleCurrencies.map(c => (
             <button key={c} onClick={() => onCurrencyChange(c)} style={{
               fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4, lineHeight: 1.6,
               border: `1px solid ${currency === c ? "var(--ink)" : "var(--line)"}`,
@@ -262,6 +284,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const [birthDate, setBirthDate] = React.useState(settings.birth_date || "");
   const [notifyEmail, setNotifyEmail] = React.useState(settings.notify_email || "");
   const [notifyEnabled, setNotifyEnabled] = React.useState(settings.notify_enabled !== false);
+  const [enabledMarkets, setEnabledMarkets] = React.useState(settings.enabled_markets || ["us"]);
   const [saving, setSaving]       = React.useState(false);
   const [emailError, setEmailError] = React.useState("");
   const [apiKey, setApiKey]         = React.useState("");
@@ -305,7 +328,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
         });
         if (kr.ok) { setOrigApiKey(apiKey); setOrigApiInbox(apiInbox); setApiKeySaved(true); }
       }
-      const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled };
+      const payload = { display_name: displayName.trim(), timezone: tz, birth_date: birthDate, notify_email: trimmed, notify_enabled: notifyEnabled, enabled_markets: enabledMarkets };
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -318,6 +341,27 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   return (
     <Modal open={true} onClose={onClose} title={I18N.t("app.settings.title")} width={420}>
       <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.markets")}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {Object.entries(MARKET_META).map(([key, meta]) => {
+              const checked = enabledMarkets.includes(key);
+              return (
+                <label key={key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", padding: "5px 10px", borderRadius: 6, border: `1px solid ${checked ? "var(--ink-3)" : "var(--line)"}`, background: checked ? "var(--bg-deep)" : "transparent", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={e => setEnabledMarkets(prev => e.target.checked ? [...prev, key] : prev.filter(x => x !== key))}
+                    style={{ accentColor: "var(--ink)", cursor: "pointer" }}
+                  />
+                  <span style={{ fontWeight: 600 }}>{key.toUpperCase()}</span>
+                  <span style={{ color: "var(--ink-4)", fontSize: 11 }}>{meta.currency}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.markets.hint")}</div>
+        </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.timezone")}</div>
           <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>
@@ -335,16 +379,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
         </div>
         <div>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.birthDate")}</div>
-          <input
-            type="date"
-            value={birthDate}
-            onChange={e => setBirthDate(e.target.value)}
-            style={{
-              width: "100%", padding: "6px 10px", fontSize: 13, borderRadius: 7,
-              border: "1px solid var(--line-2)", background: "var(--paper)", color: "var(--ink)",
-              boxSizing: "border-box",
-            }}
-          />
+          <DateInput value={birthDate} onChange={v => setBirthDate(v)} style={{ width: "100%" }}/>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.birthDate.hint")}</div>
         </div>
         <div>

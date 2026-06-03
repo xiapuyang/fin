@@ -975,10 +975,10 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
                   <Input type="number" value={form.monthly_payment} onChange={v => set("monthly_payment", v)} placeholder="10400" style={{ width: "100%" }}/>
                 </BalField>
                 <BalField label={I18N.t("balance.item.startDate")}>
-                  <Input type="date" value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
+                  <DateInput value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
                 </BalField>
                 <BalField label={I18N.t("balance.item.endDate")}>
-                  <Input type="date" value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
+                  <DateInput value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
             )}
@@ -1267,10 +1267,10 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
                   <Input type="number" value={form.monthly_payment} onChange={v => set("monthly_payment", v)} placeholder="10400" style={{ width: "100%" }}/>
                 </BalField>
                 <BalField label={I18N.t("balance.item.startDate")}>
-                  <Input type="date" value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
+                  <DateInput value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
                 </BalField>
                 <BalField label={I18N.t("balance.item.endDate")}>
-                  <Input type="date" value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
+                  <DateInput value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
             )}
@@ -1321,7 +1321,7 @@ const CopySnapModal = ({ snap, onClose, onDone }) => {
           {I18N.tf("balance.copySnap.itemCount", { n: snap.item_count })}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label={I18N.t("balance.copySnap.date")}><Input type="date" value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.date")}><DateInput value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
           <BalField label={I18N.t("balance.copySnap.label")}><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
@@ -1361,7 +1361,7 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
     <Modal open title={I18N.t("balance.snap.edit")} onClose={onClose} width={400}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label={I18N.t("balance.copySnap.date")}><Input type="date" value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.date")}><DateInput value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
           <BalField label={I18N.t("balance.copySnap.label")}><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
           <BalField label={`${I18N.t("balance.item.note")} (${I18N.t("base.label.optional")})`}><Input value={note} onChange={setNote} placeholder={I18N.t("balance.item.note.ph")} style={{ width: "100%" }}/></BalField>
         </div>

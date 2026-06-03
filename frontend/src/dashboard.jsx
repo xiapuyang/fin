@@ -477,7 +477,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
       </div>
 
       {/* Modules grid */}
-      <SectionHeader kicker={I18N.t("dashboard.modules")} title={I18N.t("nav.dashboard")} subtitle={I18N.t("dashboard.subtitle")}/>
+      <SectionHeader title={I18N.t("nav.dashboard")} subtitle={I18N.t("dashboard.subtitle")}/>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 32 }}>
         {modules.map(m => (
           <ModuleCard key={m.id} mod={m} onClick={() => onNavigate(m.id)}/>

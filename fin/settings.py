@@ -28,6 +28,7 @@ _DEFAULTS = {
     "currency": "CNY",
     "privacy_mask": False,
     "language": "en",
+    "enabled_markets": ["us"],
 }
 
 
