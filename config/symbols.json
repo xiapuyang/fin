@@ -1,11 +1,11 @@
 {
-  "美股指数 US Index": [
+  "usIndex": [
     { "code": "^GSPC", "name": "S&P 500",    "market": "US", "currency": "USD" },
     { "code": "^NDX",  "name": "Nasdaq 100", "market": "US", "currency": "USD" },
     { "code": "^DJI",  "name": "Dow Jones",  "market": "US", "currency": "USD" },
     { "code": "^VIX",  "name": "VIX",        "market": "US", "currency": "USD" }
   ],
-  "美股 ETF US ETF": [
+  "usetf": [
     { "code": "SPY",  "name": "S&P ETF",        "market": "US", "currency": "USD" },
     { "code": "QQQ",  "name": "Nasdaq ETF",      "market": "US", "currency": "USD" },
     { "code": "IWM",  "name": "Russell 2000",    "market": "US", "currency": "USD" },
@@ -14,7 +14,7 @@
     { "code": "BNDW", "name": "Global Bond",     "market": "US", "currency": "USD" },
     { "code": "BSV",  "name": "Short-Term Bond", "market": "US", "currency": "USD" }
   ],
-  "Mag7": [
+  "mag7": [
     { "code": "NVDA",  "name": "Nvidia",      "market": "US", "currency": "USD" },
     { "code": "AAPL",  "name": "Apple",       "market": "US", "currency": "USD" },
     { "code": "MSFT",  "name": "Microsoft",   "market": "US", "currency": "USD" },
@@ -25,7 +25,7 @@
     { "code": "TSLA",  "name": "Tesla",       "market": "US", "currency": "USD" },
     { "code": "BRK-B", "name": "Berkshire B", "market": "US", "currency": "USD" }
   ],
-  "港股 HK Stocks": [
+  "hkStocks": [
     { "code": "^HSI",    "name": "恒生指数", "market": "HK", "currency": "HKD" },
     { "code": "^HSTECH", "name": "恒生科技", "market": "HK", "currency": "HKD" },
     { "code": "^HSCE",   "name": "国企指数", "market": "HK", "currency": "HKD" },
@@ -34,7 +34,7 @@
     { "code": "3690.HK", "name": "美团",     "market": "HK", "currency": "HKD" },
     { "code": "1810.HK", "name": "小米集团", "market": "HK", "currency": "HKD" }
   ],
-  "A 股 A-Shares": [
+  "aShares": [
     { "code": "000300.SS", "name": "沪深 300", "market": "CN", "currency": "CNY" },
     { "code": "000001.SS", "name": "上证指数", "market": "CN", "currency": "CNY" },
     { "code": "399006.SZ", "name": "创业板指", "market": "CN", "currency": "CNY" },

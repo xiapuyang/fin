@@ -56,8 +56,8 @@ const MarketDot = ({ market, size = 8 }) => {
 };
 
 const MarketLabel = ({ market }) => {
-  const t = { US: "美股 US", HK: "港股 HK", CN: "A股 CN", CA: "加股 CA" }[market] || market;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}><MarketDot market={market} /> {t}</span>;
+  const label = I18N.t(`base.market.${market.toLowerCase()}`);
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}><MarketDot market={market} /> {label}</span>;
 };
 
 // === Badge =================================================================

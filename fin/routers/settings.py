@@ -38,6 +38,7 @@ class SettingsPayload(BaseModel):
     fire_life_expectancy: int | None = None
     currency: str | None = None
     privacy_mask: bool | None = None
+    language: str | None = None
 
 
 @router.get("/config")

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fin.config import FRONTEND_DIR
+from fin.config import CONFIG_DIR, FRONTEND_DIR
 from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
@@ -88,11 +88,19 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/i18n", response_class=HTMLResponse)
+async def i18n_manager():
+    return (FRONTEND_DIR / "i18n.html").read_text(encoding="utf-8")
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+
+if CONFIG_DIR.exists():
+    app.mount("/config", StaticFiles(directory=str(CONFIG_DIR)), name="config")
 
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

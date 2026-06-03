@@ -52,6 +52,26 @@ Run scripts under `scripts/` via `python scripts/<name>.py`. Scripts that make H
    a. `category_resolver.py list` → array of `{id, direction, name}` from the **current env's API** (never read `data/` or `data-dev/` JSON directly — those may belong to a different instance).
    b. Exact `(direction, name)` match → swap `category` to the ID, continue.
    c. No exact match → for each unmapped name, AskUserQuestion with options derived **at runtime** by inspecting the existing list against the unmapped name. Use semantic judgment, not a fixed similarity formula: e.g. `饮食` → suggest mapping to `餐饮`; `Uber` / `打车` → suggest `交通`; `Amazon` / `星巴克` → suggest `购物`. Always include "Create new custom category" and "Skip these N rows" as options. Pre-articulate: state the reasoning briefly in the option `description` so the user can audit ("`饮食` and `餐饮` both mean food/eating").
+
+      English keyword reference for the 14 universal built-in categories (same on every install).
+      For anything not covered here, inspect the custom categories returned by `category_resolver.py list`
+      and use semantic judgment to pick the best match or suggest "Create new custom category".
+
+      | English input keywords | Built-in category · id |
+      |---|---|
+      | Food / Dining / Restaurant / Grocery / Lunch / Coffee / Cafe | 餐饮 · 0001 |
+      | Transport / Uber / Lyft / Bus / Subway / Taxi / Commute / Parking / Transit | 交通 · 0002 |
+      | Shopping / Amazon / Retail / Purchase / Online order / Store | 购物 · 0003 |
+      | Medical / Doctor / Pharmacy / Hospital / Dental / Health / Vision | 医疗 · 0004 |
+      | Insurance / Life insurance / Health plan / Auto insurance / Premium | 保险 · 0005 |
+      | Social insurance / Pension / Social security / 五险一金 | 社保 · 0006 |
+      | Rent / Apartment rent / Monthly rent / Housing fee | 房租 · 0007 |
+      | Mortgage / Home loan / Property loan payment | 房贷 · 0008 |
+      | Subscription / SaaS / Software / Membership / Annual plan | 订阅 · 0009 |
+      | Travel / Hotel / Flight / Airbnb / Vacation / Trip / Cruise | 旅游 · 0010 |
+      | Salary / Payroll / Wage / Compensation / Direct deposit | 工资 · 0101 |
+      | Bonus / Performance bonus / Incentive / Commission | 奖金 · 0102 |
+      | Anything else that does not match a more specific built-in or custom category | 其他 · 0011 (expense) / 其他 · 0103 (income) |
    d. User picks "Create new" → `category_resolver.py create --direction <expense|income> --name <NAME>` → returns the new record with its ID; use that ID.
    e. User picks "Skip rows" → drop those rows from the canonical list before preview.
 6. **Preview + dedup** — `preview.py --type <domain> --rows <canonical.json>` fetches existing data via `GET /api/<domain>`, performs client-side dedup using the documented natural keys, prints:

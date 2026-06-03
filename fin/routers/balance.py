@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fin.config import BULK_MAX_ITEMS, TS_FMT
+from fin import settings as _settings
 from fin.database import get_db
 from fin.models.balance_account import BalanceAccountModel
 from fin.models.balance_item import BalanceItemModel
@@ -250,7 +251,9 @@ def copy_snapshot(
         new_snap = snap_repo.create(
             BalanceSnapshotCreate(
                 snapshot_date=new_date or source.snapshot_date,
-                label=new_label if new_label is not None else f"{source.label} (副本)",
+                label=new_label
+                if new_label is not None
+                else f"{source.label}{' (copy)' if _settings.load().get('language', 'en') != 'zh' else '（副本）'}",
                 note=source.note,
             ),
             MOCK_USER_ID,

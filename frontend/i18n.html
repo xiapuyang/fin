@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>fin · i18n manager</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F8F5F0; --paper: #FFFFFF; --ink: #14161B; --ink-3: #5C6270;
+    --line: #E7E1D5; --accent: #D9352B; --miss: #FFF3CD;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--paper); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header span { color: var(--ink-3); font-size: 13px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .toolbar input { border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font-size: 13px; width: 220px; outline: none; background: var(--bg); }
+  .toolbar input:focus { border-color: var(--ink-3); }
+  .toolbar button { padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+  .toolbar button:hover { background: var(--bg); }
+  /* validation panel */
+  .val-panel { padding: 10px 16px; border-bottom: 2px solid; flex-shrink: 0; font-size: 13px; }
+  .val-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+  .val-issue { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 5px; line-height: 1.4; }
+  .val-badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; letter-spacing: 0.03em; text-transform: uppercase; }
+  .val-error { background: #FCA5A5; color: #7F1D1D; }
+  .val-warn  { background: #FCD34D; color: #78350F; }
+  .val-msg { color: var(--ink); }
+  .val-keys { color: var(--ink-3); font-family: monospace; font-size: 12px; }
+  .val-toggle { border: none; background: none; cursor: pointer; font-size: 12px; color: var(--accent); padding: 0; font-family: monospace; text-decoration: underline; }
+  .val-detail { width: 100%; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .val-key { font-family: monospace; font-size: 11px; padding: 1px 6px; background: rgba(0,0,0,0.08); border-radius: 3px; }
+  /* main layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+  aside { width: 160px; border-right: 1px solid var(--line); background: var(--paper); overflow-y: auto; flex-shrink: 0; padding: 8px 0; }
+  aside button { display: block; width: 100%; text-align: left; padding: 7px 14px; font-size: 13px; border: none; background: transparent; cursor: pointer; color: var(--ink-3); border-radius: 0; }
+  aside button:hover { background: var(--bg); }
+  aside button.active { background: var(--bg); color: var(--ink); font-weight: 600; }
+  aside .count { font-size: 11px; color: var(--ink-3); float: right; font-weight: 400; }
+  .content { flex: 1; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { position: sticky; top: 0; background: var(--paper); border-bottom: 2px solid var(--line); padding: 8px 10px; text-align: left; font-size: 12px; color: var(--ink-3); font-weight: 600; white-space: nowrap; z-index: 1; }
+  thead th:first-child { width: 35%; }
+  thead th:nth-child(2), thead th:nth-child(3) { width: 32.5%; }
+  tbody tr:hover { background: rgba(0,0,0,0.02); }
+  tbody tr.missing { background: var(--miss); }
+  tbody tr.modified { background: #EFF8E8; }
+  tbody td { padding: 4px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.key { font-family: monospace; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; padding-top: 7px; }
+  td.val { padding: 0; }
+  td.val textarea { width: 100%; min-height: 32px; border: none; background: transparent; font-size: 13px; font-family: inherit; color: var(--ink); resize: none; padding: 7px 10px; line-height: 1.4; outline: none; }
+  td.val textarea:focus { background: #F0F4FF; }
+  .badge-miss { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: #FFEAA7; color: #856404; margin-left: 6px; vertical-align: middle; }
+  .empty { padding: 48px; text-align: center; color: var(--ink-3); }
+  .stats { font-size: 12px; color: var(--ink-3); padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--paper); flex-shrink: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>fin · i18n manager</h1>
+  <span id="status">Loading…</span>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search keys or values…" />
+    <button onclick="downloadJSON('en')">↓ en.json</button>
+    <button onclick="downloadJSON('zh')">↓ zh.json</button>
+  </div>
+</header>
+<div class="val-panel" id="val-panel" style="display:none"></div>
+<div class="stats" id="stats"></div>
+<div class="main">
+  <aside id="sidebar"></aside>
+  <div class="content">
+    <table>
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>English</th>
+          <th>中文</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">No keys match</div>
+  </div>
+</div>
+<script>
+let _en = {}, _zh = {};
+let _edits = { en: {}, zh: {} };
+let _activeModule = "all";
+let _search = "";
+let _lastIssues = [];
+let _valExpanded = {};
+
+const VALID_MODS = new Set(['base', 'cat', 'nav', 'app', 'dashboard', 'alerts', 'holdings', 'balance', 'ledger', 'fire']);
+
+async function load() {
+  try {
+    const [enText, zhText] = await Promise.all([
+      fetch("/config/i18n/en.json").then(r => r.text()),
+      fetch("/config/i18n/zh.json").then(r => r.text()),
+    ]);
+    _en = JSON.parse(enText);
+    _zh = JSON.parse(zhText);
+    document.getElementById("status").textContent = `${Object.keys(_en).length} keys`;
+    _lastIssues = runValidations(enText, zhText, _en, _zh);
+    renderValidations(_lastIssues);
+    buildSidebar();
+    render();
+  } catch (e) {
+    document.getElementById("status").textContent = "Load failed — is fin running?";
+  }
+}
+
+// Detect duplicate keys in a flat JSON file by scanning line by line.
+// JSON.parse silently deduplicates, so this must work on raw text.
+function findDuplicateKeys(jsonText) {
+  const seen = new Set();
+  const dups = new Set();
+  for (const line of jsonText.split('\n')) {
+    const m = line.match(/^\s+"((?:[^"\\]|\\.)*)"\s*:/);
+    if (m) {
+      const key = m[1];
+      if (seen.has(key)) dups.add(key);
+      else seen.add(key);
+    }
+  }
+  return Array.from(dups);
+}
+
+function getPlaceholders(s) {
+  const re = /\{([^}]+)\}/g;
+  const result = [];
+  let m;
+  while ((m = re.exec(s)) !== null) result.push(m[1]);
+  return result.sort();
+}
+
+function runValidations(enText, zhText, en, zh) {
+  const issues = [];
+  const enKeys = Object.keys(en);
+  const zhKeys = Object.keys(zh);
+  const enSet = new Set(enKeys);
+  const zhSet = new Set(zhKeys);
+
+  // 1. Duplicate keys (silent data loss risk)
+  const enDups = findDuplicateKeys(enText);
+  const zhDups = findDuplicateKeys(zhText);
+  if (enDups.length) issues.push({ level: 'error', msg: `en.json 有 ${enDups.length} 个重复 key（JSON.parse 会静默取最后一个）`, keys: enDups });
+  if (zhDups.length) issues.push({ level: 'error', msg: `zh.json 有 ${zhDups.length} 个重复 key（JSON.parse 会静默取最后一个）`, keys: zhDups });
+
+  // 2. Key set mismatch between locales
+  const missingZh = enKeys.filter(k => !zhSet.has(k));
+  const missingEn = zhKeys.filter(k => !enSet.has(k));
+  if (missingZh.length) issues.push({ level: 'error', msg: `${missingZh.length} 个 key 在 en.json 有但 zh.json 没有`, keys: missingZh });
+  if (missingEn.length) issues.push({ level: 'error', msg: `${missingEn.length} 个 key 在 zh.json 有但 en.json 没有`, keys: missingEn });
+
+  // 3. Placeholder {var} mismatch — will cause runtime format errors
+  const phMismatches = enKeys.filter(k => {
+    if (!zhSet.has(k)) return false;
+    const ep = getPlaceholders(en[k]);
+    const zp = getPlaceholders(zh[k]);
+    return JSON.stringify(ep) !== JSON.stringify(zp);
+  });
+  if (phMismatches.length) issues.push({ level: 'error', msg: `${phMismatches.length} 个 key 的 {占位符} 在 en/zh 中不一致（运行时格式化会出错）`, keys: phMismatches });
+
+  // 4. Empty string values (distinct from key-as-value / untranslated)
+  const emptyEn = enKeys.filter(k => en[k] === '');
+  const emptyZh = zhKeys.filter(k => zh[k] === '');
+  if (emptyEn.length) issues.push({ level: 'warn', msg: `en.json 有 ${emptyEn.length} 个空值（value 为 ""）`, keys: emptyEn });
+  if (emptyZh.length) issues.push({ level: 'warn', msg: `zh.json 有 ${emptyZh.length} 个空值（value 为 ""）`, keys: emptyZh });
+
+  // 5. Unknown module prefix — likely a typo in the key
+  const badMod = enKeys.filter(k => !VALID_MODS.has(k.split('.')[0]));
+  if (badMod.length) issues.push({ level: 'warn', msg: `${badMod.length} 个 key 的 module 前缀不在已知列表（base/nav/app/dashboard/alerts/holdings/balance/ledger/fire）`, keys: badMod });
+
+  return issues;
+}
+
+function renderValidations(issues) {
+  const panel = document.getElementById("val-panel");
+  if (!issues.length) { panel.style.display = 'none'; return; }
+
+  const hasError = issues.some(i => i.level === 'error');
+  panel.style.background = hasError ? '#FEF2F2' : '#FFFBEB';
+  panel.style.borderColor = hasError ? '#FCA5A5' : '#FCD34D';
+  panel.style.display = '';
+
+  const errorCount = issues.filter(i => i.level === 'error').length;
+  const warnCount  = issues.filter(i => i.level === 'warn').length;
+  const summary = [
+    errorCount ? `${errorCount} error${errorCount > 1 ? 's' : ''}` : '',
+    warnCount  ? `${warnCount} warning${warnCount > 1 ? 's' : ''}` : '',
+  ].filter(Boolean).join('，');
+
+  panel.innerHTML = `
+    <div class="val-title">${hasError ? '✕' : '⚠'} Validation: ${summary}</div>
+    ${issues.map((issue, idx) => {
+      const expanded = _valExpanded[idx];
+      const preview = issue.keys.slice(0, 3).map(escHtml).join(', ');
+      const extra = issue.keys.length - 3;
+      return `<div class="val-issue">
+        <span class="val-badge val-${issue.level}">${issue.level}</span>
+        <span class="val-msg">${escHtml(issue.msg)}</span>
+        ${issue.keys.length ? `<span class="val-keys">${preview}${extra > 0 && !expanded ? `… <button class="val-toggle" onclick="toggleVal(${idx})">+${extra} more</button>` : ''}</span>` : ''}
+        ${expanded ? `<div class="val-detail">${issue.keys.map(k => `<span class="val-key">${escHtml(k)}</span>`).join('')}<button class="val-toggle" style="margin-left:4px" onclick="toggleVal(${idx})">collapse</button></div>` : ''}
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function toggleVal(idx) {
+  _valExpanded[idx] = !_valExpanded[idx];
+  renderValidations(_lastIssues);
+}
+
+function modules() {
+  const mods = new Set();
+  for (const k of Object.keys(_en)) {
+    mods.add(k.split(".")[0]);
+  }
+  return Array.from(mods).sort();
+}
+
+function buildSidebar() {
+  const mods = modules();
+  const sidebar = document.getElementById("sidebar");
+  const all = Object.keys(_en).length;
+  sidebar.innerHTML = `<button class="active" data-mod="all" onclick="setModule('all')">All <span class="count">${all}</span></button>`;
+  for (const m of mods) {
+    const count = Object.keys(_en).filter(k => k.startsWith(m + ".")).length;
+    sidebar.innerHTML += `<button data-mod="${m}" onclick="setModule('${m}')">${m} <span class="count">${count}</span></button>`;
+  }
+}
+
+function setModule(mod) {
+  _activeModule = mod;
+  document.querySelectorAll("aside button").forEach(b => b.classList.toggle("active", b.dataset.mod === mod));
+  render();
+}
+
+function getVal(locale, key) {
+  return _edits[locale][key] !== undefined ? _edits[locale][key] : (locale === "en" ? _en[key] : _zh[key]) ?? "";
+}
+
+function isMissing(key) {
+  const en = getVal("en", key), zh = getVal("zh", key);
+  return en === key && zh === key;
+}
+
+function isModified(key) {
+  return _edits.en[key] !== undefined || _edits.zh[key] !== undefined;
+}
+
+function filteredKeys() {
+  let keys = Object.keys(_en);
+  if (_activeModule !== "all") keys = keys.filter(k => k.startsWith(_activeModule + "."));
+  if (_search) {
+    const q = _search.toLowerCase();
+    keys = keys.filter(k =>
+      k.toLowerCase().includes(q) ||
+      getVal("en", k).toLowerCase().includes(q) ||
+      getVal("zh", k).toLowerCase().includes(q)
+    );
+  }
+  return keys;
+}
+
+function render() {
+  const keys = filteredKeys();
+  const tbody = document.getElementById("tbody");
+  const empty = document.getElementById("empty");
+  const missing = keys.filter(isMissing).length;
+  const modified = Object.keys(_edits.en).length + Object.keys(_edits.zh).length;
+  document.getElementById("stats").textContent =
+    `Showing ${keys.length} of ${Object.keys(_en).length} keys  ·  ${missing} untranslated  ·  ${modified} unsaved edits`;
+  if (keys.length === 0) { tbody.innerHTML = ""; empty.style.display = ""; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = keys.map(key => {
+    const miss = isMissing(key);
+    const mod = isModified(key);
+    const cls = miss ? "missing" : mod ? "modified" : "";
+    const en = escAttr(getVal("en", key));
+    const zh = escAttr(getVal("zh", key));
+    return `<tr class="${cls}" data-key="${escAttr(key)}">
+      <td class="key" title="${escAttr(key)}">${escHtml(key)}${miss ? '<span class="badge-miss">!</span>' : ''}</td>
+      <td class="val"><textarea rows="1" oninput="edit('en','${escAttr(key)}',this)">${en}</textarea></td>
+      <td class="val"><textarea rows="1" oninput="edit('zh','${escAttr(key)}',this)">${zh}</textarea></td>
+    </tr>`;
+  }).join("");
+  tbody.querySelectorAll("textarea").forEach(autoResize);
+}
+
+function autoResize(ta) {
+  ta.style.height = "auto";
+  ta.style.height = ta.scrollHeight + "px";
+}
+
+function edit(locale, key, ta) {
+  _edits[locale][key] = ta.value;
+  const row = ta.closest("tr");
+  const miss = getVal("en", key) === key && getVal("zh", key) === key;
+  row.className = miss ? "missing" : "modified";
+  autoResize(ta);
+  const missing2 = filteredKeys().filter(isMissing).length;
+  const modified2 = Object.keys(_edits.en).length + Object.keys(_edits.zh).length;
+  const keys = filteredKeys();
+  document.getElementById("stats").textContent =
+    `Showing ${keys.length} of ${Object.keys(_en).length} keys  ·  ${missing2} untranslated  ·  ${modified2} unsaved edits`;
+}
+
+function downloadJSON(locale) {
+  const base = locale === "en" ? _en : _zh;
+  const merged = Object.assign({}, base, _edits[locale]);
+  const blob = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${locale}.json`;
+  a.click();
+}
+
+function escHtml(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s) { return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;"); }
+
+document.getElementById("search").addEventListener("input", e => {
+  _search = e.target.value;
+  render();
+});
+
+load();
+</script>
+</body>
+</html>

@@ -1,11 +1,6 @@
 /* Dashboard — overview of all 5 modules + market summary */
 
-const STATE_LABEL = {
-  REGULAR: "盘中 Open",
-  PRE:     "盘前 Pre",
-  POST:    "盘后 After",
-  CLOSED:  "休市 Closed",
-};
+const STATE_LABEL = new Proxy({}, { get: (_, k) => I18N.t(`base.state.${k.toLowerCase()}`) });
 
 // Fallback used only when the backend's /api/market-states is stale or unavailable.
 // Backend (exchange_calendars) is authoritative — it handles holidays correctly.
@@ -187,13 +182,13 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
     ...knownMarkets.map(m => {
       const v = positions.filter(p => p.market === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
       return {
-        label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密" }[m] || m,
+        label: I18N.t(`base.market.${m.toLowerCase()}`),
         value: v,
         color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m],
       };
     }),
-    { label: "美债", value: positions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
-    { label: "现金", value: allCashValue, color: "#888" },
+    { label: I18N.t("dashboard.bond"), value: positions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
+    { label: I18N.t("dashboard.cash"), value: allCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
   // ── Derived: net worth + history ─────────────────────────────────────────────
@@ -266,47 +261,47 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
   // ── Modules meta ─────────────────────────────────────────────────────────────
   const modules = [
     {
-      id: "alerts", icon: "bell", kicker: "MODULE 01", title: "提醒", en: "Alerts",
+      id: "alerts", icon: "bell", kicker: I18N.t("dashboard.module.01.kicker"), title: I18N.t("dashboard.module.01.title"),
       color: "var(--up)",
-      stat: `${activeAlerts} active · ${triggered} triggered`,
-      blurb: "盘中价格 & 涨跌触发邮件",
+      stat: I18N.tf("dashboard.module.alerts.stat", { n: activeAlerts, m: triggered }),
+      blurb: I18N.t("dashboard.module.01.blurb"),
     },
     {
-      id: "holdings", icon: "wallet", kicker: "MODULE 02", title: "投资组合", en: "Portfolio",
+      id: "holdings", icon: "wallet", kicker: I18N.t("dashboard.module.02.kicker"), title: I18N.t("dashboard.module.02.title"),
       color: "var(--info)",
-      stat: portfolioLoading ? "加载中…" : allTotal > 0 ? `${fmtM(allTotal)} · ${allocation.length} 类` : "暂无持仓",
-      blurb: "成本 & 盈亏 & 年化 IRR",
+      stat: portfolioLoading ? I18N.t("dashboard.loading") : allTotal > 0 ? `${fmtM(allTotal)} · ${allocation.length} ${I18N.t("dashboard.types")}` : I18N.t("dashboard.noHoldings.title"),
+      blurb: I18N.t("dashboard.module.02.blurb"),
     },
     {
-      id: "ledger", icon: "book", kicker: "MODULE 03", title: "记账", en: "Ledger",
+      id: "ledger", icon: "book", kicker: I18N.t("dashboard.module.03.kicker"), title: I18N.t("dashboard.module.03.title"),
       color: "var(--violet)",
-      stat: ledgerWeekCount == null ? "加载中…" : ledgerWeekCount > 0 ? `${ledgerWeekCount} entries this week` : "本周暂无记录",
-      blurb: "支出收入 & 月度报表",
+      stat: ledgerWeekCount == null ? I18N.t("dashboard.loading") : ledgerWeekCount > 0 ? `${ledgerWeekCount} entries this week` : "—",
+      blurb: I18N.t("dashboard.module.03.blurb"),
     },
     {
-      id: "balance", icon: "target", kicker: "MODULE 04", title: "资产负债", en: "Balance Sheet",
+      id: "balance", icon: "target", kicker: I18N.t("dashboard.module.04.kicker"), title: I18N.t("dashboard.module.04.title"),
       color: "var(--warn)",
-      stat: balLoading ? "加载中…" : `${snapCount} 快照 · ${fmtM(netWorth)}`,
-      blurb: "净资产 & 历史快照",
+      stat: balLoading ? I18N.t("dashboard.loading") : `${snapCount} ${I18N.t("dashboard.snapshots")} · ${fmtM(netWorth)}`,
+      blurb: I18N.t("dashboard.module.04.blurb"),
     },
     {
-      id: "fire", icon: "spark", kicker: "MODULE 05", title: "退休计划", en: "FIRE",
+      id: "fire", icon: "spark", kicker: I18N.t("dashboard.module.05.kicker"), title: I18N.t("dashboard.module.05.title"),
       color: "var(--down)",
-      stat: !birthDate ? "请先设置生日"
-        : fireTarget <= 0 ? "请先设置月支出"
-        : yearsToFire === 0 ? "已达到 FIRE 目标 🎯"
-        : yearsToFire != null ? `${yearsToFire}y to 财务自由`
-        : "目标不可达",
-      blurb: "FIRE 数字 & 复利推演 & 里程碑",
+      stat: !birthDate ? I18N.t("fire.noBirthDate.msg")
+        : fireTarget <= 0 ? I18N.t("fire.noBirthDate.msg")
+        : yearsToFire === 0 ? I18N.t("dashboard.fire.achieved")
+        : yearsToFire != null ? `${yearsToFire}${I18N.t("dashboard.fire.yearsUnit")}`
+        : I18N.t("dashboard.fire.unreachable"),
+      blurb: I18N.t("dashboard.module.05.blurb"),
     },
   ];
 
   const fireReady = fireTarget > 0 && !!birthDate;
   const fireSubtitle = fireReady && yearsToFire != null && yearsToFire > 0
-    ? `Net worth tracking toward FIRE · ${yearsToFire}y to 财务自由`
+    ? `${I18N.t("dashboard.subtitle")} · ${yearsToFire}${I18N.t("dashboard.fire.yearsUnit")}`
     : fireReady && yearsToFire === 0
-    ? "FIRE 目标已达成 🎉"
-    : "Net worth tracking toward FIRE";
+    ? I18N.t("dashboard.fire.achieved.banner")
+    : I18N.t("dashboard.subtitle");
 
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
@@ -322,8 +317,8 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         })()}</div>
         <h1 className="serif-cn" style={{ fontSize: 36, fontWeight: 700, margin: "6px 0 4px", letterSpacing: ".01em" }}>{(() => {
           const h = new Date(now.toLocaleString("en-US", { timeZone: timezone })).getHours();
-          const salut = h < 6 ? "凌晨好" : h < 12 ? "早上好" : h < 18 ? "下午好" : "晚上好";
-          return displayName ? `${salut}，${displayName}` : salut;
+          const salut = h < 6 ? I18N.t("dashboard.greeting.latenight") : h < 12 ? I18N.t("dashboard.greeting.morning") : h < 18 ? I18N.t("dashboard.greeting.afternoon") : I18N.t("dashboard.greeting.evening");
+          return displayName ? `${salut}, ${displayName}` : salut;
         })()}</h1>
         <div style={{ fontSize: 14, color: "var(--ink-3)" }}>{fireSubtitle}</div>
       </div>
@@ -333,9 +328,9 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         {/* Net Worth */}
         <Card padding={20}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("dashboard.netWorth")}</div>
             {balLoading && portfolioLoading ? (
-              <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 10 }}>加载中…</div>
+              <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 10 }}>{I18N.t("dashboard.loading")}</div>
             ) : (
               <>
                 <div className="mono" style={{ fontSize: 36, fontWeight: 700, marginTop: 6, letterSpacing: "-.01em" }}>
@@ -343,8 +338,8 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
                 </div>
                 <div style={{ display: "flex", gap: 12, marginTop: 4, alignItems: "center" }}>
                   {momPct != null
-                    ? <><ChangeNum value={momPct} format="pct" size="sm"/><span style={{ fontSize: 12, color: "var(--ink-4)" }}>vs prev snapshot</span></>
-                    : <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{snapSeries.length > 0 ? "首个快照" : "来自持仓估值"}</span>
+                    ? <><ChangeNum value={momPct} format="pct" size="sm"/><span style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("dashboard.snap.vsPrev")}</span></>
+                    : <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{snapSeries.length > 0 ? I18N.t("dashboard.snap.first") : I18N.t("dashboard.snap.fromHoldings")}</span>
                   }
                 </div>
               </>
@@ -369,11 +364,11 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
 
         {/* Asset Breakdown (balance sheet categories) */}
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ASSET BREAKDOWN · 资产分类</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("dashboard.assetBreakdown")}</div>
           {balLoading ? (
-            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>加载中…</div>
+            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>{I18N.t("dashboard.loading")}</div>
           ) : assetBreakdown.length === 0 ? (
-            <Empty icon="target" title="无资产数据" hint="在资产负债页记录资产"/>
+            <Empty icon="target" title={I18N.t("dashboard.noAssets.title")} hint={I18N.t("dashboard.noAssets.hint")}/>
           ) : (() => {
             const totalAssets = assetBreakdown.reduce((s, a) => s + a.value, 0);
             return (
@@ -381,7 +376,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
                 <Donut
                   data={assetBreakdown} size={110} thickness={18}
                   centerValue={PRIVACY.masked ? `${curSym}•.•M` : `${curSym}${(toCur(totalAssets) / 1e6).toFixed(1)}M`}
-                  centerSub="总资产"
+                  centerSub={I18N.t("dashboard.centerSub.assets")}
                 />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
                   {assetBreakdown.map(a => {
@@ -389,7 +384,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
                     return (
                       <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ width: 7, height: 7, borderRadius: 2, background: a.color, flexShrink: 0 }}/>
-                        <span style={{ flex: 1, color: "var(--ink-2)" }}>{a.label}</span>
+                        <span style={{ flex: 1, color: "var(--ink-2)" }}>{I18N.tCat(a.label)}</span>
                         <span className="mono" style={{ color: "var(--ink-3)", fontWeight: 500 }}>{pct.toFixed(0)}%</span>
                       </div>
                     );
@@ -402,18 +397,18 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
 
         {/* Allocation (portfolio by market) */}
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>ALLOCATION · 仓位</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("dashboard.allocation")}</div>
           {portfolioLoading ? (
-            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>加载中…</div>
+            <div style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 16 }}>{I18N.t("dashboard.loading")}</div>
           ) : allocation.length === 0 ? (
-            <Empty icon="wallet" title="暂无持仓" hint="在投资组合页面添加持仓"/>
+            <Empty icon="wallet" title={I18N.t("dashboard.noHoldings.title")} hint={I18N.t("dashboard.noHoldings.hint")}/>
           ) : (() => {
             return (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 8 }}>
                 <Donut
                   data={allocation} size={110} thickness={18}
                   centerValue={PRIVACY.masked ? `${curSym}•.•M` : `${curSym}${(toCur(allTotal) / 1e6).toFixed(1)}M`}
-                  centerSub="投资组合"
+                  centerSub={I18N.t("dashboard.centerSub.portfolio")}
                 />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, width: "100%" }}>
                   {allocation.map(a => {
@@ -434,15 +429,15 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
 
         {/* FIRE Target */}
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>FIRE TARGET · 财务自由</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("dashboard.fireTarget")}</div>
           {!fireReady ? (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
-                {!birthDate ? "请在应用设置中填写生日以启用 FIRE 计算" : "请在退休计划页设置月支出以计算 FIRE 目标"}
+                {!birthDate ? I18N.t("dashboard.fire.noBirthDate") : I18N.t("dashboard.fire.noExp")}
               </div>
               {!birthDate
                 ? null
-                : <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>前往设置 →</Button>
+                : <Button variant="ghost" size="sm" style={{ marginTop: 10 }} onClick={() => onNavigate("fire")}>{I18N.t("dashboard.fire.goSettings")}</Button>
               }
             </div>
           ) : (
@@ -454,24 +449,24 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
                     {(fireProgress * 100).toFixed(1)}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>%</span>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                    of <Private>{curSym}{(toCur(fireTarget) / 1e6).toFixed(1)}M</Private> target
+                    {I18N.t("dashboard.fire.target").split("{value}")[0]}<Private>{curSym}{(toCur(fireTarget) / 1e6).toFixed(1)}M</Private>{I18N.t("dashboard.fire.target").split("{value}")[1] || ""}
                   </div>
                 </div>
               </div>
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Years to go</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{I18N.t("dashboard.fire.yearsToGo")}</div>
                   <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
-                    {yearsToFire === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>已达成</span>
-                      : yearsToFire != null ? <>{yearsToFire}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>y</span></>
+                    {yearsToFire === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>{I18N.t("dashboard.fire.achieved")}</span>
+                      : yearsToFire != null ? <>{yearsToFire}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>{I18N.t("dashboard.fire.yearsUnit")}</span></>
                       : <span style={{ fontSize: 14, color: "var(--ink-4)" }}>—</span>}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>Required CAGR</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{I18N.t("dashboard.fire.requiredCagr")}</div>
                   <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: requiredCagr == null ? "var(--ink-4)" : requiredCagr <= 15 ? "var(--up)" : "var(--warn)" }}>
                     {requiredCagr == null ? "—"
-                      : requiredCagr === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>已达成</span>
+                      : requiredCagr === 0 ? <span style={{ fontSize: 14, color: "var(--up)" }}>{I18N.t("dashboard.fire.achieved")}</span>
                       : <>{requiredCagr.toFixed(1)}<span style={{ fontSize: 14 }}>%</span></>}
                   </div>
                 </div>
@@ -482,7 +477,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
       </div>
 
       {/* Modules grid */}
-      <SectionHeader kicker="MODULES" title="模块导航" subtitle="Local-first · zero cloud · five focused modules"/>
+      <SectionHeader kicker={I18N.t("dashboard.modules")} title={I18N.t("nav.dashboard")} subtitle={I18N.t("dashboard.subtitle")}/>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 32 }}>
         {modules.map(m => (
           <ModuleCard key={m.id} mod={m} onClick={() => onNavigate(m.id)}/>
@@ -494,14 +489,14 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         <Card padding={0}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>关注列表 Watchlist</div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{watchlist.length} 支 · 自选标的</div>
+              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("dashboard.watchlist.title")}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.tf("dashboard.watchlist.count", { n: watchlist.length })}</div>
             </div>
-            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate({ route: "alerts", category: WATCHLIST_TAB })}>Manage</Button>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate({ route: "alerts", category: WATCHLIST_TAB })}>{I18N.t("dashboard.watchlist.manage")}</Button>
           </div>
           <div>
             {watch.length === 0 && (
-              <Empty icon="bell" title="自选为空" hint="在提醒页搜索标的并添加到自选"/>
+              <Empty icon="bell" title={I18N.t("dashboard.watchlist.empty")} hint={I18N.t("dashboard.watchlist.empty.hint")}/>
             )}
             {watch.map((s, i) => {
               const ch = (s.price - s.prevClose) / s.prevClose * 100;
@@ -533,10 +528,10 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
         <Card padding={0}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>提醒概览 Alerts</div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{activeAlerts} active · {triggered} fired this month</div>
+              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("dashboard.alerts.title")}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.tf("dashboard.alerts.active", { n: activeAlerts, m: triggered })}</div>
             </div>
-            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>查看全部</Button>
+            <Button size="sm" variant="ghost" iconRight="arrow-right" onClick={() => onNavigate("alerts")}>{I18N.t("base.btn.viewAll")}</Button>
           </div>
           <div style={{ padding: "10px 14px" }}>
             {alerts.filter(a => a.enabled).slice(0, 10).map(a => {
@@ -562,7 +557,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
                   </div>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>
                     {distance != null && isFinite(distance)
-                      ? `${Math.abs(distance).toFixed(1)}${isPriceCond ? "%" : "pp"} away`
+                      ? `${Math.abs(distance).toFixed(1)}${isPriceCond ? "%" : "pp"} ${I18N.t("dashboard.alerts.away")}`
                       : "—"}
                   </span>
                 </div>
@@ -601,9 +596,8 @@ const ModuleCard = ({ mod, onClick }) => {
         <Icon name="arrow-right" size={14} style={{ color: hov ? "var(--ink)" : "var(--ink-5)", transition: "color .15s, transform .15s", transform: hov ? "translateX(2px)" : "none" }}/>
       </div>
       <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".15em", color: "var(--ink-4)", marginTop: 14 }}>{mod.kicker}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+      <div style={{ marginTop: 4 }}>
         <span className="serif-cn" style={{ fontSize: 22, fontWeight: 700 }}>{mod.title}</span>
-        <span style={{ fontSize: 12, color: "var(--ink-4)", fontWeight: 500 }}>{mod.en}</span>
       </div>
       <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.45 }}>{mod.blurb}</div>
       <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 12, paddingTop: 10, borderTop: "1px dashed var(--line)" }}>{mod.stat}</div>

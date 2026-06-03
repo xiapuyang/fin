@@ -21,7 +21,8 @@ if _FROZEN:
         DATA_DIR = HOME_FIN / "data"
         LOG_DIR = HOME_FIN / "logs"
     FRONTEND_DIR = BUNDLE_DIR / "frontend"
-    SYMBOLS_PATH = BUNDLE_DIR / "config" / "symbols.json"
+    CONFIG_DIR = BUNDLE_DIR / "config"
+    SYMBOLS_PATH = CONFIG_DIR / "symbols.json"
     load_dotenv(DATA_DIR / ".env")
     FIN_DEV = False
     DB_PATH = DATA_DIR / "fin.db"
@@ -33,7 +34,8 @@ else:
     FIN_DEV = os.environ.get("FIN_DEV") == "1"
     LOG_DIR = HOME_FIN / "logs"
     FRONTEND_DIR = PROJECT_ROOT / "frontend"
-    SYMBOLS_PATH = PROJECT_ROOT / "config" / "symbols.json"
+    CONFIG_DIR = PROJECT_ROOT / "config"
+    SYMBOLS_PATH = CONFIG_DIR / "symbols.json"
 
     if FIN_DEV:
         DATA_DIR = HOME_FIN / "data-dev"

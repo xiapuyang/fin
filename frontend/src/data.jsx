@@ -3,8 +3,8 @@
 // Single source of truth for supported currencies — mirrors fin/config.py SUPPORTED_CURRENCIES.
 const CURRENCIES = ["CNY", "USD", "HKD", "CAD"];
 const CURRENCY_SYMBOL = { CNY: "¥", USD: "$", HKD: "HK$", CAD: "CA$" };
-const CURRENCY_LABEL  = { CNY: "人民币 CNY", USD: "美元 USD", HKD: "港元 HKD", CAD: "加元 CAD" };
-const CURRENCY_OPTIONS = CURRENCIES.map(c => ({ value: c, label: CURRENCY_LABEL[c] || c }));
+const CURRENCY_LABEL  = new Proxy({}, { get: (_, c) => I18N.t(`base.currency.${c.toLowerCase()}`) });
+const CURRENCY_OPTIONS = () => CURRENCIES.map(c => ({ value: c, label: CURRENCY_LABEL[c] || c }));
 
 const SYMBOLS = {};
 const FX = { USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 };

@@ -120,9 +120,55 @@ Naming conventions in the existing hierarchy (mixed — pick what matches the pa
 
 Use the holdings router's `POST /api/accounts` endpoint (or `AccountSQLiteRepository` directly). Required: `name`. Common: `currency` (defaults to `CNY`), `note`, `balance_account_id` to link this broker into the balance hierarchy.
 
+## Internationalization
+
+Locale strings live in `config/i18n/en.json` and `config/i18n/zh.json`, served as static files at `/config/i18n/<locale>.json`. The loader (`frontend/src/i18n.jsx`) picks the locale from `localStorage("fin_lang")` → `navigator.language` prefix → `"en"`.
+
+### New string workflow
+
+Before adding a new key, search `config/i18n/en.json` for existing keys that express the same meaning — reuse if one exists, add only if none fits.
+
+1. Use `I18N.t("module.key")` in JSX render output (never hardcode Chinese or English display strings)
+2. Add `"module.key": "English text"` to `config/i18n/en.json`
+3. Add `"module.key": "中文文案"` to `config/i18n/zh.json`
+4. Missing keys fall back to displaying the key itself — easy to catch visually
+
+Module prefixes: `base`, `cat`, `nav`, `app`, `dashboard`, `alerts`, `holdings`, `balance`, `ledger`, `fire`.
+
+### Category display rule
+
+- Ledger `is_builtin: true` → `I18N.t("ledger.cat." + cat.id)` — keyed by numeric ID (e.g. `ledger.cat.0001`)
+- Ledger custom (`is_builtin: false`) → `cat.name` as-is (user's own text, never translated)
+- Balance categories (always built-in) → `I18N.tCat(item.category)` — balance_items stores Chinese strings, so key is `balance.cat.现金`, `balance.cat.存款`, etc.
+- Account / sub-account names → always raw (user data)
+
+Ledger stores category as an ID (`0001`–`0103` builtins, `0201+` custom). Balance stores category as a Chinese string — no ID column. Use `ledger.cat.*` for ledger and `balance.cat.*` strictly for balance. Dead keys (e.g. `cat.*` bare prefix, or names not in either system) must not be added.
+
+### Management UI
+
+`/i18n` — two-column table (key / en / zh), module filter sidebar, search, inline edit, download buttons.
+
+### Key patterns
+
+- `STATE_LABEL` and `CURRENCY_LABEL` — `Proxy` objects for lazy I18N lookup at render time
+- `getCOND_OPTIONS()` — function (not constant) for lazy evaluation
+- `CURRENCY_OPTIONS()` — function (not constant) for lazy evaluation
+- Backend language: `fin.settings.load().get("language", "en")` at runtime
+
 ## Color convention
 
 The UI uses **Chinese market convention**: red (`--up`) = price rising, green (`--down`) = price falling. This is intentional and opposite to Western convention — do not change it.
+
+## Data file safety
+
+Before writing to `ledger_categories.json` or `settings.json` (in `DATA_DIR`, typically `~/.fin/data/`), always create a timestamped backup first:
+
+```bash
+cp ~/.fin/data/ledger_categories.json ~/.fin/data/ledger_categories.json.bak-$(date +%Y%m%d_%H%M%S)
+cp ~/.fin/data/settings.json          ~/.fin/data/settings.json.bak-$(date +%Y%m%d_%H%M%S)
+```
+
+This applies to any direct file write, Python script, or shell command that modifies these files. Never skip this step, even for "small" edits.
 
 ## Key design constraints
 

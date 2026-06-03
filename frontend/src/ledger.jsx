@@ -1,10 +1,10 @@
 /* Module 03 — 收入支出 */
 
 const RECURRING_LABEL = {
-  monthly:       "每月",
-  annual:        "每年",
-  semi_annual:   "每半年",
-  every_4months: "每四个月",
+  get monthly()       { return I18N.t("ledger.recurring.freq.monthly"); },
+  get annual()        { return I18N.t("ledger.recurring.freq.annual"); },
+  get semi_annual()   { return I18N.t("ledger.recurring.freq.semi_annual"); },
+  get every_4months() { return I18N.t("ledger.recurring.freq.every_4months"); },
 };
 
 const RECURRING_ORDER = ["monthly", "every_4months", "semi_annual", "annual"];
@@ -49,7 +49,8 @@ const CategoryContext = React.createContext({
 const CategoryPill = ({ category, categoryName }) => {
   const { byName, byId } = React.useContext(CategoryContext);
   const rec = byId[category] || byName[category] || CATEGORY_FALLBACK;
-  const label = categoryName || rec.name || category;
+  const rawLabel = categoryName || rec.name || category;
+  const label = rec.is_builtin ? I18N.t("ledger.cat." + category) : rawLabel;
   return (
     <span style={{
       background: rec.bg, color: rec.text,
@@ -217,8 +218,8 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
     const expense = [];
     const income = [];
     for (const c of categories) {
-      byName[c.name] = { bg: c.bg_color, text: c.text_color, id: c.id };
-      byId[c.id] = { name: c.name, bg: c.bg_color, text: c.text_color };
+      byName[c.name] = { bg: c.bg_color, text: c.text_color, id: c.id, is_builtin: c.is_builtin };
+      byId[c.id] = { name: c.name, bg: c.bg_color, text: c.text_color, is_builtin: c.is_builtin };
       if (c.direction === "expense") expense.push(c);
       else if (c.direction === "income") income.push(c);
     }
@@ -391,7 +392,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
   }, 0);
 
   const yearOpts = [
-    { value: "0", label: "全部年" },
+    { value: "0", label: I18N.t("ledger.chart.year.all") },
     ...years.map(y => ({ value: String(y), label: String(y) })),
   ];
 
@@ -399,9 +400,9 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
     <CategoryContext.Provider value={categoryCtx}>
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
-        kicker="MODULE 03 · 收入支出"
-        title="收入支出"
-        subtitle="Personal Cashflow · 自动分类 · 年度报表"
+        kicker={I18N.t("ledger.kicker")}
+        title={I18N.t("ledger.title")}
+        subtitle={I18N.t("ledger.subtitle")}
         right={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Select
@@ -410,8 +411,8 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
               options={yearOpts}
               style={{ width: 110 }}
             />
-            <Button variant="secondary" icon="settings" onClick={() => setShowCategoryManager(true)}>分类</Button>
-            <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>添加记录</Button>
+            <Button variant="secondary" icon="settings" onClick={() => setShowCategoryManager(true)}>{I18N.t("ledger.btn.categories")}</Button>
+            <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>{I18N.t("ledger.btn.addRecord")}</Button>
           </div>
         }
       />
@@ -424,11 +425,11 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
           : summary.expense / 12;
         return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 22 }}>
-            <LedgerTile label={allYears ? "总收入 TOTAL"   : "年度收入 INCOME"}  value={PRIVACY.masked ? "•••" : dispStat(summary.income, 0, "+")}                                       tone="up" />
-            <LedgerTile label={allYears ? "总支出 TOTAL"   : "年度支出 EXPENSE"} value={PRIVACY.masked ? "•••" : dispStat(summary.expense, 0, "−")}                                      tone="up" />
-            <LedgerTile label="净结余 NET"                                        value={PRIVACY.masked ? "•••" : dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone="up" />
-            <LedgerTile label={allYears ? "年均支出 AVG/YR" : "月均支出 AVG/MO"} value={PRIVACY.masked ? "•••" : dispStat(avgVal)}                                                     tone="neutral" />
-            <LedgerTile label="最大单笔 MAX TXN"                                  value={PRIVACY.masked ? "•••" : dispStat(summary.max_expense)}                                        tone="neutral"
+            <LedgerTile label={allYears ? I18N.t("ledger.stat.totalIncome")  : I18N.t("ledger.stat.yearIncome")}  value={PRIVACY.masked ? "•••" : dispStat(summary.income, 0, "+")}                                       tone="up" />
+            <LedgerTile label={allYears ? I18N.t("ledger.stat.totalExpense") : I18N.t("ledger.stat.yearExpense")} value={PRIVACY.masked ? "•••" : dispStat(summary.expense, 0, "−")}                                      tone="up" />
+            <LedgerTile label={I18N.t("ledger.stat.net")}                                                         value={PRIVACY.masked ? "•••" : dispStat(Math.abs(summary.net), 0, summary.net >= 0 ? "+" : "−")}      tone="up" />
+            <LedgerTile label={allYears ? I18N.t("ledger.stat.avgYear")      : I18N.t("ledger.stat.avgMonth")}   value={PRIVACY.masked ? "•••" : dispStat(avgVal)}                                                     tone="neutral" />
+            <LedgerTile label={I18N.t("ledger.stat.maxTxn")}                                                      value={PRIVACY.masked ? "•••" : dispStat(summary.max_expense)}                                        tone="neutral"
               sub={summary.max_expense_date ? `${summary.max_expense_date} · ${summary.max_expense_name || ""}` : undefined}
             />
           </div>
@@ -439,9 +440,9 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14, marginBottom: 22 }}>
         <Card padding={20}>
           <div style={{ marginBottom: 14 }}>
-            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>支出趋势</div>
+            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{I18N.t("ledger.chart.title")}</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-              {(activeYear && activeYear !== 0) ? `${activeYear}年 · 月度` : "全部 · 年度"}
+              {(activeYear && activeYear !== 0) ? `${activeYear} · ${I18N.t("ledger.chart.monthly")}` : I18N.t("ledger.chart.allYears")}
             </div>
           </div>
           {chartData.bars.length > 0
@@ -452,11 +453,11 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
                 }))}
                 width={700} height={180}
               />
-            : <Empty icon="circle" title="暂无数据" hint="选择有数据的年份" />
+            : <Empty icon="circle" title={I18N.t("ledger.noData.title")} hint={I18N.t("ledger.noData.hint")} />
           }
         </Card>
         <Card padding={20}>
-          <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>分类占比</div>
+          <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{I18N.t("ledger.donut.title")}</div>
           {chartData.pie.length > 0 ? (
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <Donut
@@ -480,7 +481,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
               </div>
             </div>
           ) : (
-            <Empty icon="circle" title="暂无数据" />
+            <Empty icon="circle" title={I18N.t("ledger.noData.title")} />
           )}
         </Card>
       </div>
@@ -494,25 +495,25 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
               value={direction}
               onChange={handleDirectionChange}
               tabs={[
-                { id: "all", label: "全部" },
-                { id: "income", label: "收入" },
-                { id: "expense", label: "支出" },
+                { id: "all",     label: I18N.t("ledger.tab.all") },
+                { id: "income",  label: I18N.t("ledger.tab.income") },
+                { id: "expense", label: I18N.t("ledger.tab.expense") },
               ]}
             />
             <form onSubmit={handleSearch} style={{ display: "flex", gap: 6, flex: 1, maxWidth: 320 }}>
               <Input
                 value={searchInput}
                 onChange={v => { setSearchInput(v); if (!v) { setSearch(""); setPage(1); } }}
-                placeholder="搜索名称、备注、分类…"
+                placeholder={I18N.t("ledger.search.ph")}
                 prefix={<Icon name="search" size={13} />}
                 style={{ flex: 1, height: 30 }}
               />
             </form>
-            <div style={{ fontSize: 12, color: "var(--ink-4)", flexShrink: 0 }}>共 {listData.total} 条</div>
+            <div style={{ fontSize: 12, color: "var(--ink-4)", flexShrink: 0 }}>{I18N.t("ledger.total")} {listData.total}</div>
           </div>
           {(direction === "expense" || direction === "income") && (
             <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {(direction === "income" ? categoryCtx.income : categoryCtx.expense).map(({ id, name }) => {
+              {(direction === "income" ? categoryCtx.income : categoryCtx.expense).map(({ id, name, is_builtin }) => {
                 const col = colorOf(name);
                 const active = category === id;
                 return (
@@ -526,7 +527,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
                       cursor: "pointer", transition: "background .12s, color .12s",
                     }}
                   >
-                    {name}
+                    {is_builtin ? I18N.t("ledger.cat." + id) : name}
                   </button>
                 );
               })}
@@ -535,9 +536,9 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
         </div>
 
         {loading ? (
-          <div style={{ padding: 32, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>加载中…</div>
+          <div style={{ padding: 32, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>{I18N.t("ledger.loading")}</div>
         ) : listData.items.length === 0 ? (
-          <Empty icon="book" title="暂无记录" hint="导入 Notion 数据或手动添加" />
+          <Empty icon="book" title={I18N.t("ledger.empty.title")} hint={I18N.t("ledger.empty.hint")} />
         ) : (
           listData.items.map((item, i) => (
             <LedgerRow
@@ -568,7 +569,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
       {recurring.length > 0 && (
         <div style={{ marginTop: 28 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
-            定期消费 · {recurring.length} 项 · 月均 {dispStat(monthlyEquiv)} · 年均 {dispStat(monthlyEquiv * 12)}
+            {I18N.t("ledger.recurring.title")} · {recurring.length} {I18N.t("ledger.recurring.items")} · {I18N.t("ledger.recurring.monthly")} {dispStat(monthlyEquiv)} · {I18N.t("ledger.recurring.annual")} {dispStat(monthlyEquiv * 12)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
             {RECURRING_ORDER.map(k => {
@@ -583,15 +584,15 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
                     background: col.bg, color: col.text,
                     padding: "8px 14px", fontSize: 12, fontWeight: 700,
                   }}>
-                    <div>{RECURRING_LABEL[k]} · {items.length} 项</div>
+                    <div>{RECURRING_LABEL[k]} · {items.length} {I18N.t("ledger.recurring.items")}</div>
                     {items.length > 0 && (
                       <div style={{ fontWeight: 500, fontSize: 11, marginTop: 2, opacity: 0.85 }}>
-                        月均 {dispStat(groupMonthly)} · 年 {dispStat(groupAnnual)}
+                        {I18N.t("ledger.recurring.monthly")} {dispStat(groupMonthly)} · {I18N.t("ledger.recurring.annual")} {dispStat(groupAnnual)}
                       </div>
                     )}
                   </div>
                   {items.length === 0
-                    ? <div style={{ padding: "14px", fontSize: 12, color: "var(--ink-4)" }}>暂无</div>
+                    ? <div style={{ padding: "14px", fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("ledger.recurring.none")}</div>
                     : items.map((r, idx) => (
                         <RecurringCard
                           key={r.id}
@@ -618,7 +619,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
       {recurringExpired.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-4)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
-            已结束 · {recurringExpired.length} 项
+            {I18N.t("ledger.recurring.ended")} · {recurringExpired.length} {I18N.t("ledger.recurring.items")}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, opacity: 0.62 }}>
             {RECURRING_ORDER.map(k => {
@@ -626,10 +627,10 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
               return (
                 <div key={k} style={{ border: "1px dashed var(--line-2)", borderRadius: 10, overflow: "hidden", background: "var(--bg-deep)" }}>
                   <div style={{ background: "var(--bg-deep)", color: "var(--ink-4)", padding: "8px 14px", fontSize: 12, fontWeight: 700 }}>
-                    {RECURRING_LABEL[k]} · {items.length} 项
+                    {RECURRING_LABEL[k]} · {items.length} {I18N.t("ledger.recurring.items")}
                   </div>
                   {items.length === 0
-                    ? <div style={{ padding: "14px", fontSize: 12, color: "var(--ink-5)" }}>暂无</div>
+                    ? <div style={{ padding: "14px", fontSize: 12, color: "var(--ink-5)" }}>{I18N.t("ledger.recurring.none")}</div>
                     : items.map((r, idx) => (
                         <RecurringCard
                           key={r.id}
@@ -663,7 +664,7 @@ const Ledger = ({ fxRates = {}, currency = "CNY" }) => {
       )}
       {deleteTarget && (
         <ConfirmModal
-          message={`确认删除「${deleteTarget.name}」？此操作不可撤销。`}
+          message={I18N.tf("ledger.deleteConfirm", { name: deleteTarget.name })}
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDeleteConfirm}
         />
@@ -725,8 +726,8 @@ const iconBtnStyle = {
 const RecurringCard = ({ item, nextDate, last, fmt, ended, onEdit, onDelete, onDuplicate, onEnd, onResume, onExpand }) => {
   const count = item.count || 0;
   const dateLabel = ended
-    ? (item.date ? `截至 ${item.date.slice(5)}` : "已结束")
-    : (nextDate ? `下次 ${nextDate.getMonth() + 1}/${nextDate.getDate()}` : "");
+    ? (item.date ? `${I18N.t("ledger.recurring.until")} ${item.date.slice(5)}` : I18N.t("ledger.recurring.ended.badge"))
+    : (nextDate ? `${I18N.t("ledger.recurring.next")} ${nextDate.getMonth() + 1}/${nextDate.getDate()}` : "");
   const stop = (e, fn) => { e.stopPropagation(); fn && fn(); };
   return (
     <div
@@ -750,21 +751,21 @@ const RecurringCard = ({ item, nextDate, last, fmt, ended, onEdit, onDelete, onD
             <span style={{
               fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", background: "var(--bg-deep)",
               padding: "1px 6px", borderRadius: 999, flexShrink: 0,
-            }}>{count}次</span>
+            }}>{count} {I18N.t("ledger.recurring.times")}</span>
           )}
         </div>
         <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
           {onDuplicate && (
-            <button onClick={(e) => stop(e, onDuplicate)} style={iconBtnStyle} title="快速记录"><Icon name="copy" size={13} /></button>
+            <button onClick={(e) => stop(e, onDuplicate)} style={iconBtnStyle} title={I18N.t("ledger.recurring.quickRecord")}><Icon name="copy" size={13} /></button>
           )}
           {onEnd && (
-            <button onClick={(e) => stop(e, onEnd)} style={iconBtnStyle} title="结束定期"><Icon name="pause" size={13} /></button>
+            <button onClick={(e) => stop(e, onEnd)} style={iconBtnStyle} title={I18N.t("ledger.recurring.end")}><Icon name="pause" size={13} /></button>
           )}
           {onResume && (
-            <button onClick={(e) => stop(e, onResume)} style={{ ...iconBtnStyle, color: "var(--down)" }} title="恢复定期"><Icon name="play" size={13} /></button>
+            <button onClick={(e) => stop(e, onResume)} style={{ ...iconBtnStyle, color: "var(--down)" }} title={I18N.t("ledger.recurring.resume")}><Icon name="play" size={13} /></button>
           )}
-          <button onClick={(e) => stop(e, onEdit)} style={iconBtnStyle} title="编辑"><Icon name="edit" size={13} /></button>
-          <button onClick={(e) => stop(e, onDelete)} style={{ ...iconBtnStyle, color: "var(--up)" }} title="删除"><Icon name="trash" size={13} /></button>
+          <button onClick={(e) => stop(e, onEdit)} style={iconBtnStyle} title={I18N.t("base.btn.edit")}><Icon name="edit" size={13} /></button>
+          <button onClick={(e) => stop(e, onDelete)} style={{ ...iconBtnStyle, color: "var(--up)" }} title={I18N.t("base.btn.delete")}><Icon name="trash" size={13} /></button>
         </div>
       </div>
       <div style={{ marginTop: 5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -817,7 +818,7 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
               flexShrink: 0, fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 999,
               background: "var(--line-2)", color: "var(--ink-4)",
             }}>
-              已结束
+              {I18N.t("ledger.recurring.ended.badge")}
             </span>
           )}
         </div>
@@ -834,8 +835,8 @@ const LedgerRow = ({ item, last, fmt, onEdit, onDelete }) => {
         {isIncome ? "+" : "−"}{fmt(item.amount, item.currency, 2)}
       </span>
       <div style={{ display: "flex", gap: 2 }}>
-        <button onClick={onEdit} style={iconBtnStyle} title="编辑"><Icon name="edit" size={13} /></button>
-        <button onClick={onDelete} style={{ ...iconBtnStyle, color: "var(--up)" }} title="删除"><Icon name="trash" size={13} /></button>
+        <button onClick={onEdit} style={iconBtnStyle} title={I18N.t("base.btn.edit")}><Icon name="edit" size={13} /></button>
+        <button onClick={onDelete} style={{ ...iconBtnStyle, color: "var(--up)" }} title={I18N.t("base.btn.delete")}><Icon name="trash" size={13} /></button>
       </div>
     </div>
   );
@@ -879,30 +880,30 @@ const EndRecurringModal = ({ name, onClose, onConfirm }) => {
     setLoading(false);
   };
   return (
-    <Modal open title="结束定期任务" onClose={onClose} width={380}>
+    <Modal open title={I18N.t("ledger.endTask.title")} onClose={onClose} width={380}>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>
-          结束「{name}」？结束后可在「已结束」区域恢复。
+          {I18N.tf("ledger.endTask.msg", { name })}
         </div>
-        <FieldRow label="截止日">
+        <FieldRow label={I18N.t("ledger.endTask.endDate")}>
           <Input type="date" value={expiryDate} onChange={setExpiryDate} />
         </FieldRow>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleConfirm} disabled={loading}>确认结束</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={loading}>{I18N.t("ledger.endTask.confirm")}</Button>
         </div>
       </div>
     </Modal>
   );
 };
 
-const ConfirmModal = ({ message, onClose, onConfirm, confirmLabel = "确认删除", confirmVariant = "danger" }) => (
-  <Modal open title="确认操作" onClose={onClose} width={380}>
+const ConfirmModal = ({ message, onClose, onConfirm, confirmLabel, confirmVariant = "danger" }) => (
+  <Modal open title={I18N.t("ledger.confirm.title")} onClose={onClose} width={380}>
     <div style={{ padding: 20 }}>
       <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>{message}</div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
-        <Button variant="secondary" onClick={onClose}>取消</Button>
-        <Button variant={confirmVariant} onClick={onConfirm}>{confirmLabel}</Button>
+        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+        <Button variant={confirmVariant} onClick={onConfirm}>{confirmLabel || I18N.t("ledger.confirm.delete")}</Button>
       </div>
     </div>
   </Modal>
@@ -930,11 +931,11 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const { expense: expenseCats, income: incomeCats } = React.useContext(CategoryContext);
   // options: {value: id, label: name}
-  const cats = (form.direction === "income" ? incomeCats : expenseCats).map(c => ({ value: c.id, label: c.name }));
+  const cats = (form.direction === "income" ? incomeCats : expenseCats).map(c => ({ value: c.id, label: c.is_builtin ? I18N.t("ledger.cat." + c.id) : c.name }));
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.amount || !form.date) {
-      setError("请填写名称、日期和金额"); return;
+      setError(I18N.t("ledger.record.err.required")); return;
     }
     setLoading(true); setError(null);
     try {
@@ -965,7 +966,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || "保存失败"); }
+        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || I18N.t("ledger.record.err.save")); }
       }
       onDone();
     } catch (e) {
@@ -976,7 +977,7 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title={isEdit ? "编辑记录" : "添加记录"} onClose={onClose} width={440}>
+    <Modal open title={isEdit ? I18N.t("ledger.record.edit.title") : I18N.t("ledger.record.add.title")} onClose={onClose} width={440}>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", gap: 8 }}>
           {["expense", "income"].map(d => (
@@ -987,17 +988,17 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
                 color: form.direction === d ? "#fff" : "var(--ink-3)",
                 fontSize: 13, cursor: "pointer", fontFamily: "inherit",
               }}>
-              {d === "expense" ? "支出" : "收入"}
+              {d === "expense" ? I18N.t("ledger.record.expense") : I18N.t("ledger.record.income")}
             </button>
           ))}
         </div>
-        <FieldRow label="名称">
-          <Input value={form.name} onChange={v => set("name", v)} placeholder="消费名称" />
+        <FieldRow label={I18N.t("ledger.record.name")}>
+          <Input value={form.name} onChange={v => set("name", v)} placeholder={I18N.t("ledger.record.name.ph")} />
         </FieldRow>
-        <FieldRow label="日期">
+        <FieldRow label={I18N.t("ledger.record.date")}>
           <Input type="date" value={form.date} onChange={v => set("date", v)} />
         </FieldRow>
-        <FieldRow label="金额">
+        <FieldRow label={I18N.t("ledger.record.amount")}>
           <div style={{ display: "flex", gap: 6 }}>
             <Select
               value={form.currency}
@@ -1008,11 +1009,11 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
             <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0.00" style={{ flex: 1 }} />
           </div>
         </FieldRow>
-        <FieldRow label="分类">
+        <FieldRow label={I18N.t("ledger.record.category")}>
           <Select value={form.category} onChange={v => set("category", v)}
             options={cats} />
         </FieldRow>
-        <FieldRow label="定期">
+        <FieldRow label={I18N.t("ledger.record.recurring")}>
           <Select
             value={form.recurring_type || ""}
             onChange={v => {
@@ -1021,28 +1022,28 @@ const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {
               if (v && !form.subcategory && form.name) set("subcategory", form.name);
             }}
             options={[
-              { value: "", label: "单次" },
-              { value: "monthly", label: "每月" },
-              { value: "annual", label: "每年" },
-              { value: "semi_annual", label: "每半年" },
-              { value: "every_4months", label: "每四个月" },
+              { value: "",              label: I18N.t("ledger.record.recur.once") },
+              { value: "monthly",       label: I18N.t("ledger.record.recur.monthly") },
+              { value: "annual",        label: I18N.t("ledger.record.recur.annual") },
+              { value: "semi_annual",   label: I18N.t("ledger.record.recur.semi_annual") },
+              { value: "every_4months", label: I18N.t("ledger.record.recur.every_4months") },
             ]} />
         </FieldRow>
-        <FieldRow label="子类">
+        <FieldRow label={I18N.t("ledger.record.subcategory")}>
           <Input
             value={form.subcategory}
             onChange={v => set("subcategory", v)}
-            placeholder={form.recurring_type ? "用于识别同一笔定期项" : "可选，用于分组"}
+            placeholder={form.recurring_type ? I18N.t("ledger.record.subcategory.ph.recurring") : I18N.t("ledger.record.subcategory.ph")}
           />
         </FieldRow>
-        <FieldRow label="备注">
-          <Input value={form.note} onChange={v => set("note", v)} placeholder="可选" />
+        <FieldRow label={I18N.t("ledger.record.note")}>
+          <Input value={form.note} onChange={v => set("note", v)} placeholder={I18N.t("ledger.record.note.ph")} />
         </FieldRow>
         {error && <div style={{ color: "var(--up)", fontSize: 13 }}>{error}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
           <Button variant="primary" onClick={handleSave} disabled={loading}>
-            {loading ? "保存中…" : "保存"}
+            {loading ? I18N.t("ledger.record.saving") : I18N.t("ledger.record.save")}
           </Button>
         </div>
       </div>
@@ -1092,7 +1093,7 @@ const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || "保存失败"); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || I18N.t("ledger.record.err.save")); }
       onDone();
     } catch (e) {
       setError(e.message);
@@ -1102,7 +1103,7 @@ const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title={`快速记录`} onClose={onClose} width={360}>
+    <Modal open title={I18N.t("ledger.quickRecord.title")} onClose={onClose} width={360}>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{item.name}</div>
         <div style={{ fontSize: 12, color: "var(--ink-4)" }}>
@@ -1111,14 +1112,14 @@ const DuplicateModal = ({ item, fmt, fxRates = {}, onClose, onDone }) => {
           {item.currency && item.currency !== "CNY" ? `${item.currency} ` : ""}
           {fmt(item.amount, item.currency, 2)}
         </div>
-        <FieldRow label="日期">
+        <FieldRow label={I18N.t("ledger.quickRecord.date")}>
           <Input type="date" value={date} onChange={setDate} />
         </FieldRow>
         {error && <div style={{ color: "var(--up)", fontSize: 13 }}>{error}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
           <Button variant="primary" onClick={handleSave} disabled={loading}>
-            {loading ? "保存中…" : "记录"}
+            {loading ? I18N.t("ledger.quickRecord.saving") : I18N.t("ledger.quickRecord.record")}
           </Button>
         </div>
       </div>
@@ -1143,7 +1144,7 @@ const SeriesModal = ({ item, fmt, onClose, onEdit, onDelete }) => {
   }, [item.id]);
 
   return (
-    <Modal open title={`${item.name} · 全部记录`} onClose={onClose} width={520}>
+    <Modal open title={`${item.name} · ${I18N.t("ledger.allRecords.title")}`} onClose={onClose} width={520}>
       <div style={{ padding: 18, maxHeight: 480, overflowY: "auto" }}>
         <div style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 10 }}>
           {RECURRING_LABEL[item.recurring_type] || ""} · {item.category}
@@ -1153,8 +1154,8 @@ const SeriesModal = ({ item, fmt, onClose, onEdit, onDelete }) => {
           {fmt(item.amount, item.currency, 2)}
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 13 }}>{error}</div>}
-        {rows === null && !error && <div style={{ color: "var(--ink-4)", fontSize: 13 }}>加载中…</div>}
-        {rows && rows.length === 0 && <div style={{ color: "var(--ink-4)", fontSize: 13 }}>暂无记录</div>}
+        {rows === null && !error && <div style={{ color: "var(--ink-4)", fontSize: 13 }}>{I18N.t("ledger.allRecords.loading")}</div>}
+        {rows && rows.length === 0 && <div style={{ color: "var(--ink-4)", fontSize: 13 }}>{I18N.t("ledger.allRecords.empty")}</div>}
         {rows && rows.map((r, i) => (
           <div key={r.id} style={{
             display: "grid", gridTemplateColumns: "100px 1fr auto auto", gap: 10, alignItems: "center",
@@ -1178,8 +1179,8 @@ const SeriesModal = ({ item, fmt, onClose, onEdit, onDelete }) => {
               {fmt(r.amount, r.currency, 2)}
             </span>
             <div style={{ display: "flex", gap: 2 }}>
-              <button onClick={() => onEdit(r)} style={iconBtnStyle} title="编辑"><Icon name="edit" size={13} /></button>
-              <button onClick={() => onDelete(r)} style={{ ...iconBtnStyle, color: "var(--up)" }} title="删除"><Icon name="trash" size={13} /></button>
+              <button onClick={() => onEdit(r)} style={iconBtnStyle} title={I18N.t("base.btn.edit")}><Icon name="edit" size={13} /></button>
+              <button onClick={() => onDelete(r)} style={{ ...iconBtnStyle, color: "var(--up)" }} title={I18N.t("base.btn.delete")}><Icon name="trash" size={13} /></button>
             </div>
           </div>
         ))}
@@ -1261,7 +1262,7 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
   };
 
   const handleDelete = async (c) => {
-    if (!window.confirm(`删除分类「${c.name}」？已有记录的分类标签会保留为字符串（显示为灰色）。`)) return;
+    if (!window.confirm(I18N.tf("ledger.catManager.deleteConfirm", { name: c.name }))) return;
     setError(null); setBusy(true);
     try {
       await deleteCategory(c.id);
@@ -1280,7 +1281,7 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
   };
 
   const saveAdd = async () => {
-    if (!addName.trim()) { setError("请输入分类名称"); return; }
+    if (!addName.trim()) { setError(I18N.t("ledger.catManager.nameEmpty")); return; }
     setError(null); setBusy(true);
     try {
       const preset = COLOR_PICKER_PRESETS[addColorIdx];
@@ -1299,15 +1300,15 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
   };
 
   return (
-    <Modal open title="管理分类" onClose={onClose} width={520}>
+    <Modal open title={I18N.t("ledger.catManager.title")} onClose={onClose} width={520}>
       <div style={{ padding: 18 }}>
         <Tabs
           variant="pill"
           value={direction}
           onChange={(d) => { setDirection(d); cancelEdit(); setAdding(false); }}
           tabs={[
-            { id: "expense", label: "支出" },
-            { id: "income",  label: "收入" },
+            { id: "expense", label: I18N.t("ledger.catManager.tab.expense") },
+            { id: "income",  label: I18N.t("ledger.catManager.tab.income") },
           ]}
         />
 
@@ -1328,11 +1329,11 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
             >
               {editingId === c.id ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <Input value={editName} onChange={setEditName} placeholder="分类名称" />
+                  <Input value={editName} onChange={setEditName} placeholder={I18N.t("ledger.catManager.newName.ph")} />
                   <ColorPicker selectedIdx={editColorIdx} onChange={setEditColorIdx} />
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    <Button variant="secondary" onClick={cancelEdit}>取消</Button>
-                    <Button variant="primary" onClick={() => saveEdit(c)} disabled={busy}>保存</Button>
+                    <Button variant="secondary" onClick={cancelEdit}>{I18N.t("base.btn.cancel")}</Button>
+                    <Button variant="primary" onClick={() => saveEdit(c)} disabled={busy}>{I18N.t("base.btn.save")}</Button>
                   </div>
                 </div>
               ) : (
@@ -1342,19 +1343,19 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
                     padding: "3px 12px", fontSize: 12, fontWeight: 600, borderRadius: 999,
                     minWidth: 80, textAlign: "center",
                   }}>
-                    {c.name}
+                    {c.is_builtin ? I18N.t("ledger.cat." + c.id) : c.name}
                   </span>
                   <span style={{ flex: 1 }} />
                   {c.is_builtin ? (
                     <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", background: "var(--bg-deep)", padding: "2px 8px", borderRadius: 999 }}>
-                      内置
+                      {I18N.t("ledger.catManager.builtin")}
                     </span>
                   ) : (
                     <>
-                      <button onClick={() => startEdit(c)} style={iconBtnStyle} title="编辑">
+                      <button onClick={() => startEdit(c)} style={iconBtnStyle} title={I18N.t("base.btn.edit")}>
                         <Icon name="edit" size={13} />
                       </button>
-                      <button onClick={() => handleDelete(c)} disabled={busy} style={{ ...iconBtnStyle, color: "var(--up)" }} title="删除">
+                      <button onClick={() => handleDelete(c)} disabled={busy} style={{ ...iconBtnStyle, color: "var(--up)" }} title={I18N.t("base.btn.delete")}>
                         <Icon name="trash" size={13} />
                       </button>
                     </>
@@ -1367,11 +1368,11 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
 
         {adding ? (
           <div style={{ marginTop: 12, padding: 14, border: "1px solid var(--line-2)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 10 }}>
-            <Input value={addName} onChange={setAddName} placeholder="新分类名称" autoFocus />
+            <Input value={addName} onChange={setAddName} placeholder={I18N.t("ledger.catManager.newName.ph")} autoFocus />
             <ColorPicker selectedIdx={addColorIdx} onChange={setAddColorIdx} />
             <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-              <Button variant="secondary" onClick={() => { setAdding(false); setError(null); }}>取消</Button>
-              <Button variant="primary" onClick={saveAdd} disabled={busy}>添加</Button>
+              <Button variant="secondary" onClick={() => { setAdding(false); setError(null); }}>{I18N.t("base.btn.cancel")}</Button>
+              <Button variant="primary" onClick={saveAdd} disabled={busy}>{I18N.t("ledger.catManager.add")}</Button>
             </div>
           </div>
         ) : (
@@ -1383,7 +1384,7 @@ const CategoryManagerModal = ({ onClose, onChange }) => {
               color: "var(--ink-3)", fontSize: 13, cursor: "pointer", fontFamily: "inherit",
             }}
           >
-            + 添加 {direction === "expense" ? "支出" : "收入"} 分类
+            {direction === "expense" ? I18N.t("ledger.catManager.add.expense") : I18N.t("ledger.catManager.add.income")}
           </button>
         )}
       </div>

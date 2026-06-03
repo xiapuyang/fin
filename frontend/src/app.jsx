@@ -1,15 +1,21 @@
 /* Main app — sidebar nav + module router */
 
 const NAV = [
-  { id: "dashboard", icon: "dashboard", label: "Dashboard",  cn: "总览"    },
-  { id: "alerts",    icon: "bell",      label: "Alerts",     cn: "提醒",       tag: "01" },
-  { id: "holdings",  icon: "wallet",    label: "Portfolio",  cn: "投资组合",    tag: "02" },
-  { id: "ledger",    icon: "book",      label: "Ledger",     cn: "收入支出",    tag: "03" },
-  { id: "balance",   icon: "target",    label: "Balance",    cn: "资产负债",    tag: "04" },
-  { id: "fire",      icon: "spark",     label: "FIRE",       cn: "退休计划",    tag: "05" },
+  { id: "dashboard", icon: "dashboard", tag: null },
+  { id: "alerts",    icon: "bell",      tag: "01" },
+  { id: "holdings",  icon: "wallet",    tag: "02" },
+  { id: "ledger",    icon: "book",      tag: "03" },
+  { id: "balance",   icon: "target",    tag: "04" },
+  { id: "fire",      icon: "spark",     tag: "05" },
 ];
 
-const App = () => {
+const useLang = () => {
+  const [ready, setReady] = React.useState(I18N.isReady());
+  React.useEffect(() => { I18N.onReady(() => setReady(true)); }, []);
+  return ready;
+};
+
+const AppInner = () => {
   const [route, setRoute] = React.useState("dashboard");
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
@@ -28,6 +34,8 @@ const App = () => {
       setSettings(prev => ({ ...prev, ...s }));
       if (s.currency && CURRENCIES.includes(s.currency)) setCurrency(s.currency);
       if (typeof s.privacy_mask === "boolean") setPrivacyMasked(s.privacy_mask);
+      // Only adopt backend language when user has no explicit localStorage preference
+      if (s.language && s.language !== I18N.getLang() && !localStorage.getItem("fin_lang")) I18N.setLang(s.language);
     }).catch(() => {});
     fetch("/api/symbols").then(r => r.json()).then(data => {
       Object.assign(SYMBOLS, data);
@@ -100,7 +108,7 @@ const App = () => {
           setPrivacyMasked(next);
           fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ privacy_mask: next }) }).catch(() => {});
         }}/>
-        <div data-screen-label={`${NAV.find(n=>n.id===route)?.cn||""} ${route}`}>
+        <div data-screen-label={route}>
           {Page}
         </div>
       </main>
@@ -129,7 +137,6 @@ const Sidebar = ({ route, setRoute }) => (
       </div>
     </div>
 
-    <div style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-4)", letterSpacing: ".15em", padding: "8px 8px 6px" }}>NAVIGATION</div>
     <nav style={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {NAV.map(n => {
         const active = n.id === route;
@@ -146,7 +153,7 @@ const Sidebar = ({ route, setRoute }) => (
           onMouseLeave={e => !active && (e.currentTarget.style.background = "transparent")}
           >
             <Icon name={n.icon} size={16}/>
-            <span style={{ flex: 1 }}>{n.cn} <span style={{ fontSize: 11, color: active ? "rgba(255,255,255,.55)" : "var(--ink-4)", fontWeight: 400 }}>{n.label}</span></span>
+            <span style={{ flex: 1 }}>{I18N.t(`nav.${n.id}`)}</span>
             {n.tag && <span className="mono" style={{ fontSize: 9.5, color: active ? "rgba(255,255,255,.5)" : "var(--ink-5)", letterSpacing: ".05em" }}>{n.tag}</span>}
           </button>
         );
@@ -168,7 +175,7 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayNam
       position: "sticky", top: 0, zIndex: 30,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--ink-3)" }}>
-        <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{cur?.cn} {cur?.label}</span>
+        <span>fin</span><Icon name="chevron-right" size={12}/><span style={{ color: "var(--ink)", fontWeight: 500 }}>{I18N.t(`nav.${route}`)}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Market status dots */}
@@ -205,12 +212,26 @@ const TopBar = ({ route, fxRates = {}, currency = "CNY", market = {}, displayNam
           ))}
         </div>
         <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
+        <select
+          value={I18N.getLang()}
+          onChange={e => I18N.setLang(e.target.value)}
+          style={{
+            fontSize: 11, fontWeight: 700, color: "var(--ink)",
+            background: "var(--paper-2)", border: "1.5px solid var(--line)",
+            borderRadius: 6, padding: "3px 8px", cursor: "pointer",
+            outline: "none", letterSpacing: ".02em",
+          }}
+        >
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+        <span style={{ width: 1, height: 16, background: "var(--line-2)" }}/>
         <Button
           variant={masked ? "secondary" : "ghost"}
           size="sm"
           icon={masked ? "eye-off" : "eye"}
           onClick={() => onTogglePrivacy(!masked)}
-          title={masked ? "显示金额 Show amounts" : "隐藏金额 Hide amounts (demo mode)"}
+          title={masked ? I18N.t("app.privacy.show") : I18N.t("app.privacy.hide")}
         />
         <Button variant="ghost" size="sm" icon="settings" onClick={onOpenSettings}/>
         {(() => {
@@ -230,9 +251,9 @@ const TIMEZONE_OPTIONS = [
   { value: "America/Vancouver",  label: "Vancouver (PT)" },
   { value: "America/Los_Angeles",label: "Los Angeles (PT)" },
   { value: "Europe/London",      label: "London (GMT/BST)" },
-  { value: "Asia/Shanghai",      label: "上海 / 北京 (CST)" },
-  { value: "Asia/Hong_Kong",     label: "香港 (HKT)" },
-  { value: "Asia/Tokyo",         label: "東京 (JST)" },
+  { value: "Asia/Shanghai",      get label() { return I18N.t("app.tz.Asia/Shanghai"); } },
+  { value: "Asia/Hong_Kong",     get label() { return I18N.t("app.tz.Asia/Hong_Kong"); } },
+  { value: "Asia/Tokyo",         get label() { return I18N.t("app.tz.Asia/Tokyo"); } },
 ];
 
 const AppSettingsModal = ({ settings, onClose, onSaved }) => {
@@ -267,7 +288,7 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   const save = async () => {
     const trimmed = notifyEmail.trim();
     if (trimmed && !/.+@.+\..+/.test(trimmed)) {
-      setEmailError("请输入有效邮箱");
+      setEmailError(I18N.t("app.settings.emailError"));
       return;
     }
     setEmailError("");
@@ -295,25 +316,25 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
   };
 
   return (
-    <Modal open={true} onClose={onClose} title="应用设置 App Settings" width={420}>
+    <Modal open={true} onClose={onClose} title={I18N.t("app.settings.title")} width={420}>
       <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>时区 Timezone</div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.timezone")}</div>
           <Select value={tz} onChange={setTz} options={TIMEZONE_OPTIONS} style={{ width: "100%" }}/>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>影响日期显示和时间相关计算</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.timezone.hint")}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>显示名 Display Name</div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.displayName")}</div>
           <Input
             value={displayName}
             onChange={setDisplayName}
-            placeholder="例如 Alice — 留空显示通用问候语"
+            placeholder={I18N.t("app.settings.displayName.ph")}
             autoComplete="off"
           />
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于首页问候语（早上好 / 下午好 / 晚上好，xxx）</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.displayName.hint")}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>出生日期 Birth Date</div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.birthDate")}</div>
           <input
             type="date"
             value={birthDate}
@@ -324,10 +345,10 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
               boxSizing: "border-box",
             }}
           />
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于 FIRE 退休计划自动计算当前年龄</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.birthDate.hint")}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>通知邮箱 Notification Email</div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>{I18N.t("app.settings.email")}</div>
           <Input
             value={notifyEmail}
             onChange={v => { setNotifyEmail(v); if (emailError) setEmailError(""); }}
@@ -341,8 +362,8 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
             border: "1px solid var(--line)",
           }}>
             <div>
-              <div style={{ fontSize: 12.5, fontWeight: 500 }}>触发提醒通知</div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>提醒触发时发送邮件</div>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{I18N.t("app.settings.notify")}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{I18N.t("app.settings.notify.hint")}</div>
             </div>
             <Toggle value={notifyEnabled} onChange={() => setNotifyEnabled(!notifyEnabled)} />
           </div>
@@ -391,16 +412,22 @@ const AppSettingsModal = ({ settings, onClose, onSaved }) => {
               />
             </div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>用于价格提醒邮件通知。两项均需设置，留空保持不变。</div>
-          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>已保存</div>}
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.email.hint")}</div>
+          {apiKeySaved && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>{I18N.t("app.settings.saved")}</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={save} disabled={saving}>{saving ? I18N.t("base.btn.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>
   );
+};
+
+const App = () => {
+  const i18nReady = useLang();
+  if (!i18nReady) return null;
+  return <AppInner />;
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);

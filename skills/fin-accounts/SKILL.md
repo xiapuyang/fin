@@ -25,7 +25,7 @@ If the user is importing data (not just setting up accounts), use **fin-import**
    - `汇丰银行` → parent account
    - `汇丰银行/人民币` → sub-account `人民币` under parent `汇丰银行` (slash form)
    - `汇丰银行,港币` → sub-account `港币` under parent `汇丰银行` (CSV form, parent in col 1, sub in col 2)
-3. **Load (mode 2)** — read `assets/starter_accounts.json` directly.
+3. **Load (mode 2)** — choose the template based on the user's input language: if the user's message contains Chinese characters (CJK range U+4E00–U+9FFF) → load `assets/starter_accounts.json` (Chinese bank/broker names); otherwise → load `assets/starter_accounts_en.json` (IBKR/Fidelity/Chase/PayPal/Coinbase/Cash/Real Estate/Mortgage/Loans/Options/401k hierarchy).
 4. **Diff against existing** — run `uv run --with requests python scripts/list_accounts.py` (handles dev/prod routing via `~/.fin-dev`), parse the JSON output, filter input rows by `(name, parent_name)` already present, report how many are new.
 5. **Hard confirmation gate** — AskUserQuestion: "Create N accounts (M parent accounts, K sub-accounts)? [Yes / Show full list / Cancel]"
 6. **POST** — `uv run --with requests python scripts/setup_accounts.py --rows <json>` → `POST /api/balance/accounts/bulk`.
@@ -41,9 +41,11 @@ If the user is importing data (not just setting up accounts), use **fin-import**
 
 `POST /api/balance/accounts/bulk` with payload `list[{name, parent_name?}]`. Server pre-filters duplicates by `(user_id, name, parent_id)`; unknown `parent_name` aborts the whole batch with 400.
 
-## Starter template
+## Starter templates
 
-`assets/starter_accounts.json` is the same file shipped with fin-import (parsing vocabulary there; seed source here). **11 parent accounts** picked as canonical type examples:
+Two templates ship with this skill. Mode 2 picks the right one based on whether the user's message contains Chinese characters.
+
+**`assets/starter_accounts.json`** (Chinese) — 11 parent accounts:
 
 - **Broker**: IB
 - **Bank**: 招商银行 (人民币/美元/港币/朝朝宝/朝朝赢/美元理财)
@@ -57,7 +59,21 @@ If the user is importing data (not just setting up accounts), use **fin-import**
 - **Options**: 期权 (雇主期权)
 - **Social insurance**: 社保 (公积金 / 养老金 / 医保)
 
-Country-specific accounts (CA / HK / SG banks), duplicate-type accounts, family-member accounts, and property/employer-specific names have all been pruned. Structure is real and useful as a seed; users will extend with their own accounts via this skill or the UI.
+**`assets/starter_accounts_en.json`** (English) — 11 parent accounts:
+
+- **Broker**: IBKR (Brokerage)
+- **Broker**: Fidelity (Brokerage / IRA / Roth IRA)
+- **Bank**: Chase (Checking / Savings / Credit Card)
+- **Wallet**: PayPal (Balance)
+- **Crypto**: Coinbase (Crypto)
+- **Cash**: Cash (USD / EUR)
+- **Fixed asset**: Real Estate (Primary Home / Car)
+- **Mortgage**: Mortgage (Primary Home)
+- **Loans**: Loans (Student Loan / Personal Loan)
+- **Equity comp**: Options (RSU / ESPP)
+- **Retirement**: 401k (Traditional / Roth)
+
+Both templates are anonymized (no personal names, amounts, or employer-specific labels). Users extend with their own accounts via this skill or the UI.
 
 ## Error handling
 

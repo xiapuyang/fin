@@ -27,6 +27,7 @@ _DEFAULTS = {
     "fire_life_expectancy": 80,
     "currency": "CNY",
     "privacy_mask": False,
+    "language": "en",
 }
 
 

@@ -210,7 +210,7 @@ def test_copy_snapshot_basic(client):
     r = client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
     assert r.status_code == 201
     copy = r.json()
-    assert copy["label"] == "Orig (副本)"
+    assert copy["label"] == "Orig (copy)"
     assert copy["item_count"] == 2
 
     items = client.get(f"/api/balance/snapshots/{copy['id']}/items").json()
