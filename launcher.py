@@ -107,7 +107,57 @@ def _open_browser() -> None:
     webbrowser.open(BASE_URL)
 
 
+_WIN32_MUTEX_NAME = "Global\\FinAppSingleInstance"
+_win32_mutex_handle = None  # keep alive for process lifetime
+
+
+def _acquire_single_instance_mutex() -> bool:
+    """On Windows, grab a named mutex to prevent multiple instances.
+
+    Returns True if this is the first instance, False if another is already running.
+    The mutex must stay referenced for the lifetime of the process — released on exit
+    automatically by the OS.
+    """
+    global _win32_mutex_handle
+    if sys.platform != "win32":
+        return True
+    import ctypes
+
+    ERROR_ALREADY_EXISTS = 183
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, _WIN32_MUTEX_NAME)
+    if not handle:
+        return True  # CreateMutex failed — allow launch
+    if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return False
+    _win32_mutex_handle = handle  # prevent GC
+    return True
+
+
+def _hide_from_taskbar(icon) -> None:
+    """Remove the pystray message window from the Windows taskbar.
+
+    pystray creates a WS_POPUP top-level window for its Win32 message loop.
+    Without WS_EX_TOOLWINDOW, Windows may add a taskbar button alongside the
+    tray icon, producing two visible indicators for the same app.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    hwnd = getattr(icon, "_hwnd", None)
+    if not hwnd:
+        return
+    GWL_EXSTYLE = -20
+    WS_EX_TOOLWINDOW = 0x00000080
+    WS_EX_APPWINDOW = 0x00040000
+    ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    ex_style = (ex_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+
+
 def _on_tray_ready(icon) -> None:
+    _hide_from_taskbar(icon)
     icon.visible = True
 
 
@@ -229,6 +279,14 @@ def _check_for_updates(icon, item) -> None:
 def main() -> None:
     """Entry point. Must be called before any other application code."""
     multiprocessing.freeze_support()
+
+    # On Windows, grab a named mutex before anything else — faster and race-free
+    # compared to port checking, which has a window between check and bind.
+    if not _acquire_single_instance_mutex():
+        logger.info("Another Fin instance detected via mutex — opening browser")
+        if _health_ok():
+            _open_browser()
+        sys.exit(0)
 
     # Resolve port conflicts before creating the tray icon so a second launch
     # never leaves a ghost icon with no server behind it.
