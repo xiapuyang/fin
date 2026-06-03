@@ -104,9 +104,7 @@ def test_email_body_contains_change():
 
 
 def test_email_zh_subject_html_and_text_localized(monkeypatch):
-    from fin import alert_email as _ae
-
-    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "zh"})
+    monkeypatch.setattr("fin.settings.load", lambda: {"language": "zh"})
     alert = _make_alert(name="苹果", symbol="AAPL")
     subject, html, text = build_summary_email([(alert, 201.5, 1.23)])
     assert "提醒触发" in subject
@@ -119,9 +117,7 @@ def test_email_zh_subject_html_and_text_localized(monkeypatch):
 
 
 def test_email_en_text_lead_in_english(monkeypatch):
-    from fin import alert_email as _ae
-
-    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "en"})
+    monkeypatch.setattr("fin.settings.load", lambda: {"language": "en"})
     alert = _make_alert()
     _, _, text = build_summary_email([(alert, 201.5, 1.23)])
     assert text.startswith("Triggered ")
@@ -166,9 +162,7 @@ def test_detect_os_locale_ignores_C_posix(monkeypatch):
 
 def test_email_crlf_in_alert_name_stripped(monkeypatch):
     """Alert name containing CRLF must not break MIME structure in text body."""
-    from fin import alert_email as _ae
-
-    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "en"})
+    monkeypatch.setattr("fin.settings.load", lambda: {"language": "en"})
     alert = _make_alert(name="Bad\r\nHeader", symbol="X")
     _, _, text = build_summary_email([(alert, 1.0, 0.0)])
     assert "\r" not in text
