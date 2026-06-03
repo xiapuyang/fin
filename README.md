@@ -1,85 +1,98 @@
 # fin
 
-个人或家庭财务管理工具。把家庭财务当成一家公司来经营 —— 通过三张财务报表追踪资金流向，回答一个核心问题：**什么时候可以达到 FIRE 退休目标？**
+> 中文文档: [README.zh.md](README.zh.md)
 
-- **收入支出 (Income Statement)** — 工资 / 分红 / 利息 / 消费按类别分组，月度汇总。
-- **资产负债 (Balance Sheet)** — 多账户、多币种快照管理，自动 FX 换算到净值。
-- **现金流 (Cash Flow)** — 转入 / 转出 / 买入 / 卖出，组合成可对账的资金流动。
+Personal and family finance dashboard. Manage your household finances like a company — track money flows through three financial statements and answer one core question: **when can you reach FIRE?**
 
-最终落到一个 FIRE 计算器：基于真实历史数据估算达到财务自由的时间点。
+- **Income Statement** — Salary / dividends / interest / spending grouped by category, monthly summaries.
+- **Balance Sheet** — Multi-account, multi-currency snapshot management with automatic FX conversion to net worth.
+- **Cash Flow** — Deposits / withdrawals / buys / sells composed into a reconcilable cash flow.
 
-## 为什么用 fin
+Everything feeds into a FIRE calculator that estimates your financial independence date from real historical data.
 
-**把所有账户收敛到一张表**，是这个工具最核心的事情。市面上的工具要么只管港 A 股票，要么只管美股，要么只管记账 —— 资产分散在中港美三地的人最后只能开 N 个表 + 一个手动汇总 Excel。fin 把它们放进一个数据库一个 UI：
+## Why fin
 
-- **跨市场股票账户** — 中国 A 股、港股、美股、ETF、指数；自选股 watchlist 跨市场实时行情。
-- **多币种实时换算** — 持仓 / 收支 / 净值都按账户原币种存储，CNY / USD / HKD / CAD 通过 yfinance 实时 FX 换算到统一币种汇总，汇率获取失败回退到常驻 fallback。
-- **储蓄 / 理财 / 信用卡全覆盖** — 活期、定期、GIC、货币基金、现金管理、信用卡分期 —— 都是资产负债表上一个普通账户，统一快照、统一对账。
-- **IRR 年化回报率** — 基于转入 / 转出现金流 + 当前持仓市值用 Newton-Raphson 解 XIRR，单账户和全账户都能算 MWRR，比"涨跌幅"更贴近真实回报率。
-- **批量数据导入** — 一次性把券商导出的 CSV、银行流水、持仓列表灌进系统；带预览 / 去重 / 确认门，幂等可重跑。配套 Claude Code skill (`skills/fin-import`) 让 LLM 直接处理脏数据。
-- **价格提醒** — 美股 / 港股 / A 股 / 指数的价格 + 涨跌幅条件提醒，cron 每 20 分钟检查，触发后发邮件。
+**Consolidating all accounts into one view** is the core purpose. Most tools cover only one market or one function — stock tracking, or expense logging, or crypto. People with assets spread across US / HK / CN end up with N spreadsheets plus a manual summary. fin puts them into one database and one UI:
+
+- **Cross-market portfolios** — A-shares, HK stocks, US equities, ETFs, indices; watchlist with live quotes across all markets.
+- **Multi-currency FX** — Positions, income, and net worth all stored in account-native currency; CNY / USD / HKD / CAD converted via yfinance live rates with fallback to stored rates on failure.
+- **All account types** — Checking, savings, GIC, money market, credit card installments — all are just rows on the balance sheet, snapshotted and reconciled the same way.
+- **True rate of return (XIRR)** — Cash-flow-weighted IRR solved via Newton-Raphson from deposit/withdrawal history + current market value. Per-account and aggregate MWRR, more honest than simple gain %.
+- **Bulk import** — Load broker CSV exports, bank statements, position lists in one shot; with preview / dedup / confirmation gate; idempotent. Companion Claude Code skill (`skills/fin-import`) handles messy data via LLM.
+- **Price alerts** — Price and change-% conditions on US / HK / A-share / index symbols; cron checks every 20 minutes, triggers send email.
 
 ## Features
 
-- **Dashboard** — 净值、汇率、市场快照、watchlist 行情
-- **Alerts** — 美股 / 港股 / A 股 / 指数价格条件提醒（cron 每 20 分钟检查，触发后邮件通知）
-- **Holdings** — 持仓 + 交易记录 + 分红 / 利息 / 转账，已实现 / 未实现盈亏，**XIRR 年化回报率**
-- **Ledger** — 收入支出记账，按类别月度汇总
-- **Balance Sheet** — 账户层级（父/子）、多币种快照对比、复制上一期快照、自动 FX 换算到统一净值
-- **FIRE Calculator** — 蒙特卡洛模拟 + 确定性 CAGR 反推 + 通胀调整
+- **Dashboard** — Net worth, FX rates, market snapshot, watchlist quotes
+- **Alerts** — Price / change conditions on any symbol (cron every 20 min, email on trigger)
+- **Holdings** — Positions + trade history + dividends / interest / transfers; realized / unrealized P&L; **XIRR annualized return**
+- **Ledger** — Income and expense tracking, category-based monthly summaries
+- **Balance Sheet** — Account hierarchy (parent / child), multi-currency snapshots, copy-from-prior-period, automatic FX to unified net worth
+- **FIRE Calculator** — Monte Carlo simulation + deterministic CAGR + inflation adjustment
 
 ## Screenshots
 
-> 以下截图均为演示数据，与任何真实账户无关。
+> All screenshots use demo data unrelated to any real account.
 
 | Dashboard | Alerts |
 |---|---|
-| ![Dashboard](assets/screenshots/dashboard.png) | ![Alerts](assets/screenshots/alerts.png) |
+| ![Dashboard](assets/screenshots/en/dashboard.png) | ![Alerts](assets/screenshots/en/alerts.png) |
 
 | Holdings | Ledger |
 |---|---|
-| ![Holdings](assets/screenshots/holdings.png) | ![Ledger](assets/screenshots/ledger.png) |
+| ![Holdings](assets/screenshots/en/holdings.png) | ![Ledger](assets/screenshots/en/ledger.png) |
 
 | Balance Sheet | FIRE |
 |---|---|
-| ![Balance](assets/screenshots/balance.png) | ![FIRE](assets/screenshots/fire.png) |
+| ![Balance](assets/screenshots/en/balance.png) | ![FIRE](assets/screenshots/en/fire.png) |
 
-## 安装（桌面应用）
+## Install (desktop app)
 
-| 平台 | 芯片 | 系统要求 | 版本 |
-|------|------|----------|------|
+| Platform | Chip | Requirement | Version |
+|---|---|---|---|
 | macOS | Apple Silicon (M1+) | macOS 11+ | [v0.1.0](https://github.com/xiapuyang/fin/releases/download/v0.1.0/Fin-v0.1.0-arm64.dmg) |
 | Windows | x86\_64 | Windows 10+ | [v0.1.0](https://github.com/xiapuyang/fin/releases/download/v0.1.0/Fin-Setup-v0.1.0.exe) |
 
 ### macOS
 
-1. 下载 `.dmg`（仅支持 Apple Silicon），打开后将 **Fin.app** 拖入 Applications
-2. 首次启动前在终端运行：
+1. Download the `.dmg` (Apple Silicon only), open it, drag **Fin.app** to Applications.
+2. Before first launch, run in Terminal:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/Fin.app
 ```
 
-3. 双击启动，菜单栏右上角出现 Fin 图标，浏览器自动打开
+3. Double-click to launch. The Fin icon appears in the menu bar and a browser tab opens automatically.
 
 ### Windows
 
-1. 下载 `.exe` 安装程序，运行后从开始菜单启动 Fin
+1. Download the `.exe` installer, run it, launch Fin from the Start menu.
 
-### 邮件提醒（可选）
+### Email alerts (optional)
 
-价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
+Price alerts can send email when triggered. Without configuration alerts still record to the DB — email is optional.
 
-1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
-2. 在应用**设置**中填写 API Key、Inbox 地址和**通知邮箱**，打开通知开关
+1. Sign up at [agentmail.to](https://agentmail.to), get an API Key and Inbox ID.
+2. In the app **Settings**, enter the API Key, Inbox address, and **notification email**, then enable notifications.
 
 ---
 
-## 开发
+## Claude Code Skills
 
-### 前置：安装 uv
+For bulk data operations, two Claude Code skills are included in [`skills/`](skills/README.md):
 
-依赖 [`uv`](https://github.com/astral-sh/uv) 管理 Python 环境：
+- **fin-import** — bulk-import transactions, holdings, income, ledger entries, balance items, alerts, and watchlist symbols from CSV exports or pasted text. Handles messy real-world bank/broker data via LLM normalization.
+- **fin-accounts** — batch create balance sheet accounts (parent + sub-accounts) from a description or the bundled template.
+
+See [`skills/README.md`](skills/README.md) for install instructions.
+
+---
+
+## Development
+
+### Prerequisites: install uv
+
+Requires [`uv`](https://github.com/astral-sh/uv) for Python environment management:
 
 ```bash
 # macOS / Linux
@@ -90,7 +103,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 启动
+### Start
 
 ```bash
 git clone https://github.com/xiapuyang/fin
@@ -99,15 +112,15 @@ uv sync
 uv run python serve.py     # http://localhost:8888
 ```
 
-脚本方式（后台运行，日志写到 `~/.fin/logs/fin.log`）：
+Script mode (background, logs to `~/.fin/logs/fin.log`):
 
 ```bash
-./run.sh      # 启动，等待端口绑定后自动打开浏览器
-./stop.sh     # 停止
-./restart.sh  # 重启
+./run.sh      # start, wait for port bind, open browser
+./stop.sh     # stop
+./restart.sh  # restart
 ```
 
-### 价格提醒 cron（server 模式）
+### Price alert cron (server mode)
 
 ```bash
 # crontab -e
@@ -118,7 +131,7 @@ uv run python serve.py     # http://localhost:8888
 
 | | |
 |---|---|
-| **Python** | 3.11+，[uv](https://github.com/astral-sh/uv) 管理环境 |
-| **后台** | [FastAPI](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/encode/uvicorn) · [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) · SQLite |
-| **数据源** | [yfinance](https://github.com/ranaroussi/yfinance) · [akshare](https://github.com/akfamily/akshare) · [exchange-calendars](https://github.com/gerrymanoim/exchange_calendars) · [AgentMail](https://agentmail.to) |
-| **前端** | React 18 · Babel standalone（无构建步骤，JSX 在浏览器运行时转译） |
+| **Python** | 3.11+, managed by [uv](https://github.com/astral-sh/uv) |
+| **Backend** | [FastAPI](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/encode/uvicorn) · [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) · SQLite |
+| **Data** | [yfinance](https://github.com/ranaroussi/yfinance) · [akshare](https://github.com/akfamily/akshare) · [exchange-calendars](https://github.com/gerrymanoim/exchange_calendars) · [AgentMail](https://agentmail.to) |
+| **Frontend** | React 18 · Babel standalone (no build step; JSX transpiled in-browser at runtime) |

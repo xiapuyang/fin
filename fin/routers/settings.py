@@ -1,11 +1,11 @@
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Literal
 
 from dotenv import set_key
 from fastapi import APIRouter, Body, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
 _FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
+
+_VALID_MARKETS = {"us", "hk", "cn", "ca"}
 
 
 class SettingsPayload(BaseModel):
@@ -38,6 +40,20 @@ class SettingsPayload(BaseModel):
     fire_life_expectancy: int | None = None
     currency: str | None = None
     privacy_mask: bool | None = None
+    language: Literal["en", "zh"] | None = None
+    enabled_markets: list[str] | None = None
+
+    @field_validator("enabled_markets")
+    @classmethod
+    def _validate_markets(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        unknown = [m for m in v if m not in _VALID_MARKETS]
+        if unknown:
+            raise ValueError(
+                f"unknown markets: {unknown}; valid: {sorted(_VALID_MARKETS)}"
+            )
+        return v
 
 
 @router.get("/config")
@@ -97,9 +113,18 @@ class CredentialsPayload(BaseModel):
 
 @router.get("/settings/credentials")
 def get_credentials():
-    """Return stored AgentMail credentials (localhost-only; values are not secrets on this machine)."""
+    """Return credential metadata only — never the full API key.
+
+    The API key is sensitive (it can charge the AgentMail account and
+    read mailbox state). Returning it on GET makes it exfiltratable via
+    DNS rebinding + permissive CORS. We surface only enough for the UI
+    to confirm "a key is set" and show the last 4 characters as a
+    visual hint.
+    """
+    api_key = os.environ.get("AGENTMAIL_API_KEY", "")
     return {
-        "agentmail_api_key": os.environ.get("AGENTMAIL_API_KEY", ""),
+        "agentmail_api_key_set": bool(api_key),
+        "agentmail_api_key_hint": api_key[-4:] if len(api_key) >= 8 else "",
         "agentmail_inbox": os.environ.get("FIN_AGENTMAIL_INBOX", ""),
     }
 

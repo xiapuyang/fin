@@ -119,8 +119,8 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       .map(c => ({ label: c, value: cats[c] || 0, color: BALANCE_CAT_COLORS[c] }))
       .filter(c => c.value > 0);
   };
-  const assetCats  = aggCat("asset");
-  const liabCats   = aggCat("liability");
+  const assetCats  = aggCat("asset").map(c => ({ ...c, label: I18N.tCat(c.label) }));
+  const liabCats   = aggCat("liability").map(c => ({ ...c, label: I18N.tCat(c.label) }));
   const assetItems = items.filter(i => i.side === "asset");
   const liabItems  = items.filter(i => i.side === "liability");
 
@@ -183,7 +183,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
 
   if (loading) return (
     <div style={{ padding: "80px 32px", textAlign: "center", color: "var(--ink-4)" }}>
-      <div style={{ fontSize: 14 }}>加载中…</div>
+      <div style={{ fontSize: 14 }}>{I18N.t("base.empty.loading")}</div>
     </div>
   );
 
@@ -191,13 +191,13 @@ const BalanceSheet = ({ currency = "CNY" }) => {
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
         kicker="MODULE 04 · BALANCE SHEET"
-        title="资产负债"
-        subtitle="Net Worth Tracker · 快照管理 · FX 换算"
+        title={I18N.t("balance.title")}
+        subtitle={I18N.t("balance.subtitle")}
         right={
           <div style={{ display: "flex", gap: 8 }}>
-            <Button variant="secondary" icon="settings" onClick={() => setShowManageAccounts(true)}>账户</Button>
-            {snap && <Button variant="secondary" icon="copy" onClick={() => setShowCopySnap(true)}>复制快照</Button>}
-            <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>新增条目</Button>
+            <Button variant="secondary" icon="settings" onClick={() => setShowManageAccounts(true)}>{I18N.t("balance.btn.accounts")}</Button>
+            {snap && <Button variant="secondary" icon="copy" onClick={() => setShowCopySnap(true)}>{I18N.t("balance.btn.copySnap")}</Button>}
+            <Button variant="primary" icon="plus" onClick={() => setEditItem({})}>{I18N.t("balance.btn.addItem")}</Button>
           </div>
         }
       />
@@ -220,7 +220,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       {/* Summary tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 14, marginBottom: 18 }}>
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>NET WORTH · 净资产</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("balance.stat.netWorth")}</div>
           <div className="mono" style={{ fontSize: 38, fontWeight: 700, marginTop: 6 }}>
             <Private>{symFor(currency)}{fmtNum(toDisplay(netWorth, "CNY", currency), 0)}</Private>
           </div>
@@ -235,28 +235,28 @@ const BalanceSheet = ({ currency = "CNY" }) => {
           </div>
         </Card>
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL ASSETS · 资产</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("balance.stat.assets")}</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: "var(--down)" }}>
             <Private>+{symFor(currency)}{fmtNum(toDisplay(totalAssets, "CNY", currency), 0)}</Private>
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>{assetItems.length} 项 · {assetCats.length} 类</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>{assetItems.length} {I18N.t("balance.stat.items")} · {assetCats.length} {I18N.t("balance.stat.types")}</div>
         </Card>
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL LIABILITIES · 负债</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("balance.stat.liabilities")}</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6, color: "var(--up)" }}>
             <Private>−{symFor(currency)}{fmtNum(toDisplay(totalLiabilities, "CNY", currency), 0)}</Private>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
-            {items.filter(i=>i.side==="liability").length} 项 · 负债率 {totalAssets ? (totalLiabilities/totalAssets*100).toFixed(0) : 0}%
+            {items.filter(i=>i.side==="liability").length} {I18N.t("balance.stat.items")} · {I18N.t("balance.stat.liabRate")} {totalAssets ? (totalLiabilities/totalAssets*100).toFixed(0) : 0}%
           </div>
         </Card>
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>LIQUIDITY · 流动性</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("balance.stat.liquidity")}</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, marginTop: 6 }}>
             <Private>{symFor(currency)}{fmtNum(toDisplay(liquidAssets, "CNY", currency), 0)}</Private>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
-            现金+理财+投资 · {totalAssets ? (liquidAssets/totalAssets*100).toFixed(0) : 0}% of assets
+            {I18N.tf("balance.stat.liquid.detail", { pct: totalAssets ? (liquidAssets/totalAssets*100).toFixed(0) : 0 })}
           </div>
         </Card>
       </div>
@@ -264,16 +264,16 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       {/* Category breakdowns */}
       {(assetCats.length > 0 || liabCats.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-          <CatBreakdownCard title="资产分类 Asset Breakdown" cats={assetCats} total={totalAssets} currency={currency}/>
-          <CatBreakdownCard title="负债分类 Liability Breakdown" cats={liabCats} total={totalLiabilities} currency={currency}/>
+          <CatBreakdownCard title={I18N.t("balance.catBreakdown.assets")} cats={assetCats} total={totalAssets} currency={currency}/>
+          <CatBreakdownCard title={I18N.t("balance.catBreakdown.liab")} cats={liabCats} total={totalLiabilities} currency={currency}/>
         </div>
       )}
 
       {/* Account breakdowns */}
       {(assetItems.length > 0 || liabItems.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-          <AccountBreakdownCard title="资产账户 Account Breakdown" items={assetItems} total={totalAssets} currency={currency}/>
-          <AccountBreakdownCard title="负债账户 Account Breakdown" items={liabItems} total={totalLiabilities} currency={currency}/>
+          <AccountBreakdownCard title={I18N.t("balance.acctBreakdown.assets")} items={assetItems} total={totalAssets} currency={currency}/>
+          <AccountBreakdownCard title={I18N.t("balance.acctBreakdown.liab")} items={liabItems} total={totalLiabilities} currency={currency}/>
         </div>
       )}
 
@@ -281,13 +281,13 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       <Card padding={0} style={{ marginBottom: 18 }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <div>
-            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>明细 Items</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>点击条目查看跨快照历史</div>
+            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("balance.items.title")}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{I18N.t("balance.items.hint")}</div>
           </div>
           <Tabs variant="pill" value={sideFilter} onChange={v => { setSideFilter(v); setAccountFilter(null); }} tabs={[
-            { id: "all",       label: `全部 ${items.length}` },
-            { id: "asset",     label: `资产 ${items.filter(i=>i.side==="asset").length}` },
-            { id: "liability", label: `负债 ${items.filter(i=>i.side==="liability").length}` },
+            { id: "all",       label: `${I18N.t("balance.items.tab.all")} ${items.length}` },
+            { id: "asset",     label: `${I18N.t("balance.items.tab.asset")} ${items.filter(i=>i.side==="asset").length}` },
+            { id: "liability", label: `${I18N.t("balance.items.tab.liability")} ${items.filter(i=>i.side==="liability").length}` },
           ]}/>
         </div>
         {accountNames.length > 0 && (
@@ -297,7 +297,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
               background: !accountFilter ? "var(--ink)" : "transparent",
               color: !accountFilter ? "var(--paper)" : "var(--ink-3)",
               fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-            }}>全部</button>
+            }}>{I18N.t("balance.items.tab.all")}</button>
             {accountNames.map(name => {
               const color = entityColor(name);
               const active = accountFilter === name;
@@ -315,15 +315,15 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         )}
         {sortedFiltered.length === 0 ? (
           <div style={{ padding: "40px 18px", textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
-            暂无条目 · <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink)", textDecoration: "underline", fontSize: 13 }} onClick={() => setEditItem({})}>新增条目</button>
+            {I18N.t("balance.items.empty")} <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink)", textDecoration: "underline", fontSize: 13 }} onClick={() => setEditItem({})}>{I18N.t("balance.items.empty.link")}</button>
           </div>
         ) : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1.6fr 100px 80px 130px 130px 1fr 72px", gap: 10, padding: "9px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-              <span>NAME / ACCOUNT</span><span>CATEGORY</span><span>SIDE</span>
-              <span style={{ textAlign: "right" }}>AMOUNT</span>
+              <span>{I18N.t("balance.col.name")}</span><span>{I18N.t("balance.col.category")}</span><span>{I18N.t("balance.col.side")}</span>
+              <span style={{ textAlign: "right" }}>{I18N.t("balance.col.amount")}</span>
               <span style={{ textAlign: "right" }}>≈ {currency}</span>
-              <span>NOTE</span>
+              <span>{I18N.t("balance.col.note")}</span>
               <span></span>
             </div>
             {sortedFiltered.map((it, i, arr) => (
@@ -394,8 +394,8 @@ const BalanceSheet = ({ currency = "CNY" }) => {
       {deleteTarget && (
         <ConfirmDeleteModal
           message={deleteTarget.type === "snapshot"
-            ? "确认删除此快照及其所有条目？此操作不可撤销。"
-            : "确认删除此条目？"}
+            ? I18N.t("balance.items.deleteSnap")
+            : I18N.t("balance.items.deleteItem")}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() =>
             deleteTarget.type === "snapshot"
@@ -426,7 +426,7 @@ const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, s
       {snap ? (
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: isLatest ? "var(--ink-3)" : "#7A4D0E", letterSpacing: ".05em", textTransform: "uppercase" }}>
-            {isLatest ? "LATEST · 当前最新版" : "HISTORICAL · 历史快照"}
+            {isLatest ? I18N.t("balance.snap.latest") : I18N.t("balance.snap.historical")}
           </div>
           <div style={{ fontSize: 13.5, marginTop: 2 }}>
             <span className="mono" style={{ fontWeight: 600 }}>{snap.snapshot_date}</span>
@@ -436,16 +436,16 @@ const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, s
           </div>
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>暂无快照 · 请先创建</div>
+        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{I18N.t("balance.snap.empty")}</div>
       )}
     </div>
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      {snap && <Button variant="secondary" icon="wallet" onClick={onInjectHoldings}>插入投资组合</Button>}
-      {snap && <Button variant="ghost" icon="edit" onClick={onEditSnap} title="编辑快照信息"/>}
-      {snap && <Button variant="ghost" icon="trash" onClick={() => onDeleteSnap(snapId)} title="删除当前快照"/>}
+      {snap && <Button variant="secondary" icon="wallet" onClick={onInjectHoldings}>{I18N.t("balance.snap.injectHoldings")}</Button>}
+      {snap && <Button variant="ghost" icon="edit" onClick={onEditSnap} title={I18N.t("balance.snap.edit")}/>}
+      {snap && <Button variant="ghost" icon="trash" onClick={() => onDeleteSnap(snapId)} title={I18N.t("balance.snap.delete")}/>}
       <div ref={menuRef} style={{ position: "relative" }}>
         <Button variant="secondary" iconRight="chevron-down" onClick={() => setShowSnapMenu(v => !v)}>
-          切换快照 · {snapshots.length} 版
+          {I18N.t("balance.snap.switch")} · {snapshots.length} {I18N.t("balance.snap.versions")}
         </Button>
         {showSnapMenu && (
           <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "var(--shadow-lg)", padding: 6, width: 360, zIndex: 50 }}>
@@ -459,7 +459,7 @@ const SnapBar = ({ snapshots, snapId, setSnapId, snap, isLatest, showSnapMenu, s
                     <div style={{ fontSize: 13, fontWeight: 600, display: "flex", gap: 6, alignItems: "center" }}>
                       <span className="mono" style={{ color: "var(--ink-3)", fontSize: 11.5, fontWeight: 500 }}>{s.snapshot_date}</span>
                       <span>{s.label}</span>
-                      {sel && <Badge tone="info" size="sm">当前</Badge>}
+                      {sel && <Badge tone="info" size="sm">{I18N.t("balance.snap.current")}</Badge>}
                     </div>
                     <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>
                       {ss ? `net ¥${((ss.net)/1000000).toFixed(2)}M · ` : ""}{s.item_count} items
@@ -562,7 +562,7 @@ const AccountBreakdownCard = ({ title, items, total, currency }) => {
 
   const acctMap = {};
   items.forEach(i => {
-    const acct = i.account_name || "其他";
+    const acct = i.account_name || I18N.t("balance.acct.other");
     if (!acctMap[acct]) acctMap[acct] = { total: 0, subs: {} };
     const v = cnyOf(i);
     acctMap[acct].total += v;
@@ -683,10 +683,10 @@ const ItemRow = ({ item: it, currency, last, onClick, onEdit, onDelete, onCopy }
       </div>
       <span>
         <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", background: (BALANCE_CAT_COLORS[it.category] || "#888") + "20", color: BALANCE_CAT_COLORS[it.category] || "#888", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-          {it.category}
+          {I18N.tCat(it.category)}
         </span>
       </span>
-      <span><Badge tone={it.side === "asset" ? "down" : "up"} size="sm">{it.side === "asset" ? "资产" : "负债"}</Badge></span>
+      <span><Badge tone={it.side === "asset" ? "down" : "up"} size="sm">{it.side === "asset" ? I18N.t("balance.badge.asset") : I18N.t("balance.badge.liability")}</Badge></span>
       <span className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
         <Private>{fmtMoney(it.amount, it.currency, 2)}</Private>
       </span>
@@ -728,7 +728,7 @@ const NetWorthTrend = ({ series, highlightId }) => {
   };
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 4 }}>HISTORY · {n} snapshots</div>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 4 }}>{I18N.t("balance.history.title")} · {I18N.tf("balance.history.count", { n })}</div>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }} preserveAspectRatio="none">
         {minV < 0 && <line x1={padX} x2={W-padX} y1={y(0)} y2={y(0)} stroke="var(--line-2)" strokeDasharray="2 3"/>}
         <path d={fill} fill="var(--ink)" fillOpacity=".06"/>
@@ -777,20 +777,20 @@ const HistoryModal = ({ item, allItems, snapshots, currency, onClose }) => {
     .sort((a, b) => a.snap.snapshot_date.localeCompare(b.snap.snapshot_date));
 
   return (
-    <Modal open title={`历史记录 · ${item.name}`} onClose={onClose} width={580}>
+    <Modal open title={`${I18N.t("balance.history.title")} · ${item.name}`} onClose={onClose} width={580}>
       <div style={{ padding: "16px 20px 20px" }}>
       <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 12 }}>
-        {item.side === "asset" ? "资产" : "负债"} · {item.category}
+        {item.side === "asset" ? I18N.t("balance.badge.asset") : I18N.t("balance.badge.liability")} · {I18N.tCat(item.category)}
       </div>
       {history.length === 0 ? (
-        <div style={{ color: "var(--ink-4)", fontSize: 13 }}>仅当前快照有此条目</div>
+        <div style={{ color: "var(--ink-4)", fontSize: 13 }}>{I18N.t("balance.history.onlyThis")}</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".08em" }}>
-              <th style={{ textAlign: "left", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>快照日期</th>
-              <th style={{ textAlign: "left", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>快照标签</th>
-              <th style={{ textAlign: "right", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>金额</th>
+              <th style={{ textAlign: "left", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>{I18N.t("balance.history.snapDate")}</th>
+              <th style={{ textAlign: "left", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>{I18N.t("balance.history.snapLabel")}</th>
+              <th style={{ textAlign: "right", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>{I18N.t("balance.history.amount")}</th>
               <th style={{ textAlign: "right", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>≈ {currency}</th>
             </tr>
           </thead>
@@ -799,7 +799,7 @@ const HistoryModal = ({ item, allItems, snapshots, currency, onClose }) => {
               <tr key={h.id} style={{ background: h.snapshot_id === item.snapshot_id ? "var(--bg-deep)" : "" }}>
                 <td style={{ padding: "8px 0", borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>
                   <span className="mono">{h.snap.snapshot_date}</span>
-                  {h.snapshot_id === item.snapshot_id && <Badge tone="info" size="sm" style={{ marginLeft: 8 }}>当前</Badge>}
+                  {h.snapshot_id === item.snapshot_id && <Badge tone="info" size="sm" style={{ marginLeft: 8 }}>{I18N.t("balance.history.current")}</Badge>}
                 </td>
                 <td style={{ padding: "8px 8px", borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>{h.snap.label}</td>
                 <td className="mono" style={{ textAlign: "right", padding: "8px 0", fontWeight: 600, borderBottom: i < history.length-1 ? "1px solid var(--line)" : "" }}>
@@ -906,8 +906,8 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setError("名称不能为空"); return; }
-    if (!form.amount || isNaN(parseFloat(form.amount))) { setError("金额不合法"); return; }
+    if (!form.name.trim()) { setError(I18N.t("balance.item.nameEmpty")); return; }
+    if (!form.amount || isNaN(parseFloat(form.amount))) { setError(I18N.t("balance.item.amountInvalid")); return; }
     setLoading(true); setError(null);
     try {
       if (isEdit) await apiUpdateBalanceItem(item.id, buildPayload());
@@ -918,12 +918,12 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title={isEdit ? "编辑条目" : "新增条目"} onClose={onClose} width={480}>
+    <Modal open title={isEdit ? I18N.t("balance.item.edit.title") : I18N.t("balance.item.new.title")} onClose={onClose} width={480}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label="资产 / 负债" span2>
+          <BalField label={I18N.t("balance.item.side")} span2>
             <div style={{ display: "flex", gap: 8 }}>
-              {[{ value: "asset", label: "资产" }, { value: "liability", label: "负债" }].map(opt => (
+              {[{ value: "asset", label: I18N.t("balance.badge.asset") }, { value: "liability", label: I18N.t("balance.badge.liability") }].map(opt => (
                 <button key={opt.value} onClick={() => set("side", opt.value)} style={{
                   flex: 1, padding: "7px 0", border: "1px solid " + (form.side === opt.value ? "var(--ink)" : "var(--line)"),
                   borderRadius: 7, background: form.side === opt.value ? "var(--ink)" : "transparent",
@@ -933,28 +933,28 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
               ))}
             </div>
           </BalField>
-          <BalField label="名称" span2>
-            <Input value={form.name} onChange={v => set("name", v)} placeholder="例：招商银行存款" style={{ width: "100%" }}/>
+          <BalField label={I18N.t("balance.item.name")} span2>
+            <Input value={form.name} onChange={v => set("name", v)} placeholder={I18N.t("balance.item.name.ph")} style={{ width: "100%" }}/>
           </BalField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <BalField label="分类" span2>
+            <BalField label={I18N.t("balance.item.category")} span2>
               <BalSelect value={form.category} onChange={v => set("category", v)}
-                options={BALANCE_CATEGORIES.map(c => ({ value: c, label: c }))}/>
+                options={BALANCE_CATEGORIES.map(c => ({ value: c, label: I18N.tCat(c) }))}/>
             </BalField>
             {parentAccounts.length > 0 && (
               <>
-                <BalField label="账户">
+                <BalField label={I18N.t("balance.item.account")}>
                   <BalSelect value={form.account_id} onChange={v => { set("account_id", v); set("sub_account_id", ""); }}
-                    options={[{ value: "", label: "— 不选 —" }, ...parentAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                    options={[{ value: "", label: I18N.t("balance.item.noSelect") }, ...parentAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
                 </BalField>
-                <BalField label="子账户">
+                <BalField label={I18N.t("balance.item.subAccount")}>
                   <BalSelect value={form.sub_account_id} onChange={v => set("sub_account_id", v)}
                     disabled={!form.account_id || subAccounts.length === 0}
-                    options={[{ value: "", label: "— 不选 —" }, ...subAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                    options={[{ value: "", label: I18N.t("balance.item.noSelect") }, ...subAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
                 </BalField>
               </>
             )}
-            <BalField label="金额 / 货币" span2>
+            <BalField label={I18N.t("balance.item.amount")} span2>
               <div style={{ display: "flex", gap: 0 }}>
                 <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
                   style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
@@ -963,31 +963,31 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
                   style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
               </div>
             </BalField>
-            <BalField label="备注" span2>
-              <Input value={form.note} onChange={v => set("note", v)} placeholder="可选" style={{ width: "100%" }}/>
+            <BalField label={I18N.t("balance.item.note")} span2>
+              <Input value={form.note} onChange={v => set("note", v)} placeholder={I18N.t("balance.item.note.ph")} style={{ width: "100%" }}/>
             </BalField>
             {isLoan && (
               <>
-                <BalField label="年利率 (如 0.0365)">
+                <BalField label={I18N.t("balance.item.rate")}>
                   <Input type="number" value={form.interest_rate} onChange={v => set("interest_rate", v)} placeholder="0.0365" style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="月还款额">
+                <BalField label={I18N.t("balance.item.payment")}>
                   <Input type="number" value={form.monthly_payment} onChange={v => set("monthly_payment", v)} placeholder="10400" style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="起始日期">
-                  <Input type="date" value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
+                <BalField label={I18N.t("balance.item.startDate")}>
+                  <DateInput value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="到期日期">
-                  <Input type="date" value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
+                <BalField label={I18N.t("balance.item.endDate")}>
+                  <DateInput value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
             )}
             {isOption && (
               <>
-                <BalField label="单价">
+                <BalField label={I18N.t("balance.item.unitPrice")}>
                   <Input type="number" value={form.price} onChange={v => set("price", v)} style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="数量">
+                <BalField label={I18N.t("balance.item.quantity")}>
                   <Input type="number" value={form.quantity} onChange={v => set("quantity", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
@@ -996,8 +996,8 @@ const ItemModal = ({ item, snapId, accounts, onClose, onDone }) => {
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? I18N.t("balance.item.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>
@@ -1086,13 +1086,13 @@ const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title="插入投资组合" onClose={onClose} width={480}>
+    <Modal open title={I18N.t("balance.inject.title")} onClose={onClose} width={480}>
       <div style={{ display: "flex", flexDirection: "column", maxHeight: "65vh" }}>
         <div style={{ padding: "10px 20px 8px", flexShrink: 0, fontSize: 12, color: "var(--ink-3)" }}>
-          勾选账户插入当前快照。在投资组合账户设置中配置资产负债映射。
+          {I18N.t("balance.inject.hint")}
         </div>
         {loading ? (
-          <div style={{ padding: "20px", textAlign: "center", color: "var(--ink-3)" }}>加载中…</div>
+          <div style={{ padding: "20px", textAlign: "center", color: "var(--ink-3)" }}>{I18N.t("balance.inject.loading")}</div>
         ) : (
           <>
             <div style={{ overflowY: "auto", flex: 1, padding: "4px 20px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1116,7 +1116,7 @@ const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{acct.name}</div>
                       <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>
-                        {dupe ? "已存在 — 跳过" : noMap ? "未配置映射 — 在账户设置中配置" : "投资"}
+                        {dupe ? I18N.t("balance.inject.exists") : noMap ? I18N.t("balance.inject.noMap") : I18N.t("balance.inject.investing")}
                       </div>
                     </div>
                     <div className="mono" style={{ fontSize: 13, fontWeight: 600, opacity: dupe ? 0.5 : 1 }}>
@@ -1130,8 +1130,8 @@ const InjectHoldingsModal = ({ snapId, currentItems, onClose, onDone }) => {
             <div style={{ padding: "10px 20px 20px", flexShrink: 0, borderTop: "1px solid var(--line)" }}>
               {error && <div style={{ color: "var(--up)", fontSize: 12, marginBottom: 10 }}>{error}</div>}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <Button variant="secondary" onClick={onClose}>取消</Button>
-                <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? "插入中…" : "插入"}</Button>
+                <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+                <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? I18N.t("balance.inject.inserting") : I18N.t("balance.inject.insert")}</Button>
               </div>
             </div>
           </>
@@ -1174,8 +1174,8 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
   const isOption = OPTION_CATS.includes(form.category);
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setError("名称不能为空"); return; }
-    if (!form.amount || isNaN(parseFloat(form.amount))) { setError("金额不合法"); return; }
+    if (!form.name.trim()) { setError(I18N.t("balance.item.nameEmpty")); return; }
+    if (!form.amount || isNaN(parseFloat(form.amount))) { setError(I18N.t("balance.item.amountInvalid")); return; }
     setLoading(true); setError(null);
     try {
       const p = {
@@ -1206,16 +1206,16 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title="拷贝条目" onClose={onClose} width={480}>
+    <Modal open title={I18N.t("balance.item.copy.title")} onClose={onClose} width={480}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label="目标快照" span2>
+          <BalField label={I18N.t("balance.item.copy.targetSnap")} span2>
             <BalSelect value={form.snapshot_id} onChange={v => set("snapshot_id", v)}
               options={snapshots.map(s => ({ value: String(s.id), label: `${s.snapshot_date}  ${s.label}` }))}/>
           </BalField>
-          <BalField label="资产 / 负债" span2>
+          <BalField label={I18N.t("balance.item.side")} span2>
             <div style={{ display: "flex", gap: 8 }}>
-              {[{ value: "asset", label: "资产" }, { value: "liability", label: "负债" }].map(opt => (
+              {[{ value: "asset", label: I18N.t("balance.badge.asset") }, { value: "liability", label: I18N.t("balance.badge.liability") }].map(opt => (
                 <button key={opt.value} onClick={() => set("side", opt.value)} style={{
                   flex: 1, padding: "7px 0", border: "1px solid " + (form.side === opt.value ? "var(--ink)" : "var(--line)"),
                   borderRadius: 7, background: form.side === opt.value ? "var(--ink)" : "transparent",
@@ -1225,28 +1225,28 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
               ))}
             </div>
           </BalField>
-          <BalField label="名称" span2>
-            <Input value={form.name} onChange={v => set("name", v)} placeholder="例：招商银行存款" style={{ width: "100%" }}/>
+          <BalField label={I18N.t("balance.item.name")} span2>
+            <Input value={form.name} onChange={v => set("name", v)} placeholder={I18N.t("balance.item.name.ph")} style={{ width: "100%" }}/>
           </BalField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <BalField label="分类" span2>
+            <BalField label={I18N.t("balance.item.category")} span2>
               <BalSelect value={form.category} onChange={v => set("category", v)}
-                options={BALANCE_CATEGORIES.map(c => ({ value: c, label: c }))}/>
+                options={BALANCE_CATEGORIES.map(c => ({ value: c, label: I18N.tCat(c) }))}/>
             </BalField>
             {parentAccounts.length > 0 && (
               <>
-                <BalField label="账户">
+                <BalField label={I18N.t("balance.item.account")}>
                   <BalSelect value={form.account_id} onChange={v => { set("account_id", v); set("sub_account_id", ""); }}
-                    options={[{ value: "", label: "— 不选 —" }, ...parentAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                    options={[{ value: "", label: I18N.t("balance.item.noSelect") }, ...parentAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
                 </BalField>
-                <BalField label="子账户">
+                <BalField label={I18N.t("balance.item.subAccount")}>
                   <BalSelect value={form.sub_account_id} onChange={v => set("sub_account_id", v)}
                     disabled={!form.account_id || subAccounts.length === 0}
-                    options={[{ value: "", label: "— 不选 —" }, ...subAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
+                    options={[{ value: "", label: I18N.t("balance.item.noSelect") }, ...subAccounts.map(a => ({ value: String(a.id), label: a.name }))]}/>
                 </BalField>
               </>
             )}
-            <BalField label="金额 / 货币" span2>
+            <BalField label={I18N.t("balance.item.amount")} span2>
               <div style={{ display: "flex", gap: 0 }}>
                 <Input type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0"
                   style={{ flex: 1, borderRadius: "7px 0 0 7px", borderRight: "none" }}/>
@@ -1255,31 +1255,31 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
                   style={{ width: 90, borderRadius: "0 7px 7px 0" }}/>
               </div>
             </BalField>
-            <BalField label="备注" span2>
-              <Input value={form.note} onChange={v => set("note", v)} placeholder="可选" style={{ width: "100%" }}/>
+            <BalField label={I18N.t("balance.item.note")} span2>
+              <Input value={form.note} onChange={v => set("note", v)} placeholder={I18N.t("balance.item.note.ph")} style={{ width: "100%" }}/>
             </BalField>
             {isLoan && (
               <>
-                <BalField label="年利率 (如 0.0365)">
+                <BalField label={I18N.t("balance.item.rate")}>
                   <Input type="number" value={form.interest_rate} onChange={v => set("interest_rate", v)} placeholder="0.0365" style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="月还款额">
+                <BalField label={I18N.t("balance.item.payment")}>
                   <Input type="number" value={form.monthly_payment} onChange={v => set("monthly_payment", v)} placeholder="10400" style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="起始日期">
-                  <Input type="date" value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
+                <BalField label={I18N.t("balance.item.startDate")}>
+                  <DateInput value={form.start_date} onChange={v => set("start_date", v)} style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="到期日期">
-                  <Input type="date" value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
+                <BalField label={I18N.t("balance.item.endDate")}>
+                  <DateInput value={form.end_date} onChange={v => set("end_date", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
             )}
             {isOption && (
               <>
-                <BalField label="单价">
+                <BalField label={I18N.t("balance.item.unitPrice")}>
                   <Input type="number" value={form.price} onChange={v => set("price", v)} style={{ width: "100%" }}/>
                 </BalField>
-                <BalField label="数量">
+                <BalField label={I18N.t("balance.item.quantity")}>
                   <Input type="number" value={form.quantity} onChange={v => set("quantity", v)} style={{ width: "100%" }}/>
                 </BalField>
               </>
@@ -1288,8 +1288,8 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "拷贝中…" : "拷贝"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? I18N.t("balance.item.copying") : I18N.t("base.btn.copy")}</Button>
         </div>
       </div>
     </Modal>
@@ -1301,7 +1301,7 @@ const CopyItemModal = ({ item, snapshots, accounts, onClose, onDone }) => {
 const CopySnapModal = ({ snap, onClose, onDone }) => {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate]   = React.useState(today);
-  const [label, setLabel] = React.useState(snap.label + " (复制)");
+  const [label, setLabel] = React.useState(snap.label + I18N.t("balance.copySnap.labelDefault"));
   const [loading, setLoading] = React.useState(false);
   const [error, setError]     = React.useState(null);
 
@@ -1315,19 +1315,19 @@ const CopySnapModal = ({ snap, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title={`复制快照 · ${snap.label}`} onClose={onClose} width={400}>
+    <Modal open title={`${I18N.t("balance.copySnap.title")} · ${snap.label}`} onClose={onClose} width={400}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 14 }}>
-          复制 {snap.item_count} 个条目到新快照
+          {I18N.tf("balance.copySnap.itemCount", { n: snap.item_count })}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label="新快照日期"><Input type="date" value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
-          <BalField label="新快照标签"><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.date")}><DateInput value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.label")}><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "复制中…" : "复制"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? I18N.t("balance.copySnap.copying") : I18N.t("balance.copySnap.copy")}</Button>
         </div>
       </div>
     </Modal>
@@ -1344,7 +1344,7 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
   const [error, setError]     = React.useState(null);
 
   const handleSave = async () => {
-    if (!label.trim()) { setError("标签不能为空"); return; }
+    if (!label.trim()) { setError(I18N.t("balance.snapshot.labelEmpty")); return; }
     setLoading(true); setError(null);
     try {
       await apiUpdateBalanceSnapshot(snap.id, {
@@ -1358,17 +1358,17 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
   };
 
   return (
-    <Modal open title="编辑快照" onClose={onClose} width={400}>
+    <Modal open title={I18N.t("balance.snap.edit")} onClose={onClose} width={400}>
       <div style={{ padding: "16px 20px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <BalField label="日期"><Input type="date" value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
-          <BalField label="标签"><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
-          <BalField label="备注（可选）"><Input value={note} onChange={setNote} placeholder="可选" style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.date")}><DateInput value={date} onChange={setDate} style={{ width: "100%" }}/></BalField>
+          <BalField label={I18N.t("balance.copySnap.label")}><Input value={label} onChange={setLabel} style={{ width: "100%" }}/></BalField>
+          <BalField label={`${I18N.t("balance.item.note")} (${I18N.t("base.label.optional")})`}><Input value={note} onChange={setNote} placeholder={I18N.t("balance.item.note.ph")} style={{ width: "100%" }}/></BalField>
         </div>
         {error && <div style={{ color: "var(--up)", fontSize: 12, marginTop: 10 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading}>{loading ? I18N.t("balance.item.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>
@@ -1380,12 +1380,12 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
 // ── Confirm delete modal ──────────────────────────────────────────────────────
 
 const ConfirmDeleteModal = ({ message, onClose, onConfirm }) => (
-  <Modal open title="确认删除" onClose={onClose} width={380}>
+  <Modal open title={I18N.t("ledger.confirm.delete")} onClose={onClose} width={380}>
     <div style={{ padding: "16px 20px 20px" }}>
       <div style={{ fontSize: 13.5, color: "var(--ink)", marginBottom: 20 }}>{message}</div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Button variant="secondary" onClick={onClose}>取消</Button>
-        <Button variant="danger" onClick={onConfirm}>删除</Button>
+        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+        <Button variant="danger" onClick={onConfirm}>{I18N.t("base.btn.delete")}</Button>
       </div>
     </div>
   </Modal>
@@ -1427,7 +1427,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
 
   const submitForm = async () => {
     const name = (form.value || "").trim();
-    if (!name) { setErr("名称不能为空"); return; }
+    if (!name) { setErr(I18N.t("balance.item.nameEmpty")); return; }
     setSaving(true); setErr(null);
     try {
       if (form.mode === "add_parent") {
@@ -1478,7 +1478,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
   const iBtn = { background: "none", border: "none", cursor: "pointer", color: "var(--ink-4)", padding: "3px 5px", borderRadius: 4, lineHeight: 1 };
 
   return (
-    <Modal open title="管理资产负债账户" onClose={onClose} width={460}>
+    <Modal open title={I18N.t("balance.btn.accounts")} onClose={onClose} width={460}>
       <div style={{ padding: "16px 20px 20px" }}>
         {err && <div style={{ color: "var(--up)", fontSize: 12, marginBottom: 10 }}>{err}</div>}
 
@@ -1492,33 +1492,33 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
           />
           {form?.mode === "add_parent" ? null : (
             <Button variant="secondary" icon="plus" onClick={() => setForm({ mode: "add_parent", value: "" })}>
-              新增
+              {I18N.t("base.btn.add")}
             </Button>
           )}
         </div>
 
         {/* Add parent form */}
-        {form?.mode === "add_parent" && <NameForm label="新父账户名称" {...nameFormProps} />}
+        {form?.mode === "add_parent" && <NameForm label={I18N.t("balance.parent.newName")} {...nameFormProps} />}
 
         {selectedParent && form?.mode !== "add_parent" && (
           <>
             {/* Parent name row */}
-            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>父账户</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>{I18N.t("balance.item.account")}</div>
             <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", background: "var(--surface)", borderRadius: 8, marginBottom: 14, border: "1px solid var(--line)" }}>
               {form?.mode === "edit" && form.id === selectedParent.id ? (
-                <NameForm label="修改名称" {...nameFormProps} />
+                <NameForm label={I18N.t("balance.item.name")} {...nameFormProps} />
               ) : (
                 <>
                   <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{selectedParent.name}</span>
                   {!form && <>
-                    <button style={iBtn} title="重命名" onClick={() => setForm({ mode: "edit", id: selectedParent.id, value: selectedParent.name })}>
+                    <button style={iBtn} title={I18N.t("base.btn.edit")} onClick={() => setForm({ mode: "edit", id: selectedParent.id, value: selectedParent.name })}>
                       <Icon name="edit" size={14} />
                     </button>
                     {children.length === 0
-                      ? <button style={{ ...iBtn, color: "var(--up)" }} title="删除" onClick={() => setConfirmDelete({ id: selectedParent.id, name: selectedParent.name })}>
+                      ? <button style={{ ...iBtn, color: "var(--up)" }} title={I18N.t("base.btn.delete")} onClick={() => setConfirmDelete({ id: selectedParent.id, name: selectedParent.name })}>
                           <Icon name="trash" size={14} />
                         </button>
-                      : <span style={{ fontSize: 11, color: "var(--ink-4)", paddingLeft: 6 }}>先删子账户</span>
+                      : <span style={{ fontSize: 11, color: "var(--ink-4)", paddingLeft: 6 }}>{I18N.t("balance.item.deleteSubsFirst")}</span>
                     }
                   </>}
                 </>
@@ -1526,20 +1526,20 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
             </div>
 
             {/* Children */}
-            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>子账户</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>{I18N.t("balance.item.subAccount")}</div>
             <div style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
               {children.map((child, i) => {
                 const isEditingChild = form?.mode === "edit" && form.id === child.id;
                 return (
                   <div key={child.id} style={{ padding: "8px 12px", borderBottom: i < children.length - 1 ? "1px solid var(--line)" : "none" }}>
-                    {isEditingChild ? <NameForm label="修改名称" {...nameFormProps} /> : (
+                    {isEditingChild ? <NameForm label={I18N.t("balance.item.name")} {...nameFormProps} /> : (
                       <div style={{ display: "flex", alignItems: "center" }}>
                         <span style={{ fontSize: 13, flex: 1 }}>{child.name}</span>
                         {!form && <>
-                          <button style={iBtn} title="重命名" onClick={() => setForm({ mode: "edit", id: child.id, value: child.name })}>
+                          <button style={iBtn} title={I18N.t("base.btn.edit")} onClick={() => setForm({ mode: "edit", id: child.id, value: child.name })}>
                             <Icon name="edit" size={13} />
                           </button>
-                          <button style={{ ...iBtn, color: "var(--up)" }} title="删除" onClick={() => setConfirmDelete({ id: child.id, name: child.name })}>
+                          <button style={{ ...iBtn, color: "var(--up)" }} title={I18N.t("base.btn.delete")} onClick={() => setConfirmDelete({ id: child.id, name: child.name })}>
                             <Icon name="trash" size={13} />
                           </button>
                         </>}
@@ -1551,13 +1551,13 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
               {/* Add child row */}
               {form?.mode === "add_child" && form.parentId === selectedParentId ? (
                 <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>
-                  <NameForm label="新子账户名称" {...nameFormProps} />
+                  <NameForm label={I18N.t("balance.item.subAccount")} {...nameFormProps} />
                 </div>
               ) : !form && (
                 <div style={{ padding: "8px 12px", borderTop: children.length ? "1px solid var(--line)" : "none" }}>
                   <button style={{ ...iBtn, color: "var(--ink-3)", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
                     onClick={() => setForm({ mode: "add_child", parentId: selectedParentId, value: "" })}>
-                    <Icon name="plus" size={12} /> 添加子账户
+                    <Icon name="plus" size={12} /> {I18N.t("balance.item.subAccount")}
                   </button>
                 </div>
               )}
@@ -1568,7 +1568,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
 
       {confirmDelete && (
         <ConfirmDeleteModal
-          message={`确认删除「${confirmDelete.name}」？已关联的条目将失去账户引用。`}
+          message={I18N.t("base.confirm.delete")}
           onClose={() => setConfirmDelete(null)}
           onConfirm={doDelete}
         />

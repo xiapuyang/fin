@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fin.config import FRONTEND_DIR
+from fin.config import API_HOST, API_PORT, CONFIG_DIR, FRONTEND_DIR
 from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
@@ -47,9 +47,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="fin API", lifespan=lifespan)
 
+# Same-origin only. Wildcard origins would let a malicious page reach this
+# server via DNS rebinding and read stored credentials cross-origin.
+_ALLOWED_ORIGINS = [
+    f"http://127.0.0.1:{API_PORT}",
+    f"http://localhost:{API_PORT}",
+]
+if API_HOST not in ("127.0.0.1", "0.0.0.0", "localhost"):
+    _ALLOWED_ORIGINS.append(f"http://{API_HOST}:{API_PORT}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -88,11 +97,22 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/i18n", response_class=HTMLResponse)
+async def i18n_manager():
+    return (FRONTEND_DIR / "i18n.html").read_text(encoding="utf-8")
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+
+_I18N_DIR = CONFIG_DIR / "i18n"
+if _I18N_DIR.exists():
+    # Scope to i18n/ only — mounting all of config/ would also serve .env.example
+    # and any future files dropped in there.
+    app.mount("/config/i18n", StaticFiles(directory=str(_I18N_DIR)), name="i18n")
 
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

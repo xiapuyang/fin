@@ -247,9 +247,9 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     : acctTxns;
   const acctIncome = acctName ? income.filter(i => i.account === acctName) : income;
 
-  // Snapshots available for this account (null/empty → shown as "未命名")
+  // Snapshots available for this account (null/empty → shown as "Unnamed")
   const snapshots = React.useMemo(() => {
-    const names = [...new Set(acctHoldings.map(h => h.snapshot_name || "未命名"))].sort();
+    const names = [...new Set(acctHoldings.map(h => h.snapshot_name || "Unnamed"))].sort();
     return names;
   }, [acctHoldings]);
 
@@ -260,9 +260,9 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   }, [acctName, snapshots.join(",")]);
 
   // Holdings filtered to selected snapshot only (prevents double-counting)
-  // null/empty snapshot_name treated as "未命名"
+  // null/empty snapshot_name treated as "Unnamed"
   const snapshotHoldings = selectedSnapshot
-    ? acctHoldings.filter(h => (h.snapshot_name || "未命名") === selectedSnapshot)
+    ? acctHoldings.filter(h => (h.snapshot_name || "Unnamed") === selectedSnapshot)
     : acctHoldings;
 
   // Build per-account cutoff map — used by both allPositions and allRealized
@@ -333,11 +333,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const byMarket = [
     ...knownMarkets.map(m => {
       const v = allPositions.filter(p => effectiveMarket(p) === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0);
-      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
+      return { label: { US: I18N.t("base.market.us"), HK: I18N.t("base.market.hk"), CN: I18N.t("base.market.cn"), CA: I18N.t("base.market.ca"), CRYPTO: I18N.t("base.market.crypto") }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
-    { label: "美债", value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
-    { label: "其他", value: allPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
-    { label: "现金", value: allCashValue, color: "#888" },
+    { label: I18N.t("holdings.bond"), value: allPositions.filter(isBond).reduce((s, p) => s + p.value, 0), color: "#7C3AED" },
+    { label: I18N.t("holdings.other"), value: allPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value, 0), color: "#aaa" },
+    { label: I18N.t("holdings.cash"), value: allCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
   const acctCashValue = acctPositions.filter(p => p.code === "CASH").reduce((s, p) => s + p.value / acctFx, 0);
@@ -346,15 +346,15 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const acctByMarket = [
     ...knownMarkets.map(m => {
       const v = acctPositions.filter(p => effectiveMarket(p) === m && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0);
-      return { label: { US: "美股", HK: "港股", CN: "A股", CA: "加股", CRYPTO: "加密货币" }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
+      return { label: { US: I18N.t("base.market.us"), HK: I18N.t("base.market.hk"), CN: I18N.t("base.market.cn"), CA: I18N.t("base.market.ca"), CRYPTO: I18N.t("base.market.crypto") }[m] || m, value: v, color: { US: "#1F4FE0", HK: "#B8447B", CN: "#16A34A", CA: "#C8531C", CRYPTO: "#F7931A" }[m] };
     }),
-    { label: "美债", value: acctPositions.filter(isBond).reduce((s, p) => s + p.value / acctFx, 0), color: "#7C3AED" },
-    { label: "其他", value: acctPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
-    { label: "现金", value: acctCashValue, color: "#888" },
+    { label: I18N.t("holdings.bond"), value: acctPositions.filter(isBond).reduce((s, p) => s + p.value / acctFx, 0), color: "#7C3AED" },
+    { label: I18N.t("holdings.other"), value: acctPositions.filter(p => !knownMarkets.includes(effectiveMarket(p)) && p.code !== "CASH" && !isBond(p)).reduce((s, p) => s + p.value / acctFx, 0), color: "#aaa" },
+    { label: I18N.t("holdings.cash"), value: acctCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
   const deleteAccount = async (id, name) => {
-    if (!confirm(`删除账户「${name}」？\n相关持仓/交易/收入记录不会删除，但将变为未分配状态。`)) return;
+    if (!confirm(I18N.tf("holdings.accounts.deleteConfirm", { name }))) return;
     await apiDeleteAccount(id);
     const next = accounts.filter(a => a.id !== id);
     setAccounts(next);
@@ -396,11 +396,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
         kicker="MODULE 02 · PORTFOLIO"
-        title="投资组合"
-        subtitle="Portfolio Tracker · 所有账户汇总 + 年化回报率"
+        title={I18N.t("holdings.title")}
+        subtitle={I18N.t("holdings.subtitle")}
         right={
           <div style={{ display: "flex", border: "1px solid var(--line-2)", borderRadius: 8, overflow: "hidden" }}>
-            {[["portfolio","持仓"],["rebalance","再平衡"]].map(([id, label]) => (
+            {[["portfolio",I18N.t("holdings.tab.portfolio")],["rebalance",I18N.t("holdings.tab.rebalance")]].map(([id, label]) => (
               <button key={id} onClick={() => setViewMode(id)} style={{
                 padding: "6px 16px", fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none",
                 background: viewMode === id ? "var(--ink)" : "transparent",
@@ -421,7 +421,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {/* ── All-accounts aggregate ─────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 14, marginBottom: 22 }}>
         <Card padding={20}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>TOTAL VALUE · 所有账户</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)" }}>{I18N.t("holdings.stat.total")}</div>
           <div className="mono" style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
             {pricesReady ? <Private>{summarySym}{fmtNum(allTotal/summaryFx, 0)}</Private> : "—"}
           </div>
@@ -435,7 +435,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allCashValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.stat.today")} </span>
               {pricesReady
                 ? <><ChangeNum value={allTotal ? allDayPnl/allTotal*100 : 0} size="sm"/>
                     {allDayPnl !== 0 && (
@@ -458,19 +458,19 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
             </div>
           )}
         </Card>
-        <StatTile label="UNREALIZED P&L · 未实现盈亏" value={pricesReady ? maskDigits(`${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}`) : "—"} tone={!pricesReady ? "neutral" : allUnrealized >= 0 ? "up" : "down"} pct={pricesReady && allCost ? (allUnrealized/allCost)*100 : null} sub={pricesReady ? maskDigits(`总成本 ${summarySym}${fmtNum(allCost/summaryFx, 0)}（持仓均价 × 股数）`) : "加载价格中…"}/>
-        <StatTile label="REALIZED + 收入 · 已实现" value={maskDigits(`+${summarySym}${fmtNum((allRealized+allIncomeTotal)/summaryFx, 0)}`)} tone="up" sub={maskDigits(`已实现 ${summarySym}${fmtNum(allRealized/summaryFx, 0)} · 收入 ${summarySym}${fmtNum(allIncomeTotal/summaryFx, 0)}`)}/>
+        <StatTile label={I18N.t("holdings.stat.unrealized")} value={pricesReady ? maskDigits(`${allUnrealized >= 0 ? "+" : "−"}${summarySym}${fmtNum(Math.abs(allUnrealized/summaryFx), 0)}`) : "—"} tone={!pricesReady ? "neutral" : allUnrealized >= 0 ? "up" : "down"} pct={pricesReady && allCost ? (allUnrealized/allCost)*100 : null} sub={pricesReady ? maskDigits(`${I18N.t("holdings.stat.cost")} ${summarySym}${fmtNum(allCost/summaryFx, 0)}`) : I18N.t("holdings.stat.mwrr.loading")}/>
+        <StatTile label={I18N.t("holdings.stat.realized")} value={maskDigits(`+${summarySym}${fmtNum((allRealized+allIncomeTotal)/summaryFx, 0)}`)} tone="up" sub={maskDigits(I18N.tf("holdings.stat.realized.detail", { realized: `${summarySym}${fmtNum(allRealized/summaryFx, 0)}`, income: `${summarySym}${fmtNum(allIncomeTotal/summaryFx, 0)}` }))}/>
         {!pricesReady
-          ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
+          ? <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.loading")}/>
           : allXIRR != null
-            ? <StatTile label="年化回报率 (MWRR)" value={`${allXIRR >= 0 ? "+" : ""}${allXIRR.toFixed(1)}%`} tone={allXIRR >= 0 ? "up" : "down"} sub="所有账户 · 基于转入记录计算"/>
-            : <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="添加转入记录后可计算"/>
+            ? <StatTile label={I18N.t("holdings.stat.mwrr")} value={`${allXIRR >= 0 ? "+" : ""}${allXIRR.toFixed(1)}%`} tone={allXIRR >= 0 ? "up" : "down"} sub={I18N.t("holdings.stat.mwrr.allAccounts")}/>
+            : <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.noDeposit")}/>
         }
       </div>
 
       {/* ── Account switcher ──────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-4)", marginRight: 4 }}>账户</span>
+        <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-4)", marginRight: 4 }}>{I18N.t("holdings.accounts.label")}</span>
         {accounts.map(a => {
           const active = selectedAccountId === a.id;
           const btnBase = {
@@ -485,18 +485,18 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               {a.name}
               {a.cutoff_date && <span style={{ fontSize: 9, opacity: .6, marginLeft: 5 }}>↑{a.cutoff_date.slice(0,7)}</span>}
             </button>
-            <button onClick={() => setEditingAccount(a)} title="编辑账户设置" style={{ ...btnBase, padding: "5px 6px", borderRight: "none", borderRadius: 0, color: active ? "rgba(255,255,255,0.55)" : "var(--ink-4)", fontSize: 11 }}>
+            <button onClick={() => setEditingAccount(a)} title={I18N.t("holdings.accounts.editTitle")} style={{ ...btnBase, padding: "5px 6px", borderRight: "none", borderRadius: 0, color: active ? "rgba(255,255,255,0.55)" : "var(--ink-4)", fontSize: 11 }}>
               <Icon name="settings" size={11}/>
             </button>
-            <button onClick={() => deleteAccount(a.id, a.name)} title={`删除账户 ${a.name}`} style={{ ...btnBase, padding: "5px 8px", borderRadius: "0 20px 20px 0", color: active ? "rgba(255,255,255,0.5)" : "var(--ink-4)", fontSize: 11, lineHeight: 1 }}>✕</button>
+            <button onClick={() => deleteAccount(a.id, a.name)} title={`${I18N.t("holdings.accounts.deleteTitle")} ${a.name}`} style={{ ...btnBase, padding: "5px 8px", borderRadius: "0 20px 20px 0", color: active ? "rgba(255,255,255,0.5)" : "var(--ink-4)", fontSize: 11, lineHeight: 1 }}>✕</button>
           </div>
         );})}
         <button
           onClick={() => setShowAccountModal(true)}
           style={{ padding: "5px 14px", borderRadius: 20, border: "1px dashed var(--line-2)", background: "transparent", color: "var(--ink-3)", cursor: "pointer", fontSize: 13 }}
-        >+ 新增账户</button>
+        >{I18N.t("holdings.accounts.add")}</button>
         {accounts.length === 0 && (
-          <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>暂无账户 — 点击「+ 新增账户」开始</span>
+          <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>{I18N.t("holdings.accounts.empty")}</span>
         )}
       </div>
 
@@ -523,7 +523,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctCashValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>今日 </span>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.stat.today")} </span>
                   {pricesReady
                     ? <><ChangeNum value={acctTotal ? acctDayPnl / acctTotal * 100 : 0} size="sm"/>
                         {acctDayPnl !== 0 && (
@@ -551,18 +551,18 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               )}
             </Card>
             <StatTile
-              label="UNREALIZED P&L · 持有收益"
+              label={I18N.t("holdings.stat.unrealized")}
               value={pricesReady ? maskDigits(`${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}`) : "—"}
               tone={!pricesReady ? "neutral" : acctUnrealized >= 0 ? "up" : "down"}
               pct={hpr}
-              sub={pricesReady ? `持有收益率 ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · 净转入 ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : "加载价格中…"}
+              sub={pricesReady ? `HPR ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
             />
-            <StatTile label="REALIZED + 收入 · 已实现" value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(`已实现 ${sym}${fmtNum(acctRealized, 0)} · 收入 ${sym}${fmtNum(acctIncomeTotal, 0)}`)}/>
+            <StatTile label={I18N.t("holdings.stat.realized")} value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(I18N.tf("holdings.stat.realized.detail", { realized: `${sym}${fmtNum(acctRealized, 0)}`, income: `${sym}${fmtNum(acctIncomeTotal, 0)}` }))}/>
             {!pricesReady
-              ? <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="加载价格中…"/>
+              ? <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.loading")}/>
               : acctXIRR != null
-                ? <StatTile label="年化回报率 (MWRR)" value={`${acctXIRR >= 0 ? "+" : ""}${acctXIRR.toFixed(1)}%`} tone={acctXIRR >= 0 ? "up" : "down"} sub={`${selectedAccount.name} · 基于转入记录计算`}/>
-                : <StatTile label="年化回报率 (MWRR)" value="—" tone="neutral" sub="添加转入记录后可计算"/>
+                ? <StatTile label={I18N.t("holdings.stat.mwrr")} value={`${acctXIRR >= 0 ? "+" : ""}${acctXIRR.toFixed(1)}%`} tone={acctXIRR >= 0 ? "up" : "down"} sub={`${selectedAccount.name} · ${I18N.t("holdings.stat.mwrr.depositBased")}`}/>
+                : <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.noDeposit")}/>
             }
           </div>
         );
@@ -571,10 +571,10 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {/* ── Inner tabs ────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 14 }}>
         <Tabs variant="underline" value={tab} onChange={setTab} tabs={[
-          { id: "positions",    label: "持仓 Positions",     count: acctPositions.length },
-          { id: "transactions", label: "交易记录 Trades",    count: acctTxns.length },
-          { id: "income",       label: "收入/转账 Income",   count: acctIncome.length },
-          { id: "dividends",    label: "分红日历 Calendar",  count: acctIncome.filter(i => i.category === "dividend").length || null },
+          { id: "positions",    label: I18N.t("holdings.positions.title"),   count: acctPositions.length },
+          { id: "transactions", label: I18N.t("holdings.txns.title"),        count: acctTxns.length },
+          { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.length },
+          { id: "dividends",    label: I18N.t("holdings.calendar.title"),    count: acctIncome.filter(i => i.category === "dividend").length || null },
         ]}/>
       </div>
 
@@ -648,25 +648,25 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
   return <Card padding={0}>
     <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>持仓明细 Positions</div>
+        <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("holdings.positions.title")}</div>
         {snapshots && snapshots.length > 0 && (
           <select value={selectedSnapshot || ""} onChange={e => onSnapshotChange(e.target.value || null)}
             style={{ fontSize: 13, border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
-            {snapshots.map(s => <option key={s} value={s}>{s}</option>)}
+            {snapshots.map(s => <option key={s} value={s}>{s === "Unnamed" ? I18N.t("holdings.snapshot.unnamed") : s}</option>)}
           </select>
         )}
       </div>
-      <Button size="sm" variant="secondary" icon="plus" onClick={onAddHolding}>添加持仓</Button>
+      <Button size="sm" variant="secondary" icon="plus" onClick={onAddHolding}>{I18N.t("holdings.positions.add")}</Button>
     </div>
     {positions.length === 0
-      ? <Empty icon="wallet" title="暂无持仓" hint="点击「添加持仓」手动录入，或先添加交易记录"/>
+      ? <Empty icon="wallet" title={I18N.t("holdings.positions.empty").split(" — ")[0]} hint={I18N.t("holdings.positions.empty").split(" — ")[1]}/>
       : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: POSITIONS_GRID_COLS, gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-            <span/><span>POSITION</span>
-            <span style={{textAlign:"right"}}>SHARES</span><span style={{textAlign:"right"}}>AVG COST</span>
-            <span style={{textAlign:"right"}}>PRICE</span><span style={{textAlign:"right"}}>VALUE ({acctCcy})</span>
-            <span style={{textAlign:"right"}}>DAY CHANGE</span><span style={{textAlign:"right"}}>UNREALIZED P&L</span>
+            <span/><span>{I18N.t("holdings.col.position")}</span>
+            <span style={{textAlign:"right"}}>{I18N.t("holdings.col.shares")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.col.avgCost")}</span>
+            <span style={{textAlign:"right"}}>{I18N.t("holdings.col.price")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.col.value")} ({acctCcy})</span>
+            <span style={{textAlign:"right"}}>{I18N.t("holdings.col.dayChange")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.col.unrealizedPL")}</span>
             <span/>
           </div>
           {[...positions].sort((a,b) => b.value - a.value).map((p, i, arr) => {
@@ -676,9 +676,9 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
               <MarketDot market={p.market}/>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className="mono" style={{ fontWeight: 600 }}>{cash ? `现金 ${p.currency}` : p.code}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{cash ? `${I18N.t("holdings.positions.cash")} ${p.currency}` : p.code}</span>
                   {!cash && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{p.sym.name || p.name || ""}</span>}
-                  {!cash && p.txnCount > 0 && <span style={{ fontSize: 10, color: "var(--ink-4)", padding: "1px 6px", border: "1px solid var(--line)", borderRadius: 4 }}>{p.txnCount} 笔</span>}
+                  {!cash && p.txnCount > 0 && <span style={{ fontSize: 10, color: "var(--ink-4)", padding: "1px 6px", border: "1px solid var(--line)", borderRadius: 4 }}>{p.txnCount} {I18N.t("holdings.positions.txns")}</span>}
                 </div>
               </div>
               <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
@@ -696,12 +696,12 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                 )}
                 {!cash && p.afterHoursChangePct != null && (
                   <div style={{fontSize:10,color:"var(--ink-4)",marginTop:1}}>
-                    盘后 <ChangeNum value={p.afterHoursChangePct} size="sm"/>
+                    {I18N.t("holdings.positions.afterHours")} <ChangeNum value={p.afterHoursChangePct} size="sm"/>
                   </div>
                 )}
               </div>
               <div style={{textAlign:"right"}}>
-                {cash ? <span style={{fontSize:12,color:"var(--ink-4)"}}>现金</span> : (
+                {cash ? <span style={{fontSize:12,color:"var(--ink-4)"}}>{I18N.t("holdings.positions.cash")}</span> : (
                   <>
                     <ChangeNum value={p.pnlPct} size="sm"/>
                     <div className="mono" style={{ fontSize: 10.5, color: p.pnl >= 0 ? "var(--up)" : "var(--down)", marginTop: 1 }}>
@@ -711,8 +711,8 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                 )}
               </div>
               <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                <button style={iconBtn} title="编辑" onClick={() => onEditHolding(p)}><Icon name="edit" size={13}/></button>
-                <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除 ${cash ? "现金" : p.code} 持仓？`)) onDeleteHolding(p.id); }}><Icon name="x" size={13}/></button>
+                <button style={iconBtn} title={I18N.t("holdings.positions.edit")} onClick={() => onEditHolding(p)}><Icon name="edit" size={13}/></button>
+                <button style={{ ...iconBtn, color: "var(--up)" }} title={I18N.t("holdings.positions.delete")} onClick={() => { if (confirm(I18N.tf("holdings.positions.deleteConfirm", { code: cash ? I18N.t("holdings.positions.cash") : p.code }))) onDeleteHolding(p.id); }}><Icon name="x" size={13}/></button>
               </div>
             </div>
           );})}
@@ -754,10 +754,10 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
       onImportDone(all);
       fetchPage(1, symFilter);
       setPage(1);
-      setImportMsg(`导入 ${result.imported} 条，跳过 ${result.skipped.length} 条`);
+      setImportMsg(`Imported ${result.imported}, skipped ${result.skipped.length}`);
       setTimeout(() => setImportMsg(null), 4000);
     } catch (err) {
-      setImportMsg(`导入失败: ${err.message}`);
+      setImportMsg(`Import failed: ${err.message}`);
       setTimeout(() => setImportMsg(null), 4000);
     }
   };
@@ -766,21 +766,21 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
     <Card padding={0}>
       <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>交易记录 Transactions</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>买入 & 卖出 · 用于计算平均成本和已实现盈亏</div>
+          <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("holdings.txns.title")}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{I18N.t("holdings.txns.subtitle")}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {importMsg && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{importMsg}</span>}
           <select value={symFilter} onChange={e => handleSymFilter(e.target.value)}
             style={{ fontSize: 12, padding: "4px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
-            <option value="">全部 Symbol</option>
+            <option value="">{I18N.t("holdings.txns.allSymbols")}</option>
             {allSymbols.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>新增记录</Button>
+          <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>{I18N.t("holdings.txns.add")}</Button>
         </div>
       </div>
       {data.total === 0
-        ? <Empty icon="book" title="暂无交易记录" hint="点击「新增记录」手动添加"/>
+        ? <Empty icon="book" title={I18N.t("holdings.txns.empty").split(" — ")[0]} hint={I18N.t("holdings.txns.empty").split(" — ")[1]}/>
         : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
@@ -794,7 +794,7 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
               return (
                 <div key={t.id} style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "12px 18px", alignItems: "center", borderBottom: i < data.items.length-1 ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
                   <span className="mono" style={{color:"var(--ink-3)"}}>{t.date}</span>
-                  <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? "买入" : "卖出"}</Badge>
+                  <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? I18N.t("holdings.txns.buy") : I18N.t("holdings.txns.sell")}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
                   <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? t.shares : "—"}</span>
                   <span className="mono" style={{textAlign:"right"}}>{t.price > 0 ? fmtMoney(t.price, t.currency, assetTypeOf(t.code) === "mutualfund" ? 4 : 2) : "—"}</span>
@@ -804,8 +804,8 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
                   </span>
                   <span style={{color:"var(--ink-3)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:24}}>{t.note || ""}</span>
                   <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                    <button style={iconBtn} title="编辑" onClick={() => onEdit(t)}><Icon name="edit" size={13}/></button>
-                    <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此交易记录？`)) onDelete(t.id).then(() => fetchPage(page, symFilter)); }}><Icon name="x" size={13}/></button>
+                    <button style={iconBtn} title={I18N.t("holdings.txns.edit")} onClick={() => onEdit(t)}><Icon name="edit" size={13}/></button>
+                    <button style={{ ...iconBtn, color: "var(--up)" }} title={I18N.t("holdings.txns.delete")} onClick={() => { if (confirm(I18N.t("holdings.txns.deleteConfirm"))) onDelete(t.id).then(() => fetchPage(page, symFilter)); }}><Icon name="x" size={13}/></button>
                   </div>
                 </div>
               );
@@ -838,14 +838,14 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
     try {
       const result = await apiImportIncome(file, defaultAccount || null);
       onImportDone && onImportDone(result.income);
-      setImportMsg(`导入 ${result.imported} 条${result.skipped.length ? `，跳过 ${result.skipped.length} 条` : ""}`);
+      setImportMsg(`Imported ${result.imported}${result.skipped.length ? `, skipped ${result.skipped.length}` : ""}`);
     } catch (ex) {
-      setImportMsg(`导入失败：${ex.message}`);
+      setImportMsg(`Import failed: ${ex.message}`);
     }
   };
   const sym = ccySymbol(acctCcy);
   const catColors = { dividend: "#1F8A4C", interest: "#2D5BD9", option: "#6B4FB8", deposit: "#2D9CDB", withdrawal: "#C8460F" };
-  const catLabels = { dividend: "分红 Dividend", interest: "利息 Interest", option: "期权 Option", deposit: "转入 Deposit", withdrawal: "转出 Withdrawal" };
+  const catLabels = { dividend: I18N.t("holdings.income.cat.dividend"), interest: I18N.t("holdings.income.cat.interest"), option: I18N.t("holdings.income.cat.option"), deposit: I18N.t("holdings.income.cat.deposit"), withdrawal: I18N.t("holdings.income.cat.withdrawal") };
   // Summarise by category in account currency
   const byCat = items.reduce((acc, i) => {
     const acctAmt = i.amount * (FX[i.currency] || 1) / acctFx;
@@ -866,7 +866,7 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
               <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: "var(--up)" }}>
                 {cat === "deposit" ? "-" : "+"}<Private>{sym}{fmtNum(v, 0)}</Private>
               </div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>累计 {items.filter(i => i.category === cat).length} 笔</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{I18N.tf("holdings.income.cat.count", { n: items.filter(i => i.category === cat).length })}</div>
             </Card>
           ))}
         </div>
@@ -874,15 +874,15 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
       <Card padding={0}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>收入 & 转账</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>分红 / 利息 / 期权权利金 / 账户转入转出 — 收入合计 <Private>{sym}{fmtNum(total, 0)}</Private></div>
+            <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("holdings.income.title")}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{I18N.t("holdings.income.subtitle")} — {I18N.t("holdings.income.total")} <Private>{sym}{fmtNum(total, 0)}</Private></div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>添加记录</Button>
+            <Button size="sm" variant="secondary" icon="plus" onClick={onAdd}>{I18N.t("holdings.income.add")}</Button>
           </div>
         </div>
         {sorted.length === 0
-          ? <Empty icon="spark" title="暂无记录" hint="添加分红、利息、转入转出等记录"/>
+          ? <Empty icon="spark" title={I18N.t("holdings.income.empty").split(" — ")[0]} hint={I18N.t("holdings.income.empty").split(" — ")[1]}/>
           : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "100px 110px 1.4fr 130px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
@@ -907,8 +907,8 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
                     </span>
                     <span style={{color:"var(--ink-3)",fontSize:12}}>{i.note || "—"}</span>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                      <button style={iconBtn} title="编辑" onClick={() => onEdit(i)}><Icon name="edit" size={13}/></button>
-                      <button style={{ ...iconBtn, color: "var(--up)" }} title="删除" onClick={() => { if (confirm(`删除此记录？`)) onDelete(i.id); }}><Icon name="x" size={13}/></button>
+                      <button style={iconBtn} title={I18N.t("holdings.income.edit")} onClick={() => onEdit(i)}><Icon name="edit" size={13}/></button>
+                      <button style={{ ...iconBtn, color: "var(--up)" }} title={I18N.t("holdings.income.delete")} onClick={() => { if (confirm(I18N.t("holdings.income.deleteConfirm"))) onDelete(i.id); }}><Icon name="x" size={13}/></button>
                     </div>
                   </div>
                 );
@@ -924,8 +924,8 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
 // incomeItems: manually-entered income records (category=dividend shown as confirmed)
 // positions: current account positions — used to query yfinance for dividend events
 
-const MONTH_NAMES = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
-const WEEK_HDR = ["一","二","三","四","五","六","日"];
+const MONTH_NAMES = () => [1,2,3,4,5,6,7,8,9,10,11,12].map(n => I18N.t(`holdings.month.${n}`));
+const WEEK_HDR    = () => ["mon","tue","wed","thu","fri","sat","sun"].map(d => I18N.t(`holdings.week.${d}`));
 
 const divFreq = (hist) => {
   const oneYearAgo = new Date();
@@ -937,7 +937,7 @@ const DivUpcomingStrip = ({ upcoming, posByCode, acctFx, sym }) => {
   if (!upcoming.length) return null;
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>即将除权</div>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 8 }}>{I18N.t("holdings.calendar.upcoming")}</div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {upcoming.map(u => {
           const pos = posByCode[u.code];
@@ -970,11 +970,11 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
     <Card padding={20}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <button onClick={prevMonth} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: "4px 10px", fontSize: 18 }}>‹</button>
-        <span className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{year} 年 {MONTH_NAMES[month - 1]}</span>
+        <span className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{year} {MONTH_NAMES()[month - 1]}</span>
         <button onClick={nextMonth} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: "4px 10px", fontSize: 18 }}>›</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 4 }}>
-        {WEEK_HDR.map(h => (
+        {WEEK_HDR().map(h => (
           <div key={h} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 600, color: "var(--ink-4)", letterSpacing: ".1em", padding: "3px 0" }}>{h}</div>
         ))}
       </div>
@@ -1010,9 +1010,9 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
         })}
       </div>
       <div style={{ display: "flex", gap: 14, marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--up)", display: "inline-block" }}/>已录入收入</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(31,138,76,0.4)", display: "inline-block" }}/>历史除权日</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 10, height: 10, borderRadius: 2, border: "1.5px dashed var(--up)", display: "inline-block" }}/>即将除权</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--up)", display: "inline-block" }}/>{I18N.t("holdings.calendar.recorded")}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(31,138,76,0.4)", display: "inline-block" }}/>{I18N.t("holdings.calendar.historical")}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-4)" }}><span style={{ width: 10, height: 10, borderRadius: 2, border: "1.5px dashed var(--up)", display: "inline-block" }}/>{I18N.t("holdings.calendar.upcoming")}</div>
       </div>
       {selectedEvents.length > 0 && (
         <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
@@ -1022,7 +1022,7 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
               <div>
                 <span style={{ fontWeight: 600, marginRight: 6 }}>{e.source || e.code || "—"}</span>
                 <Badge size="sm" tone={e.type === "income" ? "down" : "info"}>
-                  {e.type === "income" ? "已收" : e.type === "upcoming" ? "除权日" : "历史"}
+                  {e.type === "income" ? I18N.t("holdings.calendar.recorded") : e.type === "upcoming" ? I18N.t("holdings.calendar.exDate") : I18N.t("holdings.calendar.historical")}
                 </Badge>
               </div>
               <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>
@@ -1054,14 +1054,14 @@ const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{code}</div>
-              {d.ex_date && <div style={{ fontSize: 11, color: d.ex_date >= today ? "var(--up)" : "var(--ink-4)", marginTop: 2 }}>除权 {d.ex_date}</div>}
+              {d.ex_date && <div style={{ fontSize: 11, color: d.ex_date >= today ? "var(--up)" : "var(--ink-4)", marginTop: 2 }}>{I18N.t("holdings.calendar.exDate")} {d.ex_date}</div>}
             </div>
             <div style={{ textAlign: "right" }}>
               {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}/sh/yr</div>}
               {yieldPct && <div className="mono" style={{ fontSize: 12, color: "var(--up)", marginTop: 2 }}>{yieldPct.toFixed(2)}%</div>}
             </div>
           </div>
-          {estAnnual && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>≈ {sym}{fmtNum(estAnnual, 0)}/年</div>}
+          {estAnnual && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>≈ {sym}{fmtNum(estAnnual, 0)}{I18N.t("holdings.calendar.perYear")}</div>}
         </Card>
       );
     })}
@@ -1132,9 +1132,9 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
   return (
     <div>
       <DivUpcomingStrip upcoming={upcoming} posByCode={posByCode} acctFx={acctFx} sym={sym} />
-      {loading && !hasAnyData && <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-4)", fontSize: 13 }}>正在从 Yahoo Finance 获取分红数据…</div>}
-      {!loading && fetchError && <div style={{ textAlign: "center", padding: "20px 0", color: "var(--ink-3)", fontSize: 13 }}>获取分红数据失败，请稍后重试</div>}
-      {!loading && !fetchError && !hasAnyData && <Empty icon="spark" title="持仓中暂无分红记录" hint="只有付息股票（ETF、股票）才会显示分红日历，指数和无分红股票不会出现"/>}
+      {loading && !hasAnyData && <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-4)", fontSize: 13 }}>{I18N.t("holdings.calendar.loading")}</div>}
+      {!loading && fetchError && <div style={{ textAlign: "center", padding: "20px 0", color: "var(--ink-3)", fontSize: 13 }}>{I18N.t("holdings.calendar.error")}</div>}
+      {!loading && !fetchError && !hasAnyData && <Empty icon="spark" title={I18N.t("holdings.calendar.empty")} hint={I18N.t("holdings.calendar.empty.hint")}/>}
       {hasAnyData && (
         <div style={{ maxWidth: 1120, display: "grid", gridTemplateColumns: "1fr 440px", gap: 16, alignItems: "start" }}>
           <DivMonthGrid year={year} month={month} today={today} eventsByDate={eventsByDate} selectedDay={selectedDay} setSelectedDay={setSelectedDay} prevMonth={prevMonth} nextMonth={nextMonth} />
@@ -1142,10 +1142,10 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
             <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "calc((100% - 10px) / 2)" }}>
               {totalEstAnnual > 0 && (
                 <Card padding={14}>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>{I18N.t("holdings.calendar.annualEst")}</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}><Private>{sym}{fmtNum(totalEstAnnual, 0)}</Private></span>
-                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.calendar.perYear")}</span>
                   </div>
                 </Card>
               )}
@@ -1155,10 +1155,10 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {totalEstAnnual > 0 && (
                 <Card padding={14} style={{ gridColumn: "1 / -1" }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>预估年度分红</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 4 }}>{I18N.t("holdings.calendar.annualEst")}</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--up)" }}><Private>{sym}{fmtNum(totalEstAnnual, 0)}</Private></span>
-                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>/ 年</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.calendar.perYear")}</span>
                   </div>
                 </Card>
               )}
@@ -1181,103 +1181,121 @@ const computeAge = (birthDate) => {
   return Math.max(1, Math.min(99, Math.floor(ms / (365.25 * 24 * 3600 * 1000))));
 };
 
+const _RB_LABEL_KEYS = {
+  "US Stocks": "holdings.rb.us", "US": "holdings.rb.us", "美股": "holdings.rb.us", "美股 US": "holdings.rb.us",
+  "HK Stocks": "holdings.rb.hk", "HK": "holdings.rb.hk", "港股": "holdings.rb.hk", "港股 HK": "holdings.rb.hk",
+  "CN Stocks": "holdings.rb.cn", "CN": "holdings.rb.cn", "A股": "holdings.rb.cn", "A股 CN": "holdings.rb.cn", "A 股 CN": "holdings.rb.cn",
+  "Bonds": "holdings.rb.bonds", "债券": "holdings.rb.bonds", "债券 Bonds": "holdings.rb.bonds",
+  "Cash": "holdings.rb.cash", "现金": "holdings.rb.cash", "现金 Cash": "holdings.rb.cash",
+  "Gold": "holdings.rb.gold", "黄金": "holdings.rb.gold", "黄金 Gold": "holdings.rb.gold",
+  "Equity": "holdings.rb.equity", "权益": "holdings.rb.equity", "股票 Equity": "holdings.rb.equity",
+  "Bonds / Cash": "holdings.rb.bonds_cash", "债券 / 现金": "holdings.rb.bonds_cash",
+  "LT Bonds": "holdings.rb.lt.bonds", "长债": "holdings.rb.lt.bonds",
+  "MT Bonds": "holdings.rb.mt.bonds", "中债": "holdings.rb.mt.bonds",
+  "Commodities": "holdings.rb.commodities", "大宗": "holdings.rb.commodities", "大宗 Commodities": "holdings.rb.commodities",
+};
+const _rbLabel = (b) => {
+  if (_RB_LABEL_KEYS[b.label]) return I18N.t(_RB_LABEL_KEYS[b.label]);
+  return b.label;
+};
+
 const computeAgeRuleBuckets = (age) => [
-  { label: "股票 Equity",  pct: Math.max(0, 100 - age), color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, markets: [], isCash: false },
-  { label: "债券 / 现金",   pct: Math.min(100, age),     color: "#5C6270", codes: [], assetTypes: ["bond"],        markets: [], isCash: true  },
+  { get label() { return I18N.t("holdings.rb.equity"); },      pct: Math.max(0, 100 - age), color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, markets: [], isCash: false },
+  { get label() { return I18N.t("holdings.rb.bonds_cash"); },  pct: Math.min(100, age),     color: "#5C6270", codes: [], assetTypes: ["bond"],        markets: [], isCash: true  },
 ];
 
 const RB_PRESETS = [
   {
     id: "personal",
-    label: "个人配置",
-    author: "自定义",
-    quote: "按实际持仓设定目标比例",
+    get label() { return I18N.t("holdings.rb.personal"); },
+    get author() { return I18N.t("holdings.rb.personal.author"); },
+    get quote() { return I18N.t("holdings.rb.personal.quote"); },
     buckets: [
-      { label: "美股 US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
-      { label: "港股 HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
-      { label: "A 股 CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
-      { label: "债券 Bonds",  pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
-      { label: "黄金 Gold",   pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
-      { label: "现金 Cash",   pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
+      { get label() { return I18N.t("holdings.rb.us"); },    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.hk"); },    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.cn"); },    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds"); }, pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
+      { get label() { return I18N.t("holdings.rb.gold"); },  pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
+      { get label() { return I18N.t("holdings.rb.cash"); },  pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
     ],
   },
   {
     id: "60_40",
-    label: "经典 60/40",
+    get label() { return I18N.t("holdings.rb.6040.label"); },
     author: "John Bogle",
-    quote: "时间证明，简单的股债平衡胜过大多数主动策略。",
+    get quote() { return I18N.t("holdings.rb.6040.quote"); },
     buckets: [
-      { label: "股票 Equity",  pct: 60, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "债券 / 现金",   pct: 40, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); },     pct: 60, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds_cash"); }, pct: 40, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
     ],
   },
   {
     id: "70_30",
-    label: "积极 70/30",
+    get label() { return I18N.t("holdings.rb.7030.label"); },
     author: "Vanguard",
-    quote: "收益与波动之间的黄金分割，适合30-45岁积累期。",
+    get quote() { return I18N.t("holdings.rb.7030.quote"); },
     buckets: [
-      { label: "股票 Equity",  pct: 70, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "债券 / 现金",   pct: 30, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); },     pct: 70, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.bonds_cash"); }, pct: 30, color: "#5C6270", codes: [], assetTypes: ["bond"],        isCash: true  },
     ],
   },
   {
     id: "all_weather",
-    label: "全天候",
+    get label() { return I18N.t("holdings.rb.allweather.label"); },
     author: "Ray Dalio",
-    quote: "没有人能预测未来，所以要准备好应对所有经济季节。",
+    get quote() { return I18N.t("holdings.rb.allweather.quote"); },
     buckets: [
-      { label: "股票 Equity",      pct: 30,  color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "长债 LT Bonds",    pct: 40,  color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
-      { label: "中债 MT Bonds",    pct: 15,  color: "#B8447B", codes: [], assetTypes: [],               isCash: false },
-      { label: "黄金 Gold",        pct: 7.5, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
-      { label: "大宗 Commodities", pct: 7.5, color: "#9C6E3A", codes: [], assetTypes: [],               isCash: true  },
+      { get label() { return I18N.t("holdings.rb.equity"); }, pct: 30,  color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.lt.bonds"); },    pct: 40,  color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
+      { get label() { return I18N.t("holdings.rb.mt.bonds"); },    pct: 15,  color: "#B8447B", codes: [], assetTypes: [],               isCash: false },
+      { get label() { return I18N.t("holdings.rb.gold"); },        pct: 7.5, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
+      { get label() { return I18N.t("holdings.rb.commodities"); }, pct: 7.5, color: "#9C6E3A", codes: [], assetTypes: [],               isCash: true  },
     ],
   },
   {
     id: "permanent",
-    label: "永久组合",
+    get label() { return I18N.t("holdings.rb.permanent.label"); },
     author: "Harry Browne",
-    quote: "无论通胀、通缩、繁荣还是萧条，各分一杯羹。",
+    get quote() { return I18N.t("holdings.rb.permanent.quote"); },
     buckets: [
-      { label: "股票 Equity",   pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
-      { label: "长债 LT Bonds", pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         isCash: false },
-      { label: "现金 Cash",     pct: 25, color: "#5C6270", codes: [], assetTypes: [],               isCash: true  },
-      { label: "黄金 Gold",     pct: 25, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
+      { get label() { return I18N.t("holdings.rb.equity"); },   pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
+      { get label() { return I18N.t("holdings.rb.lt.bonds"); }, pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],        isCash: false },
+      { get label() { return I18N.t("holdings.rb.cash"); },     pct: 25, color: "#5C6270", codes: [], assetTypes: [],              isCash: true  },
+      { get label() { return I18N.t("holdings.rb.gold"); },     pct: 25, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
     ],
   },
   {
     id: "age_rule",
-    label: "100 - 年龄",
-    author: "生命周期理论",
-    quote: "随年龄增长，逐步降低风险敞口。股票% = 100 - 年龄，其余配置债券/现金。",
+    get label() { return I18N.t("holdings.rb.lifecycle.label"); },
+    get author() { return I18N.t("holdings.rb.lifecycle.author"); },
+    get quote() { return I18N.t("holdings.rb.lifecycle.quote"); },
     buckets: null,
   },
 ];
 
 const RB_TRIGGER_MODES = [
-  { id: "calendar", label: "日历触发", desc: "按固定周期检查，不管偏离大小" },
-  { id: "absolute", label: "绝对偏离", desc: "任一桶偏离超过 N pp 触发" },
-  { id: "relative", label: "相对偏离", desc: "任一桶偏离超过目标 N% 触发" },
-  { id: "hybrid",   label: "混合触发", desc: "日历 + 绝对偏离 (Vanguard 标准)" },
+  { id: "calendar", get label() { return I18N.t("holdings.rebalance.trigger.calendar"); }, get desc() { return I18N.t("holdings.rebalance.freq.monthly"); } },
+  { id: "absolute", get label() { return I18N.t("holdings.rebalance.trigger.absolute"); }, get desc() { return I18N.t("holdings.rebalance.absThreshold"); } },
+  { id: "relative", get label() { return I18N.t("holdings.rebalance.trigger.relative"); }, get desc() { return I18N.t("holdings.rebalance.relThreshold"); } },
+  { id: "hybrid",   get label() { return I18N.t("holdings.rebalance.trigger.hybrid"); },   get desc() { return I18N.t("holdings.rebalance.trigger.hybrid"); } },
 ];
 
 const RB_CAL_OPTIONS = [
-  { value: "monthly",   label: "每月" },
-  { value: "quarterly", label: "每季度" },
-  { value: "semi",      label: "每半年" },
-  { value: "annual",    label: "每年" },
+  { value: "monthly",   get label() { return I18N.t("holdings.rebalance.freq.monthly"); } },
+  { value: "quarterly", get label() { return I18N.t("holdings.rebalance.freq.quarterly"); } },
+  { value: "semi",      get label() { return I18N.t("holdings.rebalance.freq.semi"); } },
+  { value: "annual",    get label() { return I18N.t("holdings.rebalance.freq.annual"); } },
 ];
 
 const RB_DEFAULT_CONFIG = {
   presetId: "personal",
   buckets: [
-    { label: "美股 US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
-    { label: "港股 HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
-    { label: "A 股 CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
-    { label: "债券 Bonds",  pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
-    { label: "黄金 Gold",   pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [], markets: [], isCash: false },
-    { label: "现金 Cash",   pct: 15, color: "#5C6270", codes: [], assetTypes: [],               markets: [],               isCash: true  },
+    { label: "US",    pct: 50, color: "#1F4FE0", codes: [], assetTypes: ["equity","etf"], markets: ["US"],            isCash: false },
+    { label: "HK",    pct: 15, color: "#B8447B", codes: [], assetTypes: ["equity","etf"], markets: ["HK"],            isCash: false },
+    { label: "CN",    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
+    { label: "Bonds", pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
+    { label: "Gold",  pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [], markets: [], isCash: false },
+    { label: "Cash",  pct: 15, color: "#5C6270", codes: [], assetTypes: [],               markets: [],               isCash: true  },
   ],
   trigger: { mode: "hybrid", calFreq: "annual", absDriftPp: 5, relDriftPct: 20 },
   birthDate: "",
@@ -1313,9 +1331,9 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
   const valid = Math.abs(sumPct - 100) < 0.5;
 
   return (
-    <Modal open={true} onClose={onClose} title="编辑目标配置" width={500}>
+    <Modal open={true} onClose={onClose} title={I18N.t("holdings.rebalance.editTarget")} width={500}>
       <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>选择预设</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.preset")}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           {RB_PRESETS.map(p => (
             <button key={p.id} onClick={() => applyPreset(p)} style={{
@@ -1339,44 +1357,44 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
 
         {draft.presetId === "age_rule" && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>出生日期</span>
+            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("app.settings.birthDate")}</span>
             {birthDate ? (
               <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                {birthDate} · {computeAge(birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(birthDate))}% / 债 {Math.min(100, computeAge(birthDate))}%
+                {birthDate} · {computeAge(birthDate)} · Eq {Math.max(0, 100 - computeAge(birthDate))}% / {I18N.t("base.market.bonds")} {Math.min(100, computeAge(birthDate))}%
               </span>
             ) : (
-              <span style={{ fontSize: 12, color: "var(--ink-4)" }}>未设置 · 请在右上角设置中填写</span>
+              <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("holdings.rebalance.noBirthDate")} · {I18N.t("holdings.rebalance.noBirthDate.hint")}</span>
             )}
           </div>
         )}
 
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".1em" }}>资产桶 · 目标比例</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.buckets")}</div>
         {draft.buckets.map((b, i) => (
           <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 64px 20px", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{ width: 10, height: 10, background: b.color, borderRadius: 2, display: "block" }}/>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{_rbLabel(b)}</span>
               <Input value={String(b.pct)} onChange={v => updateBucket(i, "pct", parseFloat(v) || 0)} inputMode="decimal" style={{ textAlign: "right" }}/>
               <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 18 }}>
-              <span style={{ fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, width: 52 }}>代码覆盖</span>
+              <span style={{ fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, width: 52 }}>{I18N.t("holdings.rebalance.codeOverride")}</span>
               <input
                 value={codesTexts[i]}
                 onChange={e => setCodesTexts(t => t.map((v, j) => j === i ? e.target.value : v))}
-                placeholder="逗号分隔，如 013308, TEC.TO"
+                placeholder="013308, TEC.TO"
                 style={{ flex: 1, fontSize: 11.5, border: "1px solid var(--line-2)", borderRadius: 5, padding: "3px 8px", background: "var(--bg-deep)", color: "var(--ink)", outline: "none" }}
               />
             </div>
           </div>
         ))}
         <div style={{ textAlign: "right", fontSize: 12, color: valid ? "var(--down)" : "var(--up)", marginBottom: 16 }}>
-          合计 {sumPct.toFixed(1)}% {valid ? "✓" : "· 需等于 100%"}
+          {I18N.t("holdings.rebalance.total")} {sumPct.toFixed(1)}% {valid ? "✓" : `· ${I18N.t("holdings.rebalance.mustEqual100")}`}
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={() => handleSave(draft)} disabled={!valid}>保存</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" onClick={() => handleSave(draft)} disabled={!valid}>{I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>
@@ -1531,7 +1549,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
             >{p.label}</button>
           ))}
         </div>
-        <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>编辑目标</Button>
+        <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
       </div>
 
       {/* Strategy quote */}
@@ -1543,12 +1561,12 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {birthDate ? (
                 <span style={{ fontSize: 11, color: "var(--ink-4)" }}>
-                  {computeAge(birthDate)} 岁 · 股 {Math.max(0, 100 - computeAge(birthDate))}% / 债 {Math.min(100, computeAge(birthDate))}%
+                  {computeAge(birthDate)} · Eq {Math.max(0, 100 - computeAge(birthDate))}% / {I18N.t("base.market.bonds")} {Math.min(100, computeAge(birthDate))}%
                 </span>
               ) : (
-                <span style={{ fontSize: 11, color: "var(--ink-4)" }}>未设置出生日期</span>
+                <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.rebalance.noBirthDate")}</span>
               )}
-              <span style={{ fontSize: 10.5, color: "var(--ink-5)" }}>· 在右上角设置中修改</span>
+              <span style={{ fontSize: 10.5, color: "var(--ink-5)" }}>· {I18N.t("holdings.rebalance.noBirthDate.hint")}</span>
             </div>
           )}
         </div>
@@ -1557,7 +1575,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
         {/* Left: drift bars */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>偏离度 Drift vs Target</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.driftVs")} {I18N.t("holdings.rebalance.target")}</div>
           {[...buckets].sort((a, b) => b.curPct - a.curPct).map((b, i) => {
             const fires = triggered.includes(b);
             const isExpanded = expandedBucket === i;
@@ -1570,7 +1588,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                     background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink)",
                   }}>
                     <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2 }}/>
-                    {b.label}
+                    {_rbLabel(b)}
                     <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
                   </button>
                   <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
@@ -1583,7 +1601,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
 
                 {/* Current bar */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 9, color: "var(--ink-4)", width: 22, textAlign: "right" }}>当前</span>
+                  <span style={{ fontSize: 9, color: "var(--ink-4)", width: 22, textAlign: "right" }}>{I18N.t("base.label.current")}</span>
                   <div style={{ position: "relative", flex: 1, height: 7, background: "var(--bg-deep)", borderRadius: 3 }}>
                     <div style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(b.curPct, 100)}%`, height: "100%", background: b.color, borderRadius: 3 }}/>
                     <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 13, background: "var(--ink-3)", borderRadius: 1 }}/>
@@ -1592,7 +1610,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
 
                 {/* Target bar */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                  <span style={{ fontSize: 9, color: "var(--ink-5)", width: 22, textAlign: "right" }}>目标</span>
+                  <span style={{ fontSize: 9, color: "var(--ink-5)", width: 22, textAlign: "right" }}>{I18N.t("holdings.rebalance.target")}</span>
                   <div style={{ position: "relative", flex: 1, height: 5, background: "var(--bg-deep)", borderRadius: 3 }}>
                     <div style={{ position: "absolute", left: 0, top: 0, width: `${b.pct}%`, height: "100%", background: b.color, opacity: 0.25, borderRadius: 3 }}/>
                     <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 11, background: "var(--ink-3)", borderRadius: 1 }}/>
@@ -1602,12 +1620,12 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                 {/* Drift row */}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, paddingLeft: 28 }}>
                   <span className="mono" style={{ color: fires ? "var(--up)" : "var(--ink-4)", fontWeight: fires ? 600 : 400 }}>
-                    drift {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp
-                    {mode !== "calendar" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {b.relDrift.toFixed(0)}%相对</span>}
+                    {I18N.t("holdings.rebalance.drift")} {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")}
+                    {mode !== "calendar" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")}</span>}
                     {fires && " ⚠"}
                   </span>
                   <span className="mono" style={{ color: "var(--ink-4)" }}>
-                    建议 {b.delta >= 0 ? "买入" : "卖出"} <Private>{dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k</Private>
+                    {I18N.t("holdings.rebalance.suggest")} {b.delta >= 0 ? I18N.t("holdings.rebalance.buy") : I18N.t("holdings.rebalance.sell")} <Private>{dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k</Private>
                   </span>
                 </div>
 
@@ -1616,12 +1634,12 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
                   <div style={{ marginTop: 8, marginLeft: 28, padding: "8px 12px", background: "var(--bg-deep)", borderRadius: 6, borderLeft: `3px solid ${b.color}` }}>
                     {b.bPositions.length === 0 ? (
                       <div style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>
-                        {b.isCash ? "暂无未分配持仓" : "无匹配持仓"}
+                        {b.isCash ? I18N.t("holdings.rebalance.noCash") : I18N.t("holdings.rebalance.noMatch")}
                       </div>
                     ) : (
                       <>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "2px 12px", fontSize: 10, color: "var(--ink-5)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
-                          <span>代码</span><span>账户</span><span style={{ textAlign: "right" }}>金额</span><span style={{ textAlign: "right" }}>占比</span>
+                          <span>{I18N.t("holdings.txn.symbol").replace(" *","")}</span><span>{I18N.t("holdings.holding.account")}</span><span style={{ textAlign: "right" }}>{I18N.t("holdings.income.amount").replace(" *","")}</span><span style={{ textAlign: "right" }}>%</span>
                         </div>
                         {b.bPositions.map((p, j) => (
                           <div key={j} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "3px 12px", fontSize: 11.5, padding: "3px 0", borderTop: j > 0 ? "1px solid var(--line)" : "none", alignItems: "center" }}>
@@ -1642,7 +1660,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
 
         {/* Right: trigger config */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>触发规则 Rules</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.triggers")}</div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
             {RB_TRIGGER_MODES.map(m => (
@@ -1660,13 +1678,13 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
           <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
             {(mode === "calendar" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>检查周期</span>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.freq")}</span>
                 <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }}/>
               </div>
             )}
             {(mode === "absolute" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>绝对阈值</span>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.absThreshold")}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Input value={String(absDriftPp)} onChange={v => setTrigger("absDriftPp", parseFloat(v) || 5)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
                   <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>pp</span>
@@ -1675,7 +1693,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
             )}
             {(mode === "relative" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>相对阈值</span>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.relThreshold")}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Input value={String(relDriftPct)} onChange={v => setTrigger("relDriftPct", parseFloat(v) || 20)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
                   <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>%</span>
@@ -1691,22 +1709,22 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
             border: `1px solid ${triggered.length > 0 ? "#E8C06080" : "var(--line-2)"}`,
           }}>
             {mode === "calendar" ? (
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>📅 {calLabel}定期检查 · 偏离不触发</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>📅 {calLabel} · {I18N.t("holdings.rebalance.trigger.calendar")}</div>
             ) : triggered.length > 0 ? (
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#7A4D0E", marginBottom: 4 }}>⚠ {triggered.length} 个桶已触发</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#7A4D0E", marginBottom: 4 }}>⚠ {triggered.length} {I18N.t("holdings.rebalance.triggered")}</div>
                 {triggered.map((b, i) => (
                   <div key={i} style={{ fontSize: 11, color: "#7A4D0E" }}>
-                    {b.label}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}pp ({b.relDrift.toFixed(0)}% 相对)
+                    {_rbLabel(b)}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")} ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>✓ 所有桶在阈值内，无需再平衡</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>✓ {I18N.t("holdings.rebalance.allOk")}</div>
             )}
             {mode === "hybrid" && (
               <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: triggered.length > 0 ? 6 : 0 }}>
-                {calLabel}检查 · 超 {absDriftPp}pp 再平衡
+                {calLabel} · &gt;{absDriftPp}pp {I18N.t("holdings.rebalance.trigger.hybrid")}
               </div>
             )}
           </div>
@@ -1784,7 +1802,7 @@ const SymbolCombobox = ({ value, onChange, placeholder }) => {
           boxShadow: "var(--shadow-md)", marginTop: 2, overflow: "hidden",
         }}>
           {loading && (
-            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--ink-4)" }}>查询中…</div>
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("base.empty.loading")}</div>
           )}
           {allItems.map(s => (
             <div
@@ -1824,7 +1842,7 @@ const AccountModal = ({ onClose, onSaved }) => {
   const [saving, setSaving] = React.useState(false);
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setErr("账户名不能为空"); return; }
+    if (!form.name.trim()) { setErr(I18N.t("holdings.acct.nameEmpty")); return; }
     setSaving(true); setErr(null);
     try {
       const saved = await apiCreateAccount({
@@ -1837,20 +1855,20 @@ const AccountModal = ({ onClose, onSaved }) => {
     finally { setSaving(false); }
   };
   return (
-    <Modal open={true} onClose={onClose} title="新增账户" width={400}>
+    <Modal open={true} onClose={onClose} title={I18N.t("holdings.acct.new.title")} width={400}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / 招商证券 / 支付宝基金"/></FormRow>
-        <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
+        <FormRow label={I18N.t("holdings.acct.new.name")}><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR / Questrade / Wealthsimple"/></FormRow>
+        <FormRow label={I18N.t("holdings.acct.new.currency")}>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
-        <FormRow label="截止日期">
-          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD（忽略此日期前的交易）"/>
+        <FormRow label={I18N.t("holdings.acct.new.cutoff")}>
+          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
         </FormRow>
-        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        <FormRow label={I18N.t("holdings.acct.new.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "创建账户"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? I18N.t("holdings.acct.new.creating") : I18N.t("holdings.acct.new.create")}</Button>
         </div>
       </form>
     </Modal>
@@ -1885,7 +1903,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setErr("账户名不能为空"); return; }
+    if (!form.name.trim()) { setErr(I18N.t("holdings.acct.nameEmpty")); return; }
     setSaving(true); setErr(null);
     try {
       const sm = {};
@@ -1905,54 +1923,54 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={`编辑账户 · ${account.name}`} width={420}>
+    <Modal open={true} onClose={onClose} title={`${I18N.t("holdings.acct.edit.title")} · ${account.name}`} width={420}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="账户名称 *"><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
-        <FormRow label="货币">
-          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS}/>
+        <FormRow label={I18N.t("holdings.acct.edit.name")}><Input value={form.name} onChange={v => set("name", v)} placeholder="IBKR"/></FormRow>
+        <FormRow label={I18N.t("holdings.acct.edit.currency")}>
+          <Select value={form.currency} onChange={v => set("currency", v)} options={CURRENCY_OPTIONS()}/>
         </FormRow>
-        <FormRow label="截止日期">
-          <Input value={form.cutoff_date} onChange={v => set("cutoff_date", v)} placeholder="YYYY-MM-DD"/>
+        <FormRow label={I18N.t("holdings.acct.edit.cutoff")}>
+          <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)}/>
         </FormRow>
         <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
-          此日期之前的交易记录只用作 backup，不参与已实现 / XIRR 计算。
+          {I18N.t("holdings.acct.edit.cutoff.hint")}
         </div>
-        <FormRow label="资产负债账户">
+        <FormRow label={I18N.t("holdings.acct.edit.balAcct")}>
           <Select value={form.balance_account_id} onChange={v => { set("balance_account_id", v); set("balance_sub_account_id", ""); }}
-            options={[{ value: "", label: "— 不选 —" }, ...balParents.map(a => ({ value: String(a.id), label: a.name }))]}/>
+            options={[{ value: "", label: I18N.t("holdings.acct.noSelect") }, ...balParents.map(a => ({ value: String(a.id), label: a.name }))]}/>
         </FormRow>
-        <FormRow label="资产负债子账户">
+        <FormRow label={I18N.t("holdings.acct.edit.balSub")}>
           <Select value={form.balance_sub_account_id} onChange={v => set("balance_sub_account_id", v)}
-            options={[{ value: "", label: "— 不选 —" }, ...balSubs.map(a => ({ value: String(a.id), label: a.name }))]}
+            options={[{ value: "", label: I18N.t("holdings.acct.noSelect") }, ...balSubs.map(a => ({ value: String(a.id), label: a.name }))]}
             style={{ opacity: balSubs.length === 0 ? 0.5 : 1, pointerEvents: balSubs.length === 0 ? "none" : "auto" }}/>
         </FormRow>
         <div style={{ fontSize: 11, color: "var(--ink-4)", margin: "-8px 0 12px 98px", lineHeight: 1.5 }}>
-          如不存在，请前往「资产负债 → 账户」添加。
+          {I18N.t("holdings.acct.edit.balLink.hint")}
         </div>
-        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        <FormRow label={I18N.t("holdings.acct.edit.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
 
         {/* Symbol market overrides */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
-            市场分类覆盖
+            {I18N.t("holdings.acct.edit.marketOverride")}
           </div>
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, lineHeight: 1.5 }}>
-            将指定 symbol 归入特定市场（用于持仓汇总饼图），不影响货币和价格。
+            {I18N.t("holdings.acct.edit.marketOverride.hint")}
           </div>
           {smRows.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 28px", gap: 6, marginBottom: 6 }}>
               {smRows.map((r, i) => (
                 <React.Fragment key={i}>
                   <input value={r.code} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, code: e.target.value } : x))}
-                    placeholder="symbol（如 013308）"
+                    placeholder="symbol"
                     style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}/>
                   <select value={r.market} onChange={e => setSmRows(rows => rows.map((x, j) => j === i ? { ...x, market: e.target.value } : x))}
                     style={{ fontSize: 13, padding: "5px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
-                    <option value="US">美股 US</option>
-                    <option value="HK">港股 HK</option>
-                    <option value="CN">A股 CN</option>
-                    <option value="CA">加股 CA</option>
-                    <option value="CRYPTO">加密</option>
+                    <option value="US">{I18N.t("base.market.us")}</option>
+                    <option value="HK">{I18N.t("base.market.hk")}</option>
+                    <option value="CN">{I18N.t("base.market.cn")}</option>
+                    <option value="CA">{I18N.t("base.market.ca")}</option>
+                    <option value="CRYPTO">{I18N.t("base.market.crypto")}</option>
                   </select>
                   <button type="button" onClick={() => setSmRows(rows => rows.filter((_, j) => j !== i))}
                     style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: "pointer", fontSize: 15, padding: 0 }}>✕</button>
@@ -1962,14 +1980,14 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
           )}
           <button type="button" onClick={() => setSmRows(rows => [...rows, { code: "", market: "HK" }])}
             style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
-            + 添加映射
+            {I18N.t("holdings.acct.edit.addMapping")}
           </button>
         </div>
 
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? I18N.t("holdings.acct.edit.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </form>
     </Modal>
@@ -1981,7 +1999,7 @@ const AccountSelect = ({ accounts, value, onChange }) => (
     value={value || ""}
     onChange={onChange}
     options={[
-      { value: "", label: "— 未分配 —" },
+      { value: "", label: I18N.t("holdings.acct.noSelect") },
       ...accounts.map(a => ({ value: a.name, label: a.name })),
     ]}
   />
@@ -2029,13 +2047,13 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   const submit = async (e) => {
     e.preventDefault();
     if (isCash) {
-      if (!form.shares || parseFloat(form.shares) <= 0) { setErr("金额须大于 0"); return; }
+      if (!form.shares || parseFloat(form.shares) <= 0) { setErr(I18N.t("balance.item.amountInvalid")); return; }
     } else {
-      if (!form.code.trim())                            { setErr("代码不能为空"); return; }
-      if (!form.shares || parseFloat(form.shares) <= 0) { setErr("持仓股数须大于 0"); return; }
-      if (form.avg_cost === "" || parseFloat(form.avg_cost) < 0) { setErr("均价成本不能为空"); return; }
+      if (!form.code.trim())                            { setErr(I18N.t("holdings.txn.symbol").replace(" *","") + " required"); return; }
+      if (!form.shares || parseFloat(form.shares) <= 0) { setErr(I18N.t("holdings.holding.shares").replace(" *","") + " > 0"); return; }
+      if (form.avg_cost === "" || parseFloat(form.avg_cost) < 0) { setErr(I18N.t("holdings.holding.avgCost").replace(" *","") + " required"); return; }
     }
-    if (!form.as_of_date.trim()) { setErr("快照日期不能为空"); return; }
+    if (!form.as_of_date.trim()) { setErr(I18N.t("holdings.holding.snapDate").replace(" *","") + " required"); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -2053,40 +2071,40 @@ const HoldingModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={editing ? "编辑持仓" : "添加持仓"} width={440}>
+    <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.holding.edit.title") : I18N.t("holdings.holding.add.title")} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="类型">
+        <FormRow label={I18N.t("holdings.holding.type")}>
           <Tabs variant="pill" value={isCash ? "cash" : "stock"} onChange={v => toggleCash(v === "cash")}
-            tabs={[{id:"stock",label:"证券"},{id:"cash",label:"现金"}]}/>
+            tabs={[{id:"stock",label:I18N.t("holdings.holding.type.stock")},{id:"cash",label:I18N.t("holdings.holding.type.cash")}]}/>
         </FormRow>
         {isCash ? (
           <>
-            <FormRow label="货币">
+            <FormRow label={I18N.t("holdings.holding.currency")}>
               <Select value={form.currency} onChange={setCashCurrency}
-                options={CURRENCY_OPTIONS}/>
+                options={CURRENCY_OPTIONS()}/>
             </FormRow>
-            <FormRow label="金额 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="10000" suffix={form.currency}/></FormRow>
+            <FormRow label={I18N.t("holdings.holding.amount")}><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="10000" suffix={form.currency}/></FormRow>
           </>
         ) : (
           <>
-            <FormRow label="代码 *">
+            <FormRow label={I18N.t("holdings.holding.code")}>
               <SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/>
-              {/^\d{6}$/.test(form.code) && <div style={{fontSize:11,color:"var(--ink-3)",marginTop:3}}>6位纯数字为基金代码；A股股票请加交易所后缀（如 002594.SZ / 600519.SS）</div>}
+              {/^\d{6}$/.test(form.code) && <div style={{fontSize:11,color:"var(--ink-3)",marginTop:3}}>{I18N.t("holdings.holding.fundCode.hint")}</div>}
             </FormRow>
-            <FormRow label="市场">
-              <Select value={form.market} onChange={setMarket} options={[{value:"US",label:"美股 US"},{value:"HK",label:"港股 HK"},{value:"CN",label:"A股 CN"},{value:"CA",label:"加股 CA"},{value:"CRYPTO",label:"加密货币"}]}/>
+            <FormRow label={I18N.t("holdings.holding.market")}>
+              <Select value={form.market} onChange={setMarket} options={[{value:"US",label:I18N.t("base.market.us")},{value:"HK",label:I18N.t("base.market.hk")},{value:"CN",label:I18N.t("base.market.cn")},{value:"CA",label:I18N.t("base.market.ca")},{value:"CRYPTO",label:I18N.t("base.market.crypto")}]}/>
             </FormRow>
-            <FormRow label="持仓股数 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
-            <FormRow label="均价成本 *"><Input value={form.avg_cost} onChange={v => set("avg_cost", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
+            <FormRow label={I18N.t("holdings.holding.shares")}><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
+            <FormRow label={I18N.t("holdings.holding.avgCost")}><Input value={form.avg_cost} onChange={v => set("avg_cost", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
           </>
         )}
-        <FormRow label="账户"><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label="快照日期 *"><Input value={form.as_of_date} onChange={v => set("as_of_date", v)} placeholder="YYYY-MM-DD"/></FormRow>
-        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        <FormRow label={I18N.t("holdings.holding.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.holding.snapDate")}><DateInput value={form.as_of_date} onChange={v => set("as_of_date", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.holding.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? I18N.t("base.btn.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </form>
     </Modal>
@@ -2122,12 +2140,12 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.date.trim())                            { setErr("日期不能为空"); return; }
-    if (!form.code.trim())                            { setErr("代码不能为空"); return; }
-    if (!form.shares || parseFloat(form.shares) <= 0) { setErr("股数须大于 0"); return; }
-    if (form.price === "" || parseFloat(form.price) < 0) { setErr("价格不能为空"); return; }
+    if (!form.date.trim())                            { setErr(I18N.t("holdings.txn.date").replace(" *","") + " required"); return; }
+    if (!form.code.trim())                            { setErr(I18N.t("holdings.txn.symbol").replace(" *","") + " required"); return; }
+    if (!form.shares || parseFloat(form.shares) <= 0) { setErr(I18N.t("holdings.txn.shares").replace(" *","") + " > 0"); return; }
+    if (form.price === "" || parseFloat(form.price) < 0) { setErr(I18N.t("holdings.txn.price").replace(" *","") + " required"); return; }
     const realizedStr = String(form.realized).trim();
-    if (realizedStr !== "" && Number.isNaN(parseFloat(realizedStr))) { setErr("已实现盈亏必须是数字"); return; }
+    if (realizedStr !== "" && Number.isNaN(parseFloat(realizedStr))) { setErr(I18N.t("holdings.txn.realized") + " must be a number"); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -2145,22 +2163,22 @@ const TransactionModal = ({ editing, accounts, defaultAccount, onClose, onSaved 
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={editing ? "编辑交易记录" : "新增交易记录"} width={440}>
+    <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.txn.edit.title") : I18N.t("holdings.txn.add.title")} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="日期 *"><Input value={form.date} onChange={v => set("date", v)} placeholder="YYYY-MM-DD"/></FormRow>
-        <FormRow label="代码 *"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
-        <FormRow label="方向">
-          <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:"买入 Buy"},{value:"sell",label:"卖出 Sell"}]}/>
+        <FormRow label={I18N.t("holdings.txn.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.side")}>
+          <Select value={form.side} onChange={v => set("side", v)} options={[{value:"buy",label:I18N.t("holdings.txn.side.buy")},{value:"sell",label:I18N.t("holdings.txn.side.sell")}]}/>
         </FormRow>
-        <FormRow label="股数 *"><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
-        <FormRow label="价格 *"><Input value={form.price} onChange={v => set("price", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
-        <FormRow label="账户"><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label="已实现盈亏"><Input value={form.realized} onChange={v => set("realized", v)} inputMode="decimal" placeholder="（可选，卖出时填写，可为负）" suffix={form.currency}/></FormRow>
-        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.shares")}><Input value={form.shares} onChange={v => set("shares", v)} inputMode="decimal" placeholder="100"/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.price")}><Input value={form.price} onChange={v => set("price", v)} inputMode="decimal" placeholder="120.00" suffix={form.currency}/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.realized")}><Input value={form.realized} onChange={v => set("realized", v)} inputMode="decimal" placeholder={I18N.t("holdings.txn.realized.ph")} suffix={form.currency}/></FormRow>
+        <FormRow label={I18N.t("holdings.txn.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? I18N.t("base.btn.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </form>
     </Modal>
@@ -2173,8 +2191,8 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
     const sym = SYMBOL_INDEX[(code || "").toUpperCase()];
     return sym ? (MARKET_CCY[sym.market] || "USD") : "USD";
   };
-  const catLabels = { dividend: "分红 Dividend", interest: "利息 Interest", deposit: "转入 Deposit", withdrawal: "转出 Withdrawal" };
-  const ccyOptions = CURRENCY_OPTIONS;
+  const catLabels = { dividend: I18N.t("holdings.income.cat.dividend"), interest: I18N.t("holdings.income.cat.interest"), deposit: I18N.t("holdings.income.cat.deposit"), withdrawal: I18N.t("holdings.income.cat.withdrawal") };
+  const ccyOptions = CURRENCY_OPTIONS();
   const acctCcy = accounts.find(a => a.name === (editing?.account || defaultAccount))?.currency || null;
 
   const [form, set] = useForm({
@@ -2200,9 +2218,9 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.date.trim())                            { setErr("日期不能为空"); return; }
-    if (!form.source.trim())                          { setErr("来源不能为空"); return; }
-    if (!form.amount || parseFloat(form.amount) <= 0) { setErr("金额须大于 0"); return; }
+    if (!form.date.trim())                            { setErr(I18N.t("holdings.income.date").replace(" *","") + " required"); return; }
+    if (!form.source.trim())                          { setErr(I18N.t("holdings.income.source").replace(" *","") + " required"); return; }
+    if (!form.amount || parseFloat(form.amount) <= 0) { setErr(I18N.t("balance.item.amountInvalid")); return; }
     setSaving(true); setErr(null);
     try {
       const payload = {
@@ -2218,27 +2236,27 @@ const IncomeModal = ({ editing, accounts, defaultAccount, onClose, onSaved }) =>
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={editing ? "编辑记录" : "添加收入/转账"} width={440}>
+    <Modal open={true} onClose={onClose} title={editing ? I18N.t("holdings.income.edit.title") : I18N.t("holdings.income.add.title")} width={440}>
       <form onSubmit={submit} style={{ padding: "18px 20px" }}>
-        <FormRow label="日期 *"><Input value={form.date} onChange={v => set("date", v)} placeholder="YYYY-MM-DD"/></FormRow>
-        <FormRow label="类型">
+        <FormRow label={I18N.t("holdings.income.date")}><DateInput value={form.date} onChange={v => set("date", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.income.type")}>
           <Select value={form.category} onChange={v => set("category", v)} options={Object.entries(catLabels).map(([value,label]) => ({value,label}))}/>
         </FormRow>
-        <FormRow label="来源 *"><Input value={form.source} onChange={v => set("source", v)} placeholder="NVDA 分红 / IBKR 转入"/></FormRow>
-        {!isTransfer && <FormRow label="代码"><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA（可选）"/></FormRow>}
-        <FormRow label="金额 *">
+        <FormRow label={I18N.t("holdings.income.source")}><Input value={form.source} onChange={v => set("source", v)} placeholder={I18N.t("holdings.income.source.ph")}/></FormRow>
+        {!isTransfer && <FormRow label={I18N.t("holdings.income.symbol")}><SymbolCombobox value={form.code} onChange={setCode} placeholder="NVDA"/></FormRow>}
+        <FormRow label={I18N.t("holdings.income.amount")}>
           <div style={{ display: "flex", gap: 8 }}>
             <Input value={form.amount} onChange={v => set("amount", v)} inputMode="decimal" placeholder="320.00"
               suffix={!isTransfer ? form.currency : undefined} style={{ flex: 1 }}/>
             {isTransfer && <Select value={form.currency} onChange={v => set("currency", v)} options={ccyOptions} style={{ width: 90 }}/>}
           </div>
         </FormRow>
-        <FormRow label="账户"><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
-        <FormRow label="备注"><Input value={form.note} onChange={v => set("note", v)} placeholder="（可选）"/></FormRow>
+        <FormRow label={I18N.t("holdings.income.account")}><AccountSelect accounts={accounts} value={form.account} onChange={v => set("account", v)}/></FormRow>
+        <FormRow label={I18N.t("holdings.income.note")}><Input value={form.note} onChange={v => set("note", v)} placeholder={`(${I18N.t("base.label.optional")})`}/></FormRow>
         {err && <div style={{ fontSize: 12, color: "var(--up)", marginBottom: 10 }}>{err}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" type="submit" disabled={saving}>{saving ? I18N.t("base.btn.saving") : I18N.t("base.btn.save")}</Button>
         </div>
       </form>
     </Modal>
@@ -2253,7 +2271,7 @@ const ComingSoonBanner = ({ module, features }) => (
   <div style={{ marginTop: 22, padding: 18, background: "var(--paper-2)", border: "1px dashed var(--line-2)", borderRadius: 12 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
       <Icon name="spark" size={14} style={{ color: "var(--warn)" }}/>
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: ".1em" }}>Roadmap · {module}</span>
+      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("base.roadmap")} · {module}</span>
     </div>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {features.map(f => <span key={f} style={{ fontSize: 12, padding: "4px 10px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--ink-3)" }}>{f}</span>)}

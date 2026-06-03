@@ -1,15 +1,15 @@
 /* Module 1 — Stock Alerts (full implementation) */
 
-const COND_OPTIONS = [
-  { value: "price_gte",  label: "价格高于 Price ≥",  symbol: "≥",  isPrice: true,  isUp: true  },
-  { value: "price_lte",  label: "价格低于 Price ≤",  symbol: "≤",  isPrice: true,  isUp: false },
-  { value: "change_gte", label: "涨幅超 Change ≥",   symbol: "Δ≥", isPrice: false, isUp: true  },
-  { value: "change_lte", label: "跌幅超 Change ≥",   symbol: "Δ≤", isPrice: false, isUp: false },
+const getCOND_OPTIONS = () => [
+  { value: "price_gte",  label: I18N.t("alerts.cond.price_gte"),  symbol: "≥",  isPrice: true,  isUp: true  },
+  { value: "price_lte",  label: I18N.t("alerts.cond.price_lte"),  symbol: "≤",  isPrice: true,  isUp: false },
+  { value: "change_gte", label: I18N.t("alerts.cond.change_gte"), symbol: "Δ≥", isPrice: false, isUp: true  },
+  { value: "change_lte", label: I18N.t("alerts.cond.change_lte"), symbol: "Δ≤", isPrice: false, isUp: false },
 ];
 
-const condMeta = (c) => COND_OPTIONS.find(o => o.value === c) || COND_OPTIONS[0];
+const condMeta = (c) => getCOND_OPTIONS().find(o => o.value === c) || getCOND_OPTIONS()[0];
 
-const WATCHLIST_TAB = "关注列表 Watchlist";
+const WATCHLIST_TAB = "__watchlist__";
 
 const guessMarket = (symbol) => {
   if (symbol.endsWith(".HK") || symbol.startsWith("^HSI") || symbol.startsWith("^HSCE") || symbol.startsWith("^HSTECH")) return "HK";
@@ -185,7 +185,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     if (!form.code || !form.threshold) return;
     const numThr = parseFloat(form.threshold);
     if (form.cond === "change_lte" && numThr <= 0) {
-      setFormError("跌幅超：请输入正数（如 2 表示跌幅超 2%）");
+      setFormError(I18N.t("alerts.err.change_lte"));
       return;
     }
     const sym = SYMBOL_INDEX[form.code];
@@ -206,7 +206,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
           ...prev,
           { symbol: a.code, name: s.name, market: s.market, currency: s.currency },
         ]);
-      }).catch(e => setFormError(e.detail || "提交失败"));
+      }).catch(e => setFormError(e.detail || I18N.t("alerts.err.submit")));
   };
 
   const toggle = (id) => {
@@ -238,7 +238,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
       .then(updated => {
         setAlerts(prev => prev.map(a => a.id === id ? updated : a));
         setEditingAlert(null);
-      }).catch(e => onError?.(e.detail || "保存失败"));
+      }).catch(e => onError?.(e.detail || I18N.t("alerts.err.save")));
   };
 
   const reEnable = (id) => {
@@ -284,17 +284,17 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   return (
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
-        kicker="MODULE 01 · ALERTS"
-        title="股票提醒"
-        subtitle={`Stock Price Alerts · 美股 / 港股 / A 股 / 指数${notifyEmail ? ` · 触发后邮件通知 ${notifyEmail}` : ""}`}
+        kicker={`${I18N.t("dashboard.module.01.kicker")} · ALERTS`}
+        title={I18N.t("alerts.title")}
+        subtitle={`${I18N.t("alerts.subtitle")}${notifyEmail ? ` · ${I18N.t("alerts.notifyEmail")} ${notifyEmail}` : ""}`}
       />
 
       {/* Stats strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 18 }}>
-        <StatTile label="ACTIVE 监控中" value={counts.active} accent="var(--up)" hint="Cron */20 min"/>
-        <StatTile label="TRIGGERED 已触发" value={counts.triggered} accent="var(--ink)" hint="本月 this month"/>
-        <StatTile label="MARKETS 覆盖市场" value="3" accent="var(--info)" hint="US · HK · CN"/>
-        <StatTile label="LAST CHECK 上次检查" value={(() => {
+        <StatTile label={I18N.t("alerts.stat.active")} value={counts.active} accent="var(--up)" hint={I18N.t("alerts.stat.active.hint")}/>
+        <StatTile label={I18N.t("alerts.stat.triggered")} value={counts.triggered} accent="var(--ink)" hint={I18N.t("alerts.stat.triggered.hint")}/>
+        <StatTile label={I18N.t("alerts.stat.markets")} value="3" accent="var(--info)" hint={I18N.t("alerts.stat.markets.hint")}/>
+        <StatTile label={I18N.t("alerts.stat.lastCheck")} value={(() => {
           if (!lastCheck) return "—";
           const s = Math.floor((Date.now() - lastCheck) / 1000);
           if (s < 60) return `${s}s ago`;
@@ -310,12 +310,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         <Card padding={0}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>常用标的 Quick Pick</div>
+              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{I18N.t("alerts.quickPick")}</div>
               <Input
                 value={search}
                 onChange={v => setSearch(v)}
                 prefix={<Icon name="search" size={13}/>}
-                placeholder="Search symbol…"
+                placeholder={I18N.t("alerts.quickPick.search")}
                 style={{ width: 200, height: 30 }}
               />
             </div>
@@ -328,7 +328,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                     color: category === c ? "#fff" : "var(--ink-3)",
                     border: "1px solid " + (category === c ? "var(--ink)" : "var(--line-2)"),
                     borderRadius: 6, cursor: "pointer",
-                  }}>{c}</button>
+                  }}>{c === WATCHLIST_TAB ? I18N.t("alerts.watchlist.tab") : I18N.t(`alerts.tab.${c}`)}</button>
                 ))}
               </div>
             )}
@@ -348,7 +348,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                       {!watched && (
                         <button
                           onClick={() => addToWatch(s.code, s.name, s.market, s.currency)}
-                          title="添加到自选"
+                          title={I18N.t("alerts.watchlist.addWatch")}
                           style={{ ...watchBtnStyle, color: "var(--info)" }}
                         >+ Watch</button>
                       )}
@@ -357,7 +357,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                 })}
                 {/* Backend-fetched unknown symbol */}
                 {searchLoading && (
-                  <div style={{ fontSize: 12, color: "var(--ink-4)", padding: "6px 10px" }}>查询中…</div>
+                  <div style={{ fontSize: 12, color: "var(--ink-4)", padding: "6px 10px" }}>{I18N.t("alerts.searching")}</div>
                 )}
                 {!searchLoading && searchResult && (
                   <div style={{
@@ -376,7 +376,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                     <button
                       onClick={() => pickSymbol(searchResult)}
                       style={{ ...watchBtnStyle, color: "var(--ink-2)" }}
-                    >选取</button>
+                    >{I18N.t("alerts.select")}</button>
                     {!watchlist.some(w => w.symbol === searchResult.code) && (
                       <button
                         onClick={() => addToWatch(searchResult.code, searchResult.name, searchResult.market, searchResult.currency)}
@@ -387,14 +387,14 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                 )}
                 {!searchLoading && clientMatches.length === 0 && !searchResult && search.length > 0 && (
                   <div style={{ fontSize: 12, color: "var(--ink-4)", padding: "6px 10px" }}>
-                    未找到"{search}"，请检查代码是否正确
+                    {I18N.t("alerts.notFound")}
                   </div>
                 )}
               </div>
             ) : isWatchlistTab ? (
               /* Watchlist tab */
               watchlist.length === 0 ? (
-                <Empty icon="bell" title="自选为空" hint="搜索标的并点击 + Watch，或添加提醒后自动加入"/>
+                <Empty icon="bell" title={I18N.t("alerts.watchlist.empty")} hint={I18N.t("alerts.watchlist.empty.hint")}/>
               ) : (
                 <div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -407,7 +407,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                           <SymbolChip sym={liveSym} onClick={pickSymbol} selected={form.code === w.symbol}/>
                           <button
                             onClick={() => removeFromWatch(w.symbol)}
-                            title="从关注列表移除"
+                            title={I18N.t("alerts.watchlist.remove")}
                             style={removeBtnStyle}
                           >×</button>
                         </div>
@@ -416,7 +416,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                   </div>
                   {watchlist.length > 10 && (
                     <button onClick={() => setShowAllWatch(v => !v)} style={{ ...watchBtnStyle, marginTop: 8, color: "var(--ink-3)" }}>
-                      {showAllWatch ? "收起" : `显示更多 (+${watchlist.length - 10})`}
+                      {showAllWatch ? I18N.t("alerts.collapse") : `${I18N.t("alerts.showMore")} (+${watchlist.length - 10})`}
                     </button>
                   )}
                 </div>
@@ -437,11 +437,11 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         {/* Form */}
         <Card padding={0}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>添加提醒 New Alert</div>
+            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{I18N.t("alerts.form.title")}</div>
             {selectedSym && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--ink-4)" }}>
                 <span className="pulse-dot" style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: "var(--up)" }}/>
-                Live preview
+                {I18N.t("alerts.livePreview")}
               </div>
             )}
           </div>
@@ -470,16 +470,16 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <Field label="代码 Symbol">
+              <Field label={I18N.t("alerts.form.symbol")}>
                 <Input value={form.code} onChange={v => setForm({ ...form, code: v.toUpperCase() })} prefix={<Icon name="dot" size={10} style={{ color: "var(--us)" }}/>}/>
               </Field>
-              <Field label="条件 Condition">
-                <Select value={form.cond} onChange={v => setForm({ ...form, cond: v })} options={COND_OPTIONS.map(o => ({ value: o.value, label: o.label }))} style={{ width: "100%" }}/>
+              <Field label={I18N.t("alerts.form.condition")}>
+                <Select value={form.cond} onChange={v => setForm({ ...form, cond: v })} options={getCOND_OPTIONS().map(o => ({ value: o.value, label: o.label }))} style={{ width: "100%" }}/>
               </Field>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 10, marginBottom: 14 }}>
-              <Field label={`阈值 Threshold ${cond.isPrice ? `(${selectedSym?.currency || "$"})` : "(%)"}`}>
+              <Field label={`${I18N.t("alerts.form.threshold")} ${cond.isPrice ? `(${selectedSym?.currency || "$"})` : "(%)"}`}>
                 <Input
                   value={form.threshold}
                   onChange={v => setForm({ ...form, threshold: v })}
@@ -488,8 +488,8 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                   suffix={cond.isPrice ? selectedSym?.currency : "%"}
                 />
               </Field>
-              <Field label="名称 Label (optional)">
-                <Input value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="e.g. 突破新高 / 加仓信号"/>
+              <Field label={I18N.t("alerts.form.label")}>
+                <Input value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder={I18N.t("alerts.form.label.ph")}/>
               </Field>
             </div>
 
@@ -501,17 +501,17 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
                 fontSize: 12, color: "var(--ink-2)",
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
-                <span>距离触发 {cond.isPrice ? "Distance" : "Δ"}</span>
+                <span>{I18N.t("alerts.form.distance")}</span>
                 <span className="mono" style={{ fontWeight: 600, color: Math.abs(distance) < 2 ? "var(--warn)" : "var(--ink-2)" }}>
                   {distance > 0 ? "+" : ""}{distance.toFixed(2)}{cond.isPrice ? "%" : "pp"}
-                  {Math.abs(distance) < 2 && " · 接近触发"}
+                  {Math.abs(distance) < 2 && ` ${I18N.t("alerts.form.nearTrigger")}`}
                 </span>
               </div>
             )}
 
             {formError && <div style={{ fontSize: 12, color: "var(--up)", padding: "6px 10px", background: "rgba(217,53,43,.06)", borderRadius: 6, marginBottom: 10 }}>{formError}</div>}
             <Button variant="primary" icon="plus" size="lg" onClick={submit} style={{ width: "100%", justifyContent: "center" }}>
-              添加提醒 Add Alert
+              {I18N.t("alerts.form.add")}
             </Button>
           </div>
         </Card>
@@ -525,22 +525,22 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
             value={tab}
             onChange={setTab}
             tabs={[
-              { id: "active",    label: "监控中 Active",    count: counts.active,    icon: "bolt" },
-              { id: "triggered", label: "已触发 Triggered", count: counts.triggered, icon: "check" },
-              { id: "all",       label: "全部 All",          count: counts.all },
+              { id: "active",    label: I18N.t("alerts.tab.active"),    count: counts.active,    icon: "bolt" },
+              { id: "triggered", label: I18N.t("alerts.tab.triggered"), count: counts.triggered, icon: "check" },
+              { id: "all",       label: I18N.t("alerts.tab.all"),       count: counts.all },
             ]}
           />
-          <Input value={search} onChange={setSearch} prefix={<Icon name="search" size={13}/>} placeholder="搜索代码或名称…" style={{ width: 240, height: 30 }}/>
+          <Input value={search} onChange={setSearch} prefix={<Icon name="search" size={13}/>} placeholder={I18N.t("alerts.search.ph")} style={{ width: 240, height: 30 }}/>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 110px 130px 100px 90px 80px 60px", gap: 12, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
           <span></span>
-          <span>NAME · CODE</span>
-          <span>CONDITION</span>
-          <span style={{ textAlign: "right" }}>NOW</span>
-          <span style={{ textAlign: "right" }}>THRESHOLD</span>
-          <span style={{ textAlign: "right" }}>DISTANCE</span>
-          <span style={{ textAlign: "center" }}>STATUS</span>
+          <span>{I18N.t("alerts.col.name")}</span>
+          <span>{I18N.t("alerts.col.condition")}</span>
+          <span style={{ textAlign: "right" }}>{I18N.t("alerts.col.now")}</span>
+          <span style={{ textAlign: "right" }}>{I18N.t("alerts.col.threshold")}</span>
+          <span style={{ textAlign: "right" }}>{I18N.t("alerts.col.distance")}</span>
+          <span style={{ textAlign: "center" }}>{I18N.t("alerts.col.status")}</span>
           <span style={{ textAlign: "right" }}></span>
         </div>
 
@@ -552,7 +552,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
         {filtered.length > 10 && (
           <div style={{ padding: "12px 18px", borderTop: "1px solid var(--line)" }}>
             <button onClick={() => setShowAllAlerts(v => !v)} style={{ ...watchBtnStyle, color: "var(--ink-3)" }}>
-              {showAllAlerts ? "收起" : `显示更多 Show more (+${filtered.length - 10})`}
+              {showAllAlerts ? I18N.t("alerts.collapse") : `${I18N.t("alerts.showMore")} (+${filtered.length - 10})`}
             </button>
           </div>
         )}
@@ -562,12 +562,12 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
       <Card padding={20} style={{ marginTop: 22 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
-            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>触发历史 Trigger Timeline</div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Last 14 days · {history.length} triggers</div>
+            <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{I18N.t("alerts.timeline.title")}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.tf("alerts.timeline.subtitle", { n: history.length })}</div>
           </div>
           <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--ink-3)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--up)", borderRadius: 4 }}/>突破上行</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--down)", borderRadius: 4 }}/>跌破下行</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--up)", borderRadius: 4 }}/>{I18N.t("alerts.timeline.up")}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, background: "var(--down)", borderRadius: 4 }}/>{I18N.t("alerts.timeline.down")}</span>
           </div>
         </div>
         <div style={{ overflowX: "auto" }} className="scroll">
@@ -603,10 +603,10 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
       )}
 
       {/* Import modal */}
-      <Modal open={showImport} onClose={() => setShowImport(false)} title="批量导入提醒 Bulk Import" width={600}>
+      <Modal open={showImport} onClose={() => setShowImport(false)} title={I18N.t("alerts.bulk.title")} width={600}>
         <div style={{ padding: 20 }}>
           <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
-            一行一条，格式：<span className="mono" style={{ background: "var(--bg-deep)", padding: "1px 5px", borderRadius: 3 }}>CODE COND THRESHOLD [NAME]</span>
+            {I18N.t("alerts.bulk.format")} <span className="mono" style={{ background: "var(--bg-deep)", padding: "1px 5px", borderRadius: 3 }}>CODE COND THRESHOLD [NAME]</span>
           </div>
           <textarea defaultValue={`NVDA price_gte 150 突破新高
 QQQ price_lte 490 加仓信号
@@ -620,8 +620,8 @@ QQQ price_lte 490 加仓信号
             }} className="scroll"
           />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-            <Button variant="secondary" onClick={() => setShowImport(false)}>取消</Button>
-            <Button variant="primary" icon="check" onClick={() => setShowImport(false)}>导入 5 条</Button>
+            <Button variant="secondary" onClick={() => setShowImport(false)}>{I18N.t("base.btn.cancel")}</Button>
+            <Button variant="primary" icon="check" onClick={() => setShowImport(false)}>{I18N.t("alerts.bulk.import")}</Button>
           </div>
         </div>
       </Modal>
@@ -693,7 +693,7 @@ const AlertRow = ({ a, onToggle, onRemove, onReEnable, onEdit, last, liveQuotes 
           <MarketDot market={sym?.market} size={6}/>
           <span className="mono">{a.code}</span>
           {sym && <span>· {sym.name}</span>}
-          <span>· created {a.created}</span>
+          <span>· {I18N.t("alerts.created")} {a.created}</span>
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -712,15 +712,15 @@ const AlertRow = ({ a, onToggle, onRemove, onReEnable, onEdit, last, liveQuotes 
       </div>
       <div style={{ textAlign: "center" }}>
         {a.triggered
-          ? <Badge tone="up" solid size="sm">已触发</Badge>
+          ? <Badge tone="up" solid size="sm">{I18N.t("alerts.badge.triggered")}</Badge>
           : a.enabled
-            ? <Badge tone="down" size="sm">监控中</Badge>
-            : <Badge tone="neutral" size="sm">已禁用</Badge>}
+            ? <Badge tone="down" size="sm">{I18N.t("alerts.badge.active")}</Badge>
+            : <Badge tone="neutral" size="sm">{I18N.t("alerts.badge.disabled")}</Badge>}
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 4 }}>
-        {a.triggered && <button onClick={() => onReEnable(a.id)} title="重新启用" style={iconBtn}><Icon name="play" size={13}/></button>}
-        <button onClick={() => onEdit(a)} title="编辑" style={iconBtn}><Icon name="edit" size={13}/></button>
-        <button onClick={() => onRemove(a.id)} title="删除" style={iconBtn}><Icon name="trash" size={13}/></button>
+        {a.triggered && <button onClick={() => onReEnable(a.id)} title={I18N.t("alerts.btn.reenable")} style={iconBtn}><Icon name="play" size={13}/></button>}
+        <button onClick={() => onEdit(a)} title={I18N.t("alerts.btn.edit")} style={iconBtn}><Icon name="edit" size={13}/></button>
+        <button onClick={() => onRemove(a.id)} title={I18N.t("alerts.btn.delete")} style={iconBtn}><Icon name="trash" size={13}/></button>
       </div>
     </div>
   );
@@ -753,32 +753,32 @@ const EditAlertModal = ({ alert, onClose, onSave }) => {
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={`编辑提醒 · ${alert.code}`} width={480}>
+    <Modal open={true} onClose={onClose} title={`${I18N.t("alerts.edit.title")} · ${alert.code}`} width={480}>
       <div style={{ padding: "18px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: "var(--bg-deep)", borderRadius: 8, fontSize: 12, color: "var(--ink-3)", alignItems: "center" }}>
           <MarketDot market={sym?.market} size={7}/>
           <span className="mono" style={{ fontWeight: 600, color: "var(--ink)" }}>{alert.code}</span>
           {sym && <span>{sym.name}</span>}
-          <span style={{ marginLeft: "auto", color: "var(--ink-4)" }}>created {alert.created}</span>
+          <span style={{ marginLeft: "auto", color: "var(--ink-4)" }}>{I18N.t("alerts.created")} {alert.created}</span>
         </div>
 
-        <Field label="名称 Label">
-          <Input value={name} onChange={setName} placeholder="提醒名称"/>
+        <Field label={I18N.t("alerts.edit.label")}>
+          <Input value={name} onChange={setName} placeholder={I18N.t("alerts.edit.label.ph")}/>
         </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <Field label="条件 Condition">
-            <Select value={cond} onChange={setCond} options={COND_OPTIONS.map(o => ({ value: o.value, label: o.label }))} style={{ width: "100%" }}/>
+          <Field label={I18N.t("alerts.edit.condition")}>
+            <Select value={cond} onChange={setCond} options={getCOND_OPTIONS().map(o => ({ value: o.value, label: o.label }))} style={{ width: "100%" }}/>
           </Field>
-          <Field label={`阈值 Threshold ${condMeta_.isPrice ? `(${sym?.currency || "$"})` : "(%)"}`}>
+          <Field label={`${I18N.t("alerts.edit.threshold")} ${condMeta_.isPrice ? `(${sym?.currency || "$"})` : "(%)"}`}>
             <Input value={threshold} onChange={setThreshold} type="number" suffix={condMeta_.isPrice ? (sym?.currency || "$") : "%"}/>
           </Field>
         </div>
 
         {error && <div style={{ fontSize: 12, color: "var(--up)", padding: "6px 10px", background: "rgba(217,53,43,.06)", borderRadius: 6 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
-          <Button variant="secondary" onClick={onClose}>取消</Button>
-          <Button variant="primary" icon="check" onClick={submit}>保存</Button>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="primary" icon="check" onClick={submit}>{I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>

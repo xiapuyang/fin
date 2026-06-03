@@ -56,8 +56,8 @@ const MarketDot = ({ market, size = 8 }) => {
 };
 
 const MarketLabel = ({ market }) => {
-  const t = { US: "美股 US", HK: "港股 HK", CN: "A股 CN", CA: "加股 CA" }[market] || market;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}><MarketDot market={market} /> {t}</span>;
+  const label = I18N.t(`base.market.${market.toLowerCase()}`);
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}><MarketDot market={market} /> {label}</span>;
 };
 
 // === Badge =================================================================
@@ -223,6 +223,41 @@ const Input = ({ value, onChange, placeholder, prefix, suffix, type = "text", in
   );
 };
 
+const DateInput = ({ value, onChange, style = {}, ...rest }) => {
+  const ref = React.useRef(null);
+  return (
+    <div style={{
+      position: "relative",
+      background: "var(--paper)", border: "1px solid var(--line-2)",
+      borderRadius: 8, height: 34,
+      ...style,
+    }}>
+      <input
+        {...rest}
+        ref={ref}
+        type="date"
+        value={value ?? ""}
+        onChange={e => onChange?.(e.target.value)}
+        style={{
+          width: "100%", height: "100%", boxSizing: "border-box",
+          border: "none", background: "transparent",
+          fontSize: 13, color: "var(--ink)", padding: "0 40px 0 10px",
+        }}
+      />
+      <div
+        onClick={() => ref.current?.showPicker?.()}
+        style={{
+          position: "absolute", right: 0, top: 0, bottom: 0, width: 40,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+        }}
+      >
+        <Icon name="calendar" size={18} style={{ color: "var(--ink-4)", pointerEvents: "none" }}/>
+      </div>
+    </div>
+  );
+};
+
 const Select = ({ value, onChange, options, style = {} }) => {
   return (
     <div style={{
@@ -361,6 +396,6 @@ const Modal = ({ open, onClose, children, width = 520, title }) => {
 Object.assign(window, {
   fmtNum, fmtMoney, fmtPct, toCNY,
   MarketDot, MarketLabel, Badge, Button, Card, SectionHeader, Tabs,
-  Input, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal,
+  Input, DateInput, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal,
   PRIVACY, setPrivacyMasked, usePrivacyMasked, Private,
 });

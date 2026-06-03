@@ -44,6 +44,9 @@ const _calcAge = (birthDate) => {
 
 const _LIQUID_CATS = new Set(["现金", "存款", "理财", "期权", "社保"]);
 
+// Default monthly coverage cost per display currency (editable in the SSI banner)
+const _SSI_DEFAULTS = { CNY: 1000, USD: 1000, HKD: 1000, CAD: 1000 };
+
 const Fire = ({ currency = "CNY", birthDate = "" }) => {
   usePrivacyMasked(); // re-render KPI tiles + chart amounts on privacy toggle
   const [loading, setLoading] = React.useState(true);
@@ -60,6 +63,9 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const [targetRetireAge, setTargetRetireAge] = React.useState(50);
   const [mcSigma,         setMcSigma]         = React.useState(15);
   const [lifeExpectancy,  setLifeExpectancy]  = React.useState(80);
+  const [ssiMonthly,      setSsiMonthly]      = React.useState(_SSI_DEFAULTS[currency] ?? 1000);
+  const [ssiInputStr,     setSsiInputStr]     = React.useState(String(_SSI_DEFAULTS[currency] ?? 1000));
+  const settingsRef = React.useRef({});
 
   React.useEffect(() => {
     Promise.all([
@@ -75,6 +81,11 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
       if (s.fire_target_age  != null) setTargetRetireAge(s.fire_target_age);
       if (s.fire_mc_sigma       != null) setMcSigma(s.fire_mc_sigma);
       if (s.fire_life_expectancy != null) setLifeExpectancy(s.fire_life_expectancy);
+      settingsRef.current = s;
+      const ssiMap = s.fire_ssi_monthly || {};
+      const ssiVal = ssiMap[currency] ?? (_SSI_DEFAULTS[currency] ?? 1000);
+      setSsiMonthly(ssiVal);
+      setSsiInputStr(String(ssiVal));
 
       // monthly expense — ledger avg always shown as reference
       if (avgExp != null) setLedgerAvgExp(avgExp);
@@ -144,6 +155,21 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
   const setTargetRetireAgeP = persist(setTargetRetireAge, "fire_target_age");
   const setMcSigmaP         = persist(setMcSigma,         "fire_mc_sigma");
   const setLifeExpectancyP  = persist(setLifeExpectancy,  "fire_life_expectancy");
+
+  const setSsiMonthlyP = (val) => {
+    setSsiMonthly(val);
+    setSsiInputStr(String(val));
+    const ssiMap = { ...(settingsRef.current.fire_ssi_monthly || {}), [currency]: val };
+    settingsRef.current.fire_ssi_monthly = ssiMap;
+    saveSettings({ fire_ssi_monthly: ssiMap });
+  };
+
+  React.useEffect(() => {
+    const ssiMap = settingsRef.current.fire_ssi_monthly || {};
+    const val = ssiMap[currency] ?? (_SSI_DEFAULTS[currency] ?? 1000);
+    setSsiMonthly(val);
+    setSsiInputStr(String(val));
+  }, [currency]);
 
   const investable = portfolioValue ?? 0;
 
@@ -306,17 +332,16 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
         kicker="MODULE 05 · FIRE"
-        title="FIRE 退休计划"
-        subtitle="需要出生日期才能计算 · 请到 设置 页面填出生日期"
+        title={I18N.t("fire.noBirthDate.title")}
+        subtitle={I18N.t("fire.noBirthDate.sub")}
       />
       <Card padding={32}>
         <div style={{ textAlign: "center", padding: "48px 24px", color: "var(--ink-3)" }}>
           <div className="serif-cn" style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--ink-1)" }}>
-            缺少出生日期
+            {I18N.t("fire.noBirthDate.msg")}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            FIRE 计算依赖当前年龄 — 请到 <span style={{ fontWeight: 600, color: "var(--ink-1)" }}>设置 → 出生日期</span> 填入，
-            <br/>填好后此页面会基于你的真实参数自动计算。
+            {I18N.t("fire.noBirthDate.detail")}
           </div>
         </div>
       </Card>
@@ -328,17 +353,17 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
     <div className="fade-in" style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}>
       <SectionHeader
         kicker="MODULE 05 · FIRE"
-        title="FIRE 退休计划"
-        subtitle={`Financial Independence, Retire Early · 月投入 + 复利 · ${multiplier}× 年支出法则（SWR ${swr}%）· 投资数据取自投资组合页面`}
+        title={I18N.t("fire.title")}
+        subtitle={I18N.tf("fire.subtitle", { mult: multiplier, swr })}
         right={
           <div style={{ display: "flex", gap: 4, padding: 3, background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
             {[
-              { id: "conservative", label: "保守", cagr: 6,  monthly: 6000,  swr: 3, color: "#2563EB", desc: "低风险组合 · 40+ 年退休资金" },
-              { id: "base",         label: "基准", cagr: 10, monthly: 8000,  swr: 4, color: "#16A34A", desc: "标准 Bengen 4% 法则 · 30 年退休" },
-              { id: "aggressive",   label: "激进", cagr: 13, monthly: 12000, swr: 5, color: "#D97706", desc: "高风险高回报 · 适合有兜底收入" },
+              { id: "conservative", label: I18N.t("fire.scenario.conservative.label"), cagr: 6,  monthly: 6000,  swr: 3, color: "#2563EB", desc: I18N.t("fire.scenario.conservative.desc") },
+              { id: "base",         label: I18N.t("fire.scenario.base.label"),         cagr: 10, monthly: 8000,  swr: 4, color: "#16A34A", desc: I18N.t("fire.scenario.base.desc") },
+              { id: "aggressive",   label: I18N.t("fire.scenario.aggressive.label"),   cagr: 13, monthly: 12000, swr: 5, color: "#D97706", desc: I18N.t("fire.scenario.aggressive.desc") },
             ].map(s => {
               const active = activeScenario === s.id;
-              const tip = `${s.label}方案：年化收益 ${s.cagr}% · 月度投入 ¥${s.monthly.toLocaleString()} · 提取率 ${s.swr}%（${s.desc}）`;
+              const tip = `${s.label}: CAGR ${s.cagr}% · ${I18N.t("fire.params.contribution")} ¥${s.monthly.toLocaleString()} · SWR ${s.swr}% (${s.desc})`;
               return (
                 <button key={s.id} title={tip} onClick={() => applyScenario(s.id)} style={{
                   padding: "5px 10px 6px", borderRadius: 6, cursor: "pointer",
@@ -349,7 +374,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1 }}>{s.label}</div>
                   <div style={{ fontSize: 9.5, opacity: active ? .8 : .85, marginTop: 2, letterSpacing: ".01em" }}>
-                    年化 {s.cagr}% · 月投 ¥{(s.monthly/1000).toFixed(0)}k · SWR {s.swr}%
+                    {I18N.t("fire.scenario.abbr.cagr")} {s.cagr}% · {I18N.t("fire.scenario.abbr.monthly")} ¥{(s.monthly/1000).toFixed(0)}k · SWR {s.swr}%
                   </div>
                 </button>
               );
@@ -360,10 +385,10 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
 
       {/* KPI tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 14 }}>
-        <FireTile label="FIRE NUMBER" value={fmtM(fireNumber)} sub={`月 ${sym}${fmtNum(toDisp(monthlyExp), 0)} × 12 × ${multiplier} (SWR ${swr}%)`}/>
-        <FireTile label="CURRENT" value={portfolioValue != null ? fmtM(investable + liquidAssets, 2) : "—"} sub={portfolioValue != null ? `${((investable+liquidAssets)/fireNumber*100).toFixed(0)}% 已达成 · 投资 + 流动资产` : "加载中…"}/>
-        <FireTile label="FIRE AGE" value={fireAge ? `${fireAge}` : "—"} sub={fireAge ? `${yearsToFire}y from now` : "Out of range"} accent={fireAge ? "var(--up)" : "var(--down)"}/>
-        <FireTile label="REAL CAGR" value={`${realCagr.toFixed(1)}%`} sub={`名义 ${cagr.toFixed(1)}% − 通胀 ${inflation}% · 投影使用实际收益率`}/>
+        <FireTile label={I18N.t("fire.stat.fireNumber")} value={fmtM(fireNumber)} sub={`${sym}${fmtNum(toDisp(monthlyExp), 0)} × 12 × ${multiplier} (SWR ${swr}%)`}/>
+        <FireTile label={I18N.t("fire.stat.current")} value={portfolioValue != null ? fmtM(investable + liquidAssets, 2) : "—"} sub={portfolioValue != null ? I18N.tf("fire.stat.current.achieved", { pct: ((investable+liquidAssets)/fireNumber*100).toFixed(0) }) : I18N.t("fire.stat.current.loading")}/>
+        <FireTile label={I18N.t("fire.stat.fireAge")} value={fireAge ? `${fireAge}` : "—"} sub={fireAge ? I18N.tf("fire.stat.fireAge.fromNow", { y: yearsToFire }) : I18N.t("fire.stat.fireAge.outOfRange")} accent={fireAge ? "var(--up)" : "var(--down)"}/>
+        <FireTile label={I18N.t("fire.stat.realCagr")} value={`${realCagr.toFixed(1)}%`} sub={I18N.tf("fire.stat.realCagr.detail", { cagr: cagr.toFixed(1), inf: inflation })}/>
       </div>
 
       {/* Chart + Parameters */}
@@ -371,13 +396,13 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         <Card padding={20}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div>
-              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>净资产时间轴 Net Worth Timeline</div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Projected · age {age}–{lifeExpectancy}</div>
+              <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700 }}>{I18N.t("fire.timeline.title")}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.tf("fire.chart.projected", { from: age, to: lifeExpectancy })}</div>
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--ink)" }}/>Accumulation</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 0, borderTop: "2px dashed var(--ink)", opacity: .45 }}/>Drawdown</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--up)", borderTop: "1px dashed var(--up)" }}/>FIRE target</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--ink)" }}/>{I18N.t("fire.chart.legend.accumulation")}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 0, borderTop: "2px dashed var(--ink)", opacity: .45 }}/>{I18N.t("fire.chart.legend.drawdown")}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 2, background: "var(--up)", borderTop: "1px dashed var(--up)" }}/>{I18N.t("fire.chart.legend.target")}</span>
             </div>
           </div>
           <FireChart data={project} fireNumber={fireNumber} effectiveFireTarget={effectiveFireTarget} liquidAssets={liquidAssets} fireAge={fireAge} currency={currency}/>
@@ -387,12 +412,12 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               {/* Header: title + target age picker */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div>
-                  <div className="serif-cn" style={{ fontSize: 14, fontWeight: 700 }}>蒙特卡洛模拟 Monte Carlo</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>500 次模拟 · 年收益正态分布 μ={realCagr.toFixed(1)}% σ={mcSigma}%</div>
+                  <div className="serif-cn" style={{ fontSize: 14, fontWeight: 700 }}>{I18N.t("fire.mc.title")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{I18N.t("fire.mc.subtitle")} μ={realCagr.toFixed(1)}% σ={mcSigma}%</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>目标退休</span>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>{I18N.t("fire.mc.targetRetire")}</span>
                     {[45, 50, 55, 60].map(a => (
                       <button key={a} onClick={() => setTargetRetireAgeP(a)} style={{
                         padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
@@ -403,7 +428,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                     ))}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>波动率 σ</span>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>{I18N.t("fire.mc.sigma")}</span>
                     {[10, 15, 20, 25].map(s => (
                       <button key={s} onClick={() => setMcSigmaP(s)} style={{
                         padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
@@ -414,7 +439,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                     ))}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>预期寿命</span>
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)", whiteSpace: "nowrap" }}>{I18N.t("fire.mc.lifeExpectancy")}</span>
                     {[70, 80, 90].map(a => (
                       <button key={a} onClick={() => setLifeExpectancyP(a)} style={{
                         padding: "2px 7px", fontSize: 11, fontWeight: 500, cursor: "pointer", borderRadius: 5, border: "1px solid",
@@ -429,15 +454,15 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               {/* 4 stat tiles */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr 1.3fr 1fr", gap: 8, marginBottom: 12 }}>
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>达标率 · age {targetRetireAge}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>{I18N.tf("fire.mc.successRate", { age: targetRetireAge })}</div>
                   <div className="mono" style={{
                     fontSize: 22, fontWeight: 700,
                     color: monteCarlo.successRate >= 0.7 ? "var(--up)" : monteCarlo.successRate >= 0.4 ? "var(--warn)" : "var(--down)",
                   }}>{(monteCarlo.successRate * 100).toFixed(0)}%</div>
-                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>500 条路径</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>500 {I18N.t("fire.mc.paths")}</div>
                 </div>
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>FIRE 年龄区间</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>{I18N.t("fire.mc.fireAgeRange")}</div>
                   {monteCarlo.fireAgePcts.p50 != null ? (
                     <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
                       <div style={{ textAlign: "center" }}>
@@ -454,22 +479,22 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                       </div>
                     </div>
                   ) : <div style={{ fontSize: 13, color: "var(--ink-4)", paddingTop: 6 }}>—</div>}
-                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 3 }}>成功路径退休年龄分布</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 3 }}>{I18N.t("fire.mc.median")}</div>
                 </div>
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>最低名义 CAGR</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>{I18N.t("fire.mc.minCagr")}</div>
                   <div className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
                     {monteCarlo.minNomCagr != null ? `${monteCarlo.minNomCagr.toFixed(1)}%` : "—"}
                   </div>
                   <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 2 }}>
                     {monteCarlo.minNomCagr != null
-                      ? `实际 ${Math.max(0, monteCarlo.minNomCagr - inflation).toFixed(1)}% · 确定性计算`
-                      : "超出范围"}
+                      ? `${I18N.t("fire.params.realReturn")} ${Math.max(0, monteCarlo.minNomCagr - inflation).toFixed(1)}%`
+                      : "—"}
                   </div>
                 </div>
                 {/* Sustainability tile */}
                 <div style={{ background: "var(--paper-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>撑过 {lifeExpectancy} 岁概率</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 4 }}>{I18N.tf("fire.mc.survivalRate", { age: lifeExpectancy })}</div>
                   {(() => {
                     const { p25, p50, p90, survivalRate } = monteCarlo.sustainability;
                     const fmt = (v) => v == null ? `>${lifeExpectancy}` : `${v}`;
@@ -484,14 +509,14 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                           {[["P25", fmt(p25), "#D97706"], ["P50", fmt(p50), "var(--ink-3)"], ["P90", fmt(p90), "#16A34A"]].map(([label, val, color]) => (
                             <div key={label} style={{ textAlign: "center" }}>
                               <div style={{ fontSize: 9, color: "var(--ink-5)" }}>{label}</div>
-                              <div className="mono" style={{ fontSize: 11, fontWeight: 600, color }}>{val}<span style={{ fontSize: 8 }}>岁</span></div>
+                              <div className="mono" style={{ fontSize: 11, fontWeight: 600, color }}>{val}</div>
                             </div>
                           ))}
                         </div>
                       </>
                     );
                   })()}
-                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 4 }}>提取阶段 · {targetRetireAge}岁退休后</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-5)", marginTop: 4 }}>{I18N.t("fire.mc.retirePhase")} · {targetRetireAge}</div>
                 </div>
               </div>
               <MonteCarloChart
@@ -508,37 +533,39 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                   <span style={{ width: 20, height: 7, background: "var(--ink)", opacity: .22, display: "inline-block", borderRadius: 1 }}/> P25–P75
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 20, height: 2, background: "var(--ink)", opacity: .7, display: "inline-block" }}/> 中位数 P50
+                  <span style={{ width: 20, height: 2, background: "var(--ink)", opacity: .7, display: "inline-block" }}/> {I18N.t("fire.mc.median")}
                 </span>
               </div>
             </div>
           )}
         </Card>
         <Card padding={20}>
-          <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700, marginBottom: 14 }}>参数 Parameters</div>
+          <div className="serif-cn" style={{ fontSize: 17, fontWeight: 700, marginBottom: 14 }}>{I18N.t("fire.params.title")}</div>
 
           {/* Age — always derived from birthDate (page is gated on age != null) */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>当前年龄</span>
-              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{age} 岁</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                {I18N.t("fire.params.age")}
+                <span style={{ fontSize: 10, color: "var(--ink-5)", marginLeft: 4 }}>({I18N.t("fire.params.age.auto")})</span>
+              </span>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{age}</span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>根据出生日期自动计算 · 在设置中修改</div>
           </div>
 
-          {/* Monthly expense — label row: [月支出] [3yr avg hint] [current value] */}
-          <div style={{ marginBottom: 12 }}>
+          {/* Monthly expense */}
+          <div style={{ marginBottom: 12, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>月支出</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.monthly")}</span>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 {ledgerAvgExp != null && (
                   <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
-                    过去3年均 <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
+                    {I18N.t("fire.params.monthly.3yrAvg")} <span className="mono" style={{ fontWeight: 600 }}>{sym}{fmtNum(toDisp(ledgerAvgExp), 0)}</span>
                     {monthlyExp !== ledgerAvgExp && (
                       <button onClick={() => setMonthlyExpP(ledgerAvgExp)} style={{
                         marginLeft: 6, fontSize: 9.5, padding: "1px 4px", borderRadius: 3, cursor: "pointer",
                         border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
-                      }}>还原</button>
+                      }}>{I18N.t("fire.params.monthly.reset")}</button>
                     )}
                   </span>
                 )}
@@ -554,25 +581,42 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
               background: "#FFFBEB", border: "1px solid #FDE68A",
               fontSize: 10.5, color: "#78350F", lineHeight: 1.55,
             }}>
-              提前退休需自缴社保约 <span className="mono" style={{ fontWeight: 700 }}>{sym}{fmtNum(toDisp(2000), 0)}/月</span>（城镇职工医保 + 养老），约 10 年后至 60 岁可停缴并领养老金。当前计算暂不考虑养老金收入，社保按永久支出处理，FIRE 数字偏保守。
-              <button onClick={() => setMonthlyExpP(Math.min(50000, monthlyExp + 2000))} style={{
-                marginLeft: 7, fontSize: 9.5, padding: "1px 5px", borderRadius: 3,
-                border: "1px solid #D97706", background: "transparent", color: "#D97706", cursor: "pointer",
-              }}>+{sym}{fmtNum(toDisp(2000), 0)}</button>
+              <div>{I18N.tf("fire.params.ssi.hint", { amount: `${sym}${fmtNum(ssiMonthly, 0)}` })}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5 }}>
+                <span style={{ fontSize: 9.5, color: "#92400E" }}>{sym}</span>
+                <input type="number" value={ssiInputStr} min={0} step={100}
+                  onChange={e => {
+                    setSsiInputStr(e.target.value);
+                    const n = parseInt(e.target.value, 10);
+                    if (!isNaN(n) && n >= 0) setSsiMonthlyP(n);
+                  }}
+                  onBlur={e => {
+                    const n = parseInt(e.target.value, 10);
+                    const safe = isNaN(n) || n < 0 ? 0 : n;
+                    setSsiMonthlyP(safe);
+                  }}
+                  style={{ width: 60, fontSize: 10, padding: "1px 4px", borderRadius: 3,
+                    border: "1px solid #D97706", background: "transparent", color: "#78350F", outline: "none" }}/>
+                <span style={{ fontSize: 9.5, color: "#92400E" }}>{I18N.t("fire.params.ssi.perMonth")}</span>
+                <button onClick={() => setMonthlyExpP(Math.min(50000, monthlyExp + Math.round(ssiMonthly * (FX[currency] || 1))))} style={{
+                  marginLeft: 3, fontSize: 9.5, padding: "1px 5px", borderRadius: 3,
+                  border: "1px solid #D97706", background: "transparent", color: "#D97706", cursor: "pointer",
+                }}>+{sym}{fmtNum(ssiMonthly, 0)}</button>
+              </div>
             </div>
           </div>
 
           {/* SWR — 3 compact cards */}
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>提取率 SWR</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.swr")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{swr}% · {multiplier}×</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {[
-                { rate: 3, label: "保守", blurb: "40+ 年退休" },
-                { rate: 4, label: "标准", blurb: "Bengen 法则" },
-                { rate: 5, label: "激进", blurb: "有其他收入" },
+                { rate: 3, label: I18N.t("fire.params.swr.conservative"), blurb: I18N.t("fire.params.swr.conservative.blurb") },
+                { rate: 4, label: I18N.t("fire.params.swr.standard"),     blurb: I18N.t("fire.params.swr.standard.blurb") },
+                { rate: 5, label: I18N.t("fire.params.swr.aggressive"),   blurb: I18N.t("fire.params.swr.aggressive.blurb") },
               ].map(({ rate, label, blurb }) => {
                 const mult = Math.round(100 / rate);
                 const active = swr === rate;
@@ -594,9 +638,9 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
           </div>
 
           {/* CAGR — quick buttons + slider */}
-          <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 6, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>预期年化 CAGR <span style={{ color: "var(--ink-5)", fontWeight: 400 }}>名义</span></span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.cagr")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}%</span>
             </div>
             <div style={{ display: "flex", gap: 4, marginBottom: 7 }}>
@@ -612,26 +656,23 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             </div>
             <input type="range" min={3} max={20} step={0.5} value={cagr}
               onChange={e => setCagrP(parseFloat(e.target.value))} style={{ width: "100%" }}/>
-            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 4 }}>
-              实际收益率 <span className="mono" style={{ fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}% − {inflation}% = {realCagr.toFixed(1)}%</span> · 投影使用实际值
-            </div>
             {portfolioMwrr != null && (
               <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3, marginBottom: 10 }}>
-                投资组合 MWRR <span className="mono" style={{ fontWeight: 600 }}>{portfolioMwrr.toFixed(1)}%</span>
+                {I18N.t("fire.params.cagr.portfolio")} <span className="mono" style={{ fontWeight: 600 }}>{portfolioMwrr.toFixed(1)}%</span>
                 {Math.abs(cagr - portfolioMwrr) > 0.05 && (
                   <button onClick={() => setCagrP(portfolioMwrr)} style={{
                     marginLeft: 8, fontSize: 10, padding: "1px 5px", borderRadius: 3, cursor: "pointer",
                     border: "1px solid var(--line-2)", background: "transparent", color: "var(--ink-4)",
-                  }}>还原</button>
+                  }}>{I18N.t("fire.params.cagr.reset")}</button>
                 )}
               </div>
             )}
           </div>
 
           {/* Inflation rate — quick buttons only */}
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>通胀率 Inflation</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("fire.params.inflation")}</span>
               <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{inflation}%</span>
             </div>
             <div style={{ display: "flex", gap: 4 }}>
@@ -645,32 +686,37 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                 }}>{v}%</button>
               ))}
             </div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6 }}>
+              {I18N.t("fire.params.realReturn")} <span className="mono" style={{ fontWeight: 600 }}>{cagr % 1 === 0 ? cagr : cagr.toFixed(1)}% − {inflation}% = {realCagr.toFixed(1)}%</span>
+            </div>
           </div>
 
           {/* Monthly contribution */}
-          <FireSlider label="月度投入" value={monthly} onChange={setMonthlyP} min={0} max={30000} step={500} suffix="¥"/>
+          <div style={{ paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
+            <FireSlider label={I18N.t("fire.params.contribution")} value={monthly} onChange={setMonthlyP} min={0} max={30000} step={500} suffix="¥"/>
+          </div>
 
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px dashed var(--line)" }}>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>资产构成</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{I18N.t("fire.params.assets")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>投资组合 TOTAL VALUE</span>
+                <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{I18N.t("fire.params.portfolio")}</span>
                 <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{portfolioValue != null ? fmtM(investable, 2) : "—"}</span>
               </div>
               {liquidAssets > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>现金/存款/理财/期权/社保</span>
+                  <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{I18N.t("fire.params.liquid")}</span>
                   <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}>{fmtM(liquidAssets, 2)}</span>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 5, borderTop: "1px solid var(--line)" }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)" }}>合计</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)" }}>{I18N.t("fire.params.total")}</span>
                 <span className="mono" style={{ fontSize: 13, fontWeight: 700 }}>{fmtM(investable + liquidAssets, 2)}</span>
               </div>
             </div>
             {liquidAssets > 0 && (
               <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6 }}>
-                流动资产按通胀率增长（实际收益 0%）· 投资组合缺口 {fmtM(effectiveFireTarget, 2)}
+                {I18N.t("fire.params.liquid.hint")} {fmtM(effectiveFireTarget, 2)}
               </div>
             )}
           </div>
@@ -691,29 +737,29 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
             label: "Lean FIRE", color: "var(--info)",
             target: monthlyExp * 12 * 15,
             multiplierLabel: "15×",
-            desc: "极简生活退休",
-            detail: "仅覆盖衣食住行基本开支，无旅行娱乐预算。适合低消费生活方式或低物价地区。",
+            desc: I18N.t("fire.milestone.lean.desc"),
+            detail: I18N.t("fire.milestone.lean.detail"),
           },
           {
             label: "FIRE", color: "var(--up)",
             target: monthlyExp * 12 * 25,
             multiplierLabel: "25×",
-            desc: "标准退休（4% 法则）",
-            detail: "退休后维持当前生活水准。Bengen 1994 研究证明按 4% 提取，30 年成功率约 95%。",
+            desc: I18N.t("fire.milestone.standard.desc"),
+            detail: I18N.t("fire.milestone.standard.detail"),
           },
           {
             label: "Fat FIRE", color: "var(--warn)",
             target: monthlyExp * 12 * 40,
             multiplierLabel: "40×",
-            desc: "富裕退休（2.5% 提取率）",
-            detail: "有充足缓冲可应对通胀、医疗、旅行及馈赠，无需在退休后精打细算。",
+            desc: I18N.t("fire.milestone.fat.desc"),
+            detail: I18N.t("fire.milestone.fat.detail"),
           },
           {
             label: "Coast FIRE", color: "var(--violet)",
             target: coastTarget,
-            multiplierLabel: `到 ${coastRetireAge} 岁`,
-            desc: `停止存钱，${coastRetireAge} 岁退休`,
-            detail: `达到此金额后即使从今天起完全停止新投入，现有本金按 ${realCagr.toFixed(1)}% 实际收益复利增长，到 ${coastRetireAge} 岁时刚好覆盖你的 FIRE 目标 ${fmtM(fireNumber)}。`,
+            multiplierLabel: `→ ${coastRetireAge}`,
+            desc: I18N.tf("fire.milestone.coast.desc", { age: coastRetireAge }),
+            detail: I18N.tf("fire.milestone.coast.detail", { age: coastRetireAge, rate: realCagr.toFixed(1), target: fmtM(fireNumber) }),
             coastMode: true,
             coastAlready,
             coastYr,
@@ -723,7 +769,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         return (
           <div style={{ marginTop: 14 }}>
             <Card padding={20}>
-              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>关键里程碑 Milestones</div>
+              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{I18N.t("fire.milestones.title")}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
                 {milestones.map(m => {
                   const yr = m.coastMode
@@ -741,7 +787,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
                       <div className="mono" style={{ fontSize: 17, fontWeight: 700 }}>{fmtM(m.target)}</div>
                       <div style={{ fontSize: 11, color: reached ? m.color : "var(--ink-3)", marginTop: 3, fontWeight: reached ? 600 : 400 }}>
                         {reached
-                          ? "✓ 已达成"
+                          ? I18N.t("fire.milestones.achieved")
                           : yr ? `→ age ${yr.age} · ${yr.age - age}y` : "Out of range"}
                       </div>
                       <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 6, lineHeight: 1.5 }}>{m.detail}</div>
@@ -759,18 +805,18 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         <Card padding={20}>
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>提取率场景推演 SWR Scenarios</div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>当前月支出 · 三种提取率下的目标与退休时间对比</div>
+              <div className="serif-cn" style={{ fontSize: 16, fontWeight: 700 }}>{I18N.t("fire.swr.title")}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("fire.swr.subtitle")}</div>
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
-              退休后每年从投资组合提取的比例。越保守所需本金越高，但资金安全性更强。当前选中方案高亮显示。
+              {I18N.t("fire.swr.detail")}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
-              { rate: 3, label: "保守", blurb: "本金更安全，可支撑 40+ 年退休" },
-              { rate: 4, label: "标准", blurb: "Bengen 1994 四十年实证黄金法则" },
-              { rate: 5, label: "激进", blurb: "所需本金少，适合有其他收入来源" },
+              { rate: 3, label: I18N.t("fire.params.swr.conservative"), blurb: I18N.t("fire.params.swr.conservative.blurb") },
+              { rate: 4, label: I18N.t("fire.params.swr.standard"),     blurb: I18N.t("fire.params.swr.standard.blurb") },
+              { rate: 5, label: I18N.t("fire.params.swr.aggressive"),   blurb: I18N.t("fire.params.swr.aggressive.blurb") },
             ].map(({ rate, label, blurb }) => {
               const mult = Math.round(100 / rate);
               const annualExp = monthlyExp * 12;
@@ -802,7 +848,7 @@ const Fire = ({ currency = "CNY", birthDate = "" }) => {
         </Card>
       </div>
 
-      <ComingSoonBanner module="FIRE" features={["税务影响 / 社保接续"]}/>
+      <ComingSoonBanner module="FIRE" features={[I18N.t("fire.coming.tax")]}/>
     </div>
   );
 };
@@ -878,7 +924,7 @@ const FireChart = ({ data, fireNumber, effectiveFireTarget, liquidAssets = 0, fi
       {hasLiquid && effY != null && (
         <>
           <line x1={padL} x2={padL+w} y1={effY} y2={effY} stroke="var(--up)" strokeDasharray="2 5" strokeWidth="1" strokeOpacity=".45"/>
-          <text x={padL+w-4} y={Math.abs(effY - fireY) < 18 ? effY+11 : effY-5} fontSize="9.5" fill="var(--up)" fillOpacity=".7" textAnchor="end">投资组合目标 {chartSym}{(toD(effectiveFireTarget)/1000000).toFixed(1)}M</text>
+          <text x={padL+w-4} y={Math.abs(effY - fireY) < 18 ? effY+11 : effY-5} fontSize="9.5" fill="var(--up)" fillOpacity=".7" textAnchor="end">{I18N.t("fire.chart.fireTarget")} {chartSym}{(toD(effectiveFireTarget)/1000000).toFixed(1)}M</text>
         </>
       )}
       <path d={fill} fill="var(--ink)" fillOpacity=".06"/>
@@ -904,7 +950,7 @@ const FireChart = ({ data, fireNumber, effectiveFireTarget, liquidAssets = 0, fi
           <line x1={xs(fireIdx)} x2={xs(fireIdx)} y1={padT} y2={padT+h} stroke="var(--up)" strokeWidth="1" strokeDasharray="2 3"/>
           <circle cx={xs(fireIdx)} cy={ys(data[fireIdx].value)} r="5" fill="var(--up)"/>
           <rect x={xs(fireIdx)-22} y={padT-2} width="44" height="18" rx="3" fill="var(--up)"/>
-          <text x={xs(fireIdx)} y={padT+11} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="600">Age {data[fireIdx].age}</text>
+          <text x={xs(fireIdx)} y={padT+11} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="600">{I18N.tf("fire.chart.ageLabel", { age: data[fireIdx].age })}</text>
         </g>
       )}
       {data.filter((_, i) => i % 5 === 0 || i === data.length - 1).map((d, i) => {
@@ -963,7 +1009,7 @@ const MonteCarloChart = ({ bands, years, age, fireTarget, currency = "CNY", medF
           <g>
             <rect x={rx} y={padT} width={padL + w - rx} height={h} fill="var(--ink)" fillOpacity=".03"/>
             <line x1={rx} x2={rx} y1={padT} y2={padT+h} stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity=".5"/>
-            <text x={rx+4} y={padT+10} fontSize="9.5" fill="var(--ink-3)" fontWeight="600">提取</text>
+            <text x={rx+4} y={padT+10} fontSize="9.5" fill="var(--ink-3)" fontWeight="600">{I18N.t("fire.chart.withdraw")}</text>
           </g>
         );
       })()}

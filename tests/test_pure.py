@@ -1,8 +1,10 @@
+import locale
 from types import SimpleNamespace
 
 from fin.routers.alerts import _normalize_symbol
 from fin.services.alert_checker import check_condition as _check_condition
 from fin.alert_email import build_summary_email
+from fin.settings import _detect_os_locale
 
 
 # ── _normalize_symbol ─────────────────────────────────────────────────────────
@@ -99,3 +101,77 @@ def test_email_body_contains_change():
     _, html, text = build_summary_email([(alert, 201.5, 1.23)])
     assert "+1.23%" in html
     assert "+1.23%" in text
+
+
+def test_email_zh_subject_html_and_text_localized(monkeypatch):
+    from fin import alert_email as _ae
+
+    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "zh"})
+    alert = _make_alert(name="苹果", symbol="AAPL")
+    subject, html, text = build_summary_email([(alert, 201.5, 1.23)])
+    assert "提醒触发" in subject
+    assert "📊 股票提醒触发" in html
+    assert "名称" in html and "代码" in html
+    # Plain-text lead-in must be Chinese, not "Triggered N alert(s)"
+    assert text.startswith("触发 ")
+    assert "Triggered" not in text
+    assert "以上提醒已自动禁用" in text
+
+
+def test_email_en_text_lead_in_english(monkeypatch):
+    from fin import alert_email as _ae
+
+    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "en"})
+    alert = _make_alert()
+    _, _, text = build_summary_email([(alert, 201.5, 1.23)])
+    assert text.startswith("Triggered ")
+    assert "alert(s):" in text
+
+
+# ── _detect_os_locale ────────────────────────────────────────────────────────
+
+
+def test_detect_os_locale_returns_supported_value():
+    assert _detect_os_locale() in {"en", "zh"}
+
+
+def test_detect_os_locale_chinese_from_lang_env(monkeypatch):
+    monkeypatch.setattr(locale, "getlocale", lambda *a, **k: (None, None))
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    monkeypatch.setenv("LANG", "zh_CN.UTF-8")
+    assert _detect_os_locale() == "zh"
+
+
+def test_detect_os_locale_chinese_from_getlocale(monkeypatch):
+    monkeypatch.setattr(locale, "getlocale", lambda *a, **k: ("zh_TW", "UTF-8"))
+    assert _detect_os_locale() == "zh"
+
+
+def test_detect_os_locale_falls_back_to_en_for_other_locales(monkeypatch):
+    monkeypatch.setattr(locale, "getlocale", lambda *a, **k: ("ja_JP", "UTF-8"))
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    monkeypatch.delenv("LANG", raising=False)
+    assert _detect_os_locale() == "en"
+
+
+def test_detect_os_locale_ignores_C_posix(monkeypatch):
+    monkeypatch.setattr(locale, "getlocale", lambda *a, **k: (None, None))
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    monkeypatch.setenv("LANG", "C")
+    assert _detect_os_locale() == "en"
+
+
+def test_email_crlf_in_alert_name_stripped(monkeypatch):
+    """Alert name containing CRLF must not break MIME structure in text body."""
+    from fin import alert_email as _ae
+
+    monkeypatch.setattr(_ae._settings, "load", lambda: {"language": "en"})
+    alert = _make_alert(name="Bad\r\nHeader", symbol="X")
+    _, _, text = build_summary_email([(alert, 1.0, 0.0)])
+    assert "\r" not in text
+    # Newlines exist as legitimate row separators, but the alert name's embedded
+    # newline must have been collapsed to a space.
+    assert "Bad Header" in text or "Bad  Header" in text

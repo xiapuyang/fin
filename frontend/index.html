@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -88,6 +88,8 @@
   input[type=range] { -webkit-appearance: none; appearance:none; background: transparent; }
   input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: var(--line); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); margin-top: -5px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  /* Date input: hide native calendar icon so DateInput component can render its own */
+  input[type=date]::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -97,6 +99,7 @@
 <script src="/vendor/react-dom.production.min.js"></script>
 <script src="/vendor/babel.min.js"></script>
 
+<script type="text/babel" src="src/i18n.jsx?v=__VER__"></script>
 <script type="text/babel" src="src/data.jsx?v=__VER__"></script>
 <script type="text/babel" src="src/icons.jsx?v=__VER__"></script>
 <script type="text/babel" src="src/atoms.jsx?v=__VER__"></script>

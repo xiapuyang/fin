@@ -200,7 +200,10 @@ def test_snapshot_item_count(client):
 # ── Copy snapshot ─────────────────────────────────────────────────────────────
 
 
-def test_copy_snapshot_basic(client):
+def test_copy_snapshot_basic(client, monkeypatch):
+    from fin.routers import balance as _balance
+
+    monkeypatch.setattr(_balance._settings, "load", lambda: {"language": "en"})
     snap_id = _create_snap(client, date="2025-01-01", label="Orig").json()["id"]
     _create_item(client, snap_id, name="Cash", amount=5000.0)
     _create_item(
@@ -210,13 +213,24 @@ def test_copy_snapshot_basic(client):
     r = client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
     assert r.status_code == 201
     copy = r.json()
-    assert copy["label"] == "Orig (副本)"
+    assert copy["label"] == "Orig (copy)"
     assert copy["item_count"] == 2
 
     items = client.get(f"/api/balance/snapshots/{copy['id']}/items").json()
     assert len(items) == 2
     names = {i["name"] for i in items}
     assert names == {"Cash", "Debt"}
+
+
+def test_copy_snapshot_zh_label_suffix(client, monkeypatch):
+    from fin.routers import balance as _balance
+
+    monkeypatch.setattr(_balance._settings, "load", lambda: {"language": "zh"})
+    snap_id = _create_snap(client, date="2025-01-02", label="原始").json()["id"]
+
+    r = client.post(f"/api/balance/snapshots/{snap_id}/copy", json={})
+    assert r.status_code == 201
+    assert r.json()["label"] == "原始 (复制)"
 
 
 def test_copy_snapshot_with_new_label_and_date(client):

@@ -43,6 +43,69 @@ def test_put_settings_persists_display_name(client, tmp_path, monkeypatch):
     assert client.get("/api/settings").json()["display_name"] == "Alice"
 
 
+def test_put_settings_language_accepted(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SETTINGS_PATH", tmp_path / "settings.json")
+    r = client.put("/api/settings", json={"language": "zh"})
+    assert r.status_code == 200
+    assert r.json()["language"] == "zh"
+    assert client.get("/api/settings").json()["language"] == "zh"
+
+
+def test_put_settings_language_rejects_invalid(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SETTINGS_PATH", tmp_path / "settings.json")
+    r = client.put("/api/settings", json={"language": "fr"})
+    assert r.status_code == 422
+
+
+def test_put_settings_enabled_markets_accepted(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SETTINGS_PATH", tmp_path / "settings.json")
+    r = client.put("/api/settings", json={"enabled_markets": ["us", "hk"]})
+    assert r.status_code == 200
+    assert r.json()["enabled_markets"] == ["us", "hk"]
+
+
+def test_put_settings_enabled_markets_rejects_unknown(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SETTINGS_PATH", tmp_path / "settings.json")
+    r = client.put("/api/settings", json={"enabled_markets": ["us", "xx"]})
+    assert r.status_code == 422
+
+
+def test_get_credentials_never_returns_full_api_key(client, monkeypatch):
+    """Regression: GET must not leak the full key. DNS-rebinding + CORS bug
+    would let a cross-origin page exfiltrate the key if we did."""
+    monkeypatch.setenv("AGENTMAIL_API_KEY", "sk-supersecretpayload-1234")
+    monkeypatch.setenv("FIN_AGENTMAIL_INBOX", "alerts@inbox.agentmail.to")
+    r = client.get("/api/settings/credentials")
+    assert r.status_code == 200
+    data = r.json()
+    assert "agentmail_api_key" not in data
+    assert data["agentmail_api_key_set"] is True
+    assert data["agentmail_api_key_hint"] == "1234"
+    # Full key value must not appear anywhere in the response.
+    assert "sk-supersecretpayload-1234" not in r.text
+    # The inbox is not a secret — full value is fine.
+    assert data["agentmail_inbox"] == "alerts@inbox.agentmail.to"
+
+
+def test_get_credentials_no_hint_for_short_keys(client, monkeypatch):
+    """Short keys (<8 chars) reveal too much in 4-char hint; omit it."""
+    monkeypatch.setenv("AGENTMAIL_API_KEY", "short")
+    r = client.get("/api/settings/credentials")
+    data = r.json()
+    assert data["agentmail_api_key_set"] is True
+    assert data["agentmail_api_key_hint"] == ""
+
+
+def test_get_credentials_no_key_set(client, monkeypatch):
+    monkeypatch.delenv("AGENTMAIL_API_KEY", raising=False)
+    monkeypatch.delenv("FIN_AGENTMAIL_INBOX", raising=False)
+    r = client.get("/api/settings/credentials")
+    data = r.json()
+    assert data["agentmail_api_key_set"] is False
+    assert data["agentmail_api_key_hint"] == ""
+    assert data["agentmail_inbox"] == ""
+
+
 def test_get_fx_returns_rates_via_quote_service(client):
     fake_rates = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
     with patch("fin.routers.settings.QuoteService") as mock_qs:

@@ -105,7 +105,7 @@ class ChinaFundProvider(QuoteProvider):
                 logger.warning("no NAV data from akshare for %s", symbol)
                 return {}
 
-            # DataFrame columns: 净值日期, 单位净值, 累计净值, 日增长率
+            # akshare returns Chinese column names: 净值日期, 单位净值, 累计净值, 日增长率
             latest = df.iloc[-1]
             prev_row = df.iloc[-2] if len(df) > 1 else latest
 

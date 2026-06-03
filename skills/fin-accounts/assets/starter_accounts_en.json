@@ -1,0 +1,43 @@
+[
+  {"name": "IBKR"},
+  {"name": "Brokerage", "parent_name": "IBKR"},
+
+  {"name": "Fidelity"},
+  {"name": "Brokerage", "parent_name": "Fidelity"},
+  {"name": "IRA", "parent_name": "Fidelity"},
+  {"name": "Roth IRA", "parent_name": "Fidelity"},
+
+  {"name": "Chase"},
+  {"name": "Checking", "parent_name": "Chase"},
+  {"name": "Savings", "parent_name": "Chase"},
+  {"name": "Credit Card", "parent_name": "Chase"},
+
+  {"name": "PayPal"},
+  {"name": "Balance", "parent_name": "PayPal"},
+
+  {"name": "Coinbase"},
+  {"name": "Crypto", "parent_name": "Coinbase"},
+
+  {"name": "Cash"},
+  {"name": "USD", "parent_name": "Cash"},
+  {"name": "EUR", "parent_name": "Cash"},
+
+  {"name": "Real Estate"},
+  {"name": "Primary Home", "parent_name": "Real Estate"},
+  {"name": "Car", "parent_name": "Real Estate"},
+
+  {"name": "Mortgage"},
+  {"name": "Primary Home", "parent_name": "Mortgage"},
+
+  {"name": "Loans"},
+  {"name": "Student Loan", "parent_name": "Loans"},
+  {"name": "Personal Loan", "parent_name": "Loans"},
+
+  {"name": "Options"},
+  {"name": "RSU", "parent_name": "Options"},
+  {"name": "ESPP", "parent_name": "Options"},
+
+  {"name": "401k"},
+  {"name": "Traditional", "parent_name": "401k"},
+  {"name": "Roth", "parent_name": "401k"}
+]
