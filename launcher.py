@@ -175,7 +175,12 @@ def _open_action(icon, item) -> None:
 
 
 def _open_about(icon, item) -> None:
-    """Show a native About dialog. No browser jump — same info as the in-app page."""
+    """Show a native About dialog. No browser jump — same info as the in-app page.
+
+    Runs in a worker thread so the blocking Win32 MessageBoxW does not share
+    pystray's tray-thread message pump (which prevents the OK button from
+    delivering WM_COMMAND and leaves the dialog unclosable on Windows).
+    """
     body = "\n".join(
         [
             t("about.tagline"),
@@ -187,7 +192,12 @@ def _open_about(icon, item) -> None:
             t("about.copyright"),
         ]
     )
-    _show_info(t("about.title"), body)
+    threading.Thread(
+        target=_show_info,
+        args=(t("about.title"), body),
+        daemon=True,
+        name="about-dialog",
+    ).start()
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
