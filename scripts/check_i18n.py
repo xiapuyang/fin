@@ -10,8 +10,21 @@ ZH = ROOT / "config" / "i18n" / "zh.json"
 
 
 def main():
-    en = json.loads(EN.read_text(encoding="utf-8"))
-    zh = json.loads(ZH.read_text(encoding="utf-8"))
+    """Compare en.json and zh.json key sets and report drift.
+
+    Returns:
+        Exit code: 0 if locale files are consistent, 1 if any drift,
+        2 if a locale file is missing or unreadable.
+    """
+    try:
+        en = json.loads(EN.read_text(encoding="utf-8"))
+        zh = json.loads(ZH.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        print(f"[ERROR] locale file not found: {exc.filename}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"[ERROR] invalid JSON in locale file: {exc}", file=sys.stderr)
+        return 2
 
     en_keys = set(en)
     zh_keys = set(zh)

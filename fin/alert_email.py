@@ -32,14 +32,15 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
     is_zh = lang == "zh"
     cond_labels = _COND_LABELS_ZH if is_zh else _COND_LABELS_EN
 
+    def _safe(s: str) -> str:
+        return s.replace("\r", " ").replace("\n", " ")
+
     if len(fired) == 1:
         alert, _, _ = fired[0]
-        safe_name = alert.name.replace("\r", " ").replace("\n", " ")
-        safe_symbol = alert.symbol.replace("\r", " ").replace("\n", " ")
         subject = (
-            f"[fin] 提醒触发: {safe_name} ({safe_symbol})"
+            f"[fin] 提醒触发: {_safe(alert.name)} ({_safe(alert.symbol)})"
             if is_zh
-            else f"[fin] Alert triggered: {safe_name} ({safe_symbol})"
+            else f"[fin] Alert triggered: {_safe(alert.name)} ({_safe(alert.symbol)})"
         )
     else:
         subject = (
@@ -66,7 +67,7 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
         )
         price_label = "价格" if is_zh else "price"
         change_label = "涨跌" if is_zh else "change"
-        rows_text += f"• {alert.name} ({alert.symbol}): {cond_str}  {price_label}={price:.2f}  {change_label}={change_str}\n"
+        rows_text += f"• {_safe(alert.name)} ({_safe(alert.symbol)}): {cond_str}  {price_label}={price:.2f}  {change_label}={change_str}\n"
 
     if is_zh:
         h2_text = "📊 股票提醒触发"
@@ -110,6 +111,9 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
         f"<p style='font-size:12px;color:#8B8F9A;margin-top:16px'>{footer}</p>"
         f"</body></html>"
     )
-    text_body = f"Triggered {len(fired)} alert(s):\n\n{rows_text}\n{text_footer}"
+    text_lead = (
+        f"触发 {len(fired)} 个提醒:" if is_zh else f"Triggered {len(fired)} alert(s):"
+    )
+    text_body = f"{text_lead}\n\n{rows_text}\n{text_footer}"
 
     return subject, html_body, text_body

@@ -288,7 +288,7 @@ const Dashboard = ({ onNavigate, alerts, history, timezone, currency = "CNY", di
       id: "fire", icon: "spark", kicker: I18N.t("dashboard.module.05.kicker"), title: I18N.t("dashboard.module.05.title"),
       color: "var(--down)",
       stat: !birthDate ? I18N.t("fire.noBirthDate.msg")
-        : fireTarget <= 0 ? I18N.t("fire.noBirthDate.msg")
+        : fireTarget <= 0 ? I18N.t("fire.noExpense.msg")
         : yearsToFire === 0 ? I18N.t("dashboard.fire.achieved")
         : yearsToFire != null ? `${yearsToFire}${I18N.t("dashboard.fire.yearsUnit")}`
         : I18N.t("dashboard.fire.unreachable"),

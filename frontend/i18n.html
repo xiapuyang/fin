@@ -146,14 +146,14 @@ function runValidations(enText, zhText, en, zh) {
   // 1. Duplicate keys (silent data loss risk)
   const enDups = findDuplicateKeys(enText);
   const zhDups = findDuplicateKeys(zhText);
-  if (enDups.length) issues.push({ level: 'error', msg: `en.json 有 ${enDups.length} 个重复 key（JSON.parse 会静默取最后一个）`, keys: enDups });
-  if (zhDups.length) issues.push({ level: 'error', msg: `zh.json 有 ${zhDups.length} 个重复 key（JSON.parse 会静默取最后一个）`, keys: zhDups });
+  if (enDups.length) issues.push({ level: 'error', msg: `en.json has ${enDups.length} duplicate keys (JSON.parse silently keeps the last one)`, keys: enDups });
+  if (zhDups.length) issues.push({ level: 'error', msg: `zh.json has ${zhDups.length} duplicate keys (JSON.parse silently keeps the last one)`, keys: zhDups });
 
   // 2. Key set mismatch between locales
   const missingZh = enKeys.filter(k => !zhSet.has(k));
   const missingEn = zhKeys.filter(k => !enSet.has(k));
-  if (missingZh.length) issues.push({ level: 'error', msg: `${missingZh.length} 个 key 在 en.json 有但 zh.json 没有`, keys: missingZh });
-  if (missingEn.length) issues.push({ level: 'error', msg: `${missingEn.length} 个 key 在 zh.json 有但 en.json 没有`, keys: missingEn });
+  if (missingZh.length) issues.push({ level: 'error', msg: `${missingZh.length} keys in en.json but not in zh.json`, keys: missingZh });
+  if (missingEn.length) issues.push({ level: 'error', msg: `${missingEn.length} keys in zh.json but not in en.json`, keys: missingEn });
 
   // 3. Placeholder {var} mismatch — will cause runtime format errors
   const phMismatches = enKeys.filter(k => {
@@ -162,17 +162,17 @@ function runValidations(enText, zhText, en, zh) {
     const zp = getPlaceholders(zh[k]);
     return JSON.stringify(ep) !== JSON.stringify(zp);
   });
-  if (phMismatches.length) issues.push({ level: 'error', msg: `${phMismatches.length} 个 key 的 {占位符} 在 en/zh 中不一致（运行时格式化会出错）`, keys: phMismatches });
+  if (phMismatches.length) issues.push({ level: 'error', msg: `${phMismatches.length} keys have mismatched {placeholders} between en/zh (tf() will break at runtime)`, keys: phMismatches });
 
   // 4. Empty string values (distinct from key-as-value / untranslated)
   const emptyEn = enKeys.filter(k => en[k] === '');
   const emptyZh = zhKeys.filter(k => zh[k] === '');
-  if (emptyEn.length) issues.push({ level: 'warn', msg: `en.json 有 ${emptyEn.length} 个空值（value 为 ""）`, keys: emptyEn });
-  if (emptyZh.length) issues.push({ level: 'warn', msg: `zh.json 有 ${emptyZh.length} 个空值（value 为 ""）`, keys: emptyZh });
+  if (emptyEn.length) issues.push({ level: 'warn', msg: `en.json has ${emptyEn.length} empty values ("")`, keys: emptyEn });
+  if (emptyZh.length) issues.push({ level: 'warn', msg: `zh.json has ${emptyZh.length} empty values ("")`, keys: emptyZh });
 
   // 5. Unknown module prefix — likely a typo in the key
   const badMod = enKeys.filter(k => !VALID_MODS.has(k.split('.')[0]));
-  if (badMod.length) issues.push({ level: 'warn', msg: `${badMod.length} 个 key 的 module 前缀不在已知列表（base/nav/app/dashboard/alerts/holdings/balance/ledger/fire）`, keys: badMod });
+  if (badMod.length) issues.push({ level: 'warn', msg: `${badMod.length} keys use an unknown module prefix (allowed: base/nav/app/dashboard/alerts/holdings/balance/ledger/fire)`, keys: badMod });
 
   return issues;
 }

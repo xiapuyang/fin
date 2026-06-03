@@ -1344,7 +1344,7 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
   const [error, setError]     = React.useState(null);
 
   const handleSave = async () => {
-    if (!label.trim()) { setError(I18N.t("balance.item.nameEmpty")); return; }
+    if (!label.trim()) { setError(I18N.t("balance.snapshot.labelEmpty")); return; }
     setLoading(true); setError(null);
     try {
       await apiUpdateBalanceSnapshot(snap.id, {
@@ -1498,7 +1498,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
         </div>
 
         {/* Add parent form */}
-        {form?.mode === "add_parent" && <NameForm label={I18N.t("balance.btn.accounts")} {...nameFormProps} />}
+        {form?.mode === "add_parent" && <NameForm label={I18N.t("balance.parent.newName")} {...nameFormProps} />}
 
         {selectedParent && form?.mode !== "add_parent" && (
           <>
@@ -1518,7 +1518,7 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
                       ? <button style={{ ...iBtn, color: "var(--up)" }} title={I18N.t("base.btn.delete")} onClick={() => setConfirmDelete({ id: selectedParent.id, name: selectedParent.name })}>
                           <Icon name="trash" size={14} />
                         </button>
-                      : <span style={{ fontSize: 11, color: "var(--ink-4)", paddingLeft: 6 }}>{I18N.t("balance.item.subAccount")} first</span>
+                      : <span style={{ fontSize: 11, color: "var(--ink-4)", paddingLeft: 6 }}>{I18N.t("balance.item.deleteSubsFirst")}</span>
                     }
                   </>}
                 </>

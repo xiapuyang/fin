@@ -652,7 +652,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
         {snapshots && snapshots.length > 0 && (
           <select value={selectedSnapshot || ""} onChange={e => onSnapshotChange(e.target.value || null)}
             style={{ fontSize: 13, border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
-            {snapshots.map(s => <option key={s} value={s}>{s}</option>)}
+            {snapshots.map(s => <option key={s} value={s}>{s === "Unnamed" ? I18N.t("holdings.snapshot.unnamed") : s}</option>)}
           </select>
         )}
       </div>
@@ -1389,7 +1389,7 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
           </div>
         ))}
         <div style={{ textAlign: "right", fontSize: 12, color: valid ? "var(--down)" : "var(--up)", marginBottom: 16 }}>
-          {I18N.t("holdings.rebalance.total")} {sumPct.toFixed(1)}% {valid ? "✓" : "· must equal 100%"}
+          {I18N.t("holdings.rebalance.total")} {sumPct.toFixed(1)}% {valid ? "✓" : `· ${I18N.t("holdings.rebalance.mustEqual100")}`}
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

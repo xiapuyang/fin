@@ -247,13 +247,18 @@ def copy_snapshot(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+    if new_label is None:
+        is_zh = _settings.load().get("language", "en") == "zh"
+        suffix = " (复制)" if is_zh else " (copy)"
+        label = f"{source.label}{suffix}"
+    else:
+        label = new_label
+
     try:
         new_snap = snap_repo.create(
             BalanceSnapshotCreate(
                 snapshot_date=new_date or source.snapshot_date,
-                label=new_label
-                if new_label is not None
-                else f"{source.label}{' (copy)' if _settings.load().get('language', 'en') != 'zh' else '（副本）'}",
+                label=label,
                 note=source.note,
             ),
             MOCK_USER_ID,

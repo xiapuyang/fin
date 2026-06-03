@@ -122,7 +122,10 @@ Use the holdings router's `POST /api/accounts` endpoint (or `AccountSQLiteReposi
 
 ## Internationalization
 
-Locale strings live in `config/i18n/en.json` and `config/i18n/zh.json`, served as static files at `/config/i18n/<locale>.json`. The loader (`frontend/src/i18n.jsx`) picks the locale from `localStorage("fin_lang")` → `navigator.language` prefix → `"en"`.
+Locale strings live in `config/i18n/en.json` and `config/i18n/zh.json`, served as static files at `/config/i18n/<locale>.json`. Two layers pick the active locale; on the first launch of a fresh install both should converge on the OS UI language.
+
+- **Frontend** (`frontend/src/i18n.jsx`): `localStorage("fin_lang")` → `navigator.language` prefix → `"en"`. In a packaged desktop build the embedded webview inherits `navigator.language` from the OS, so Mac and Windows installs default to the system language without any user action.
+- **Backend** (`fin/settings.py:_detect_os_locale`): used as the default for `settings.json["language"]` when the user has never explicitly chosen one. Resolution order: `locale.getlocale()` → POSIX env vars (`LC_ALL` / `LC_MESSAGES` / `LANG`) → Win32 `GetUserDefaultUILanguage()` on Windows. Anything starting with `zh` resolves to `zh`; everything else resolves to `en`. This is what `check_alerts.py` reads when localizing email bodies.
 
 ### New string workflow
 

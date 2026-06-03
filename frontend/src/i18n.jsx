@@ -11,9 +11,12 @@ const I18N = (() => {
   let _s = {}, _ready = false, _q = [];
 
   fetch(`/config/i18n/${_FIN_LANG}.json`)
-    .then(r => r.json())
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(d => { _s = d; _ready = true; _q.forEach(f => f()); _q = []; })
-    .catch(() => { _ready = true; _q.forEach(f => f()); _q = []; });
+    .catch(err => {
+      console.error(`[i18n] failed to load /config/i18n/${_FIN_LANG}.json — UI will render keys as fallback:`, err);
+      _ready = true; _q.forEach(f => f()); _q = [];
+    });
 
   return {
     getLang: () => _FIN_LANG,
@@ -27,12 +30,16 @@ const I18N = (() => {
     },
     tCat:    (n) => _s[`balance.cat.${n}`] ?? n,
     setLang: (l) => {
+      if (l === _FIN_LANG) return;
       localStorage.setItem("fin_lang", l);
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 3000);
       fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language: l }),
-      }).catch(() => {}).finally(() => location.reload());
+        signal: ctrl.signal,
+      }).catch(() => {}).finally(() => { clearTimeout(timeoutId); location.reload(); });
     },
   };
 })();
