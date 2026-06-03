@@ -57,18 +57,6 @@
         "default": null,
         "title": "Snapshot Name"
       },
-      "as_of_date": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "As Of Date"
-      },
       "shares": {
         "default": 0.0,
         "title": "Shares",

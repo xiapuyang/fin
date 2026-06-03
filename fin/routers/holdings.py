@@ -94,7 +94,6 @@ def _holding_response(h: HoldingModel) -> HoldingResponse:
         currency=h.currency,
         account=h.account,
         snapshot_name=h.snapshot_name,
-        as_of_date=h.as_of_date,
         shares=h.shares,
         avg_cost=h.avg_cost,
         note=h.note,

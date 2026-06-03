@@ -124,8 +124,10 @@ class QuoteService:
             result["market_state"] = data.get("market_state") or states.get(market_key)
             return result
 
-        if stock and stock.price:
+        if stock and (stock.price or stock.prev_close):
             result = _stock_to_dict(stock)
+            if not result.get("price") and stock.prev_close:
+                result["price"] = stock.prev_close
             result["market_state"] = states.get(market_key)
             return result
 

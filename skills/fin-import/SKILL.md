@@ -114,7 +114,7 @@ Anything missing → ask once per import (per-import default) or per row only as
 |---|---|---|
 | alerts | symbol, name, condition, value | — |
 | transactions | date, code, side, shares, price, currency | account (upfront) |
-| holdings | code, market, currency, shares, avg_cost | account, snapshot_name (upfront, defaults) |
+| holdings | code, market, currency, shares, avg_cost | account, snapshot_name (upfront, default today, **must be YYYY-MM-DD**) |
 | income | date, amount, currency, name, category | account (upfront if multiple exist) |
 | ledger | direction, name, date, amount, currency, category | — |
 | balance | name, category, side, amount, currency | snapshot_id (upfront), account_id/sub_account_id (resolved) |

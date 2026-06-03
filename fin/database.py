@@ -409,6 +409,16 @@ def _migrate_balance_indexes(db: "Session") -> None:
     db.commit()
 
 
+def _drop_holdings_as_of_date(db: "Session") -> None:
+    """Drop the as_of_date column from holdings (merged into snapshot_name)."""
+    from sqlalchemy import text
+
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(holdings)"))]
+    if "as_of_date" in cols:
+        db.execute(text("ALTER TABLE holdings DROP COLUMN as_of_date"))
+        db.commit()
+
+
 def init_db() -> None:
     import fin.models.alert  # noqa: F401
     import fin.models.stock  # noqa: F401
@@ -444,5 +454,6 @@ def init_db() -> None:
         _backfill_alert_fire_snapshot(db)
         _migrate_indexes(db)
         _migrate_balance_indexes(db)
+        _drop_holdings_as_of_date(db)
     finally:
         db.close()

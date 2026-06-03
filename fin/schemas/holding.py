@@ -1,6 +1,8 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from fin.schemas._validators import validate_date
 
 
 class HoldingCreate(BaseModel):
@@ -9,16 +11,20 @@ class HoldingCreate(BaseModel):
     market: Literal["US", "HK", "CN", "CA", "CRYPTO"]
     currency: str = "USD"
     account: Optional[str] = None
-    snapshot_name: Optional[str] = None
-    as_of_date: Optional[str] = None
-    shares: float = 0.0
+    snapshot_name: str
+    shares: float
     avg_cost: float = 0.0
     note: Optional[str] = None
 
+    @field_validator("snapshot_name")
+    @classmethod
+    def snapshot_name_is_date(cls, v: str) -> str:
+        return validate_date(v)
+
     @model_validator(mode="after")
-    def check_non_negative(self) -> "HoldingCreate":
-        if self.shares < 0:
-            raise ValueError("shares must be >= 0")
+    def check_values(self) -> "HoldingCreate":
+        if self.shares <= 0:
+            raise ValueError("shares must be > 0")
         if self.avg_cost < 0:
             raise ValueError("avg_cost must be >= 0")
         return self
@@ -31,7 +37,6 @@ class HoldingUpdate(BaseModel):
     currency: Optional[str] = None
     account: Optional[str] = None
     snapshot_name: Optional[str] = None
-    as_of_date: Optional[str] = None
     shares: Optional[float] = None
     avg_cost: Optional[float] = None
     note: Optional[str] = None
@@ -53,7 +58,6 @@ class HoldingResponse(BaseModel):
     currency: str
     account: Optional[str]
     snapshot_name: Optional[str]
-    as_of_date: Optional[str]
     shares: float
     avg_cost: float
     note: Optional[str]

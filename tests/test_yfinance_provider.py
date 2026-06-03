@@ -80,6 +80,27 @@ def test_fetch_live_returns_empty_on_zero_price(provider):
     assert result == {}
 
 
+def test_fetch_live_returns_empty_when_close_is_nan(provider):
+    # yfinance sometimes returns NaN close during PREPRE/CLOSED — must not be stored as NULL
+    fi = _make_fast_info()
+    hist = _make_history(close=float("nan"))
+    with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
+        mock_yf.Ticker.return_value.fast_info = fi
+        mock_yf.Ticker.return_value.history.return_value = hist
+        result = provider.fetch_live("0700.HK")
+    assert result == {}
+
+
+def test_fetch_live_returns_empty_when_prev_close_is_nan(provider):
+    fi = _make_fast_info()
+    hist = _make_history(close=466.4, prev_close=float("nan"))
+    with patch("fin.services.providers.yfinance_provider.yf") as mock_yf:
+        mock_yf.Ticker.return_value.fast_info = fi
+        mock_yf.Ticker.return_value.history.return_value = hist
+        result = provider.fetch_live("0700.HK")
+    assert result == {}
+
+
 def test_fetch_live_dot_to_dash_retry(provider):
     fi = _make_fast_info()
     hist = _make_history()

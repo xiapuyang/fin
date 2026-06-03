@@ -1,6 +1,12 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from fin.schemas._validators import (
+    validate_date,
+    validate_nonempty,
+    validate_optional_date,
+)
 
 
 class IncomeCreate(BaseModel):
@@ -12,6 +18,16 @@ class IncomeCreate(BaseModel):
     account: Optional[str] = None
     code: Optional[str] = None
     note: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: str) -> str:
+        return validate_date(v)
+
+    @field_validator("source")
+    @classmethod
+    def source_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @model_validator(mode="after")
     def check_positive(self) -> "IncomeCreate":
@@ -31,6 +47,11 @@ class IncomeUpdate(BaseModel):
     account: Optional[str] = None
     code: Optional[str] = None
     note: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def date_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_date(v)
 
     @model_validator(mode="after")
     def check_positive(self) -> "IncomeUpdate":

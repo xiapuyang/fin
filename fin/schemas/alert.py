@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+from fin.schemas._validators import validate_nonempty
 
 
 def _check_change_value(condition: Optional[str], value: Optional[float]) -> None:
@@ -16,6 +18,11 @@ class AlertCreate(BaseModel):
     name: str
     condition: str
     value: float
+
+    @field_validator("symbol", "name", "condition")
+    @classmethod
+    def fields_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
 
     @model_validator(mode="after")
     def check_condition_value(self) -> "AlertCreate":

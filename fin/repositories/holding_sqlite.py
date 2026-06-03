@@ -34,7 +34,6 @@ class HoldingSQLiteRepository:
             currency=data.currency,
             account=data.account,
             snapshot_name=data.snapshot_name,
-            as_of_date=data.as_of_date,
             shares=data.shares,
             avg_cost=data.avg_cost,
             note=data.note,

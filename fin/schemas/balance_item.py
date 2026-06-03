@@ -1,5 +1,7 @@
 from pydantic import BaseModel, field_validator
 
+from fin.schemas._validators import validate_nonempty, validate_optional_date
+
 BALANCE_CATEGORIES = {
     "现金",
     "存款",
@@ -33,6 +35,11 @@ class BalanceItemCreate(BaseModel):
     interest_rate: float | None = None
     monthly_payment: float | None = None
 
+    @field_validator("name")
+    @classmethod
+    def name_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
+
     @field_validator("category")
     @classmethod
     def validate_category(cls, v: str) -> str:
@@ -46,6 +53,11 @@ class BalanceItemCreate(BaseModel):
         if v not in ("asset", "liability"):
             raise ValueError("side must be 'asset' or 'liability'")
         return v
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def dates_are_valid(cls, v: str | None) -> str | None:
+        return validate_optional_date(v)
 
 
 class BalanceItemUpdate(BaseModel):
@@ -77,6 +89,11 @@ class BalanceItemUpdate(BaseModel):
         if v is not None and v not in ("asset", "liability"):
             raise ValueError("side must be 'asset' or 'liability'")
         return v
+
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def dates_are_valid(cls, v: str | None) -> str | None:
+        return validate_optional_date(v)
 
 
 class BalanceItemResponse(BaseModel):

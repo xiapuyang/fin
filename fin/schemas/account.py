@@ -1,6 +1,8 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from fin.schemas._validators import validate_nonempty, validate_optional_date
 
 
 class AccountCreate(BaseModel):
@@ -8,6 +10,16 @@ class AccountCreate(BaseModel):
     currency: str = "CNY"
     note: Optional[str] = None
     cutoff_date: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_nonempty(cls, v: str) -> str:
+        return validate_nonempty(v)
+
+    @field_validator("cutoff_date")
+    @classmethod
+    def cutoff_date_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_date(v)
 
 
 class AccountUpdate(BaseModel):
@@ -18,6 +30,11 @@ class AccountUpdate(BaseModel):
     balance_account_id: Optional[int] = None
     balance_sub_account_id: Optional[int] = None
     symbol_markets: Optional[dict[str, str]] = None
+
+    @field_validator("cutoff_date")
+    @classmethod
+    def cutoff_date_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_date(v)
 
 
 class AccountResponse(BaseModel):
