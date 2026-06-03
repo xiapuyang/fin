@@ -2,59 +2,45 @@
 
 Imported by both check_alerts.py (real cron path) and verify_email.py
 (end-to-end verification), so the user always sees the same template.
+All localized strings come from fin.i18n.t() — see config/i18n/{en,zh}.json.
 """
 
 from html import escape
 
-from fin import settings as _settings
+from fin.i18n import t
 
-_COND_LABELS_ZH = {
-    "price_gte": "价格 ≥",
-    "price_lte": "价格 ≤",
-    "change_gte": "涨幅 ≥",
-    "change_lte": "跌幅 ≤",
-}
 
-_COND_LABELS_EN = {
-    "price_gte": "Price ≥",
-    "price_lte": "Price ≤",
-    "change_gte": "Change ≥",
-    "change_lte": "Change ≤",
-}
+def _safe(s: str) -> str:
+    """Strip CR/LF so user-supplied alert names can't break headers/text rows."""
+    return s.replace("\r", " ").replace("\n", " ")
 
 
 def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
     """Build (subject, html, text) for a batch of triggered alerts.
 
-    fired: list of (AlertModel, price, change_pct) tuples.
+    Args:
+        fired: list of (AlertModel, price, change_pct) tuples.
+
+    Returns:
+        Tuple of (subject, html_body, text_body) localized via fin.i18n.
     """
-    lang = _settings.load().get("language", "en")
-    is_zh = lang == "zh"
-    cond_labels = _COND_LABELS_ZH if is_zh else _COND_LABELS_EN
-
-    def _safe(s: str) -> str:
-        return s.replace("\r", " ").replace("\n", " ")
-
-    if len(fired) == 1:
+    count = len(fired)
+    if count == 1:
         alert, _, _ = fired[0]
-        subject = (
-            f"[fin] 提醒触发: {_safe(alert.name)} ({_safe(alert.symbol)})"
-            if is_zh
-            else f"[fin] Alert triggered: {_safe(alert.name)} ({_safe(alert.symbol)})"
+        subject = t(
+            "alert.email.subject_one",
+            name=_safe(alert.name),
+            symbol=_safe(alert.symbol),
         )
     else:
-        subject = (
-            f"[fin] {len(fired)} 个提醒触发"
-            if is_zh
-            else f"[fin] {len(fired)} alerts triggered"
-        )
+        subject = t("alert.email.subject_many", count=count)
 
     rows_html = ""
     rows_text = ""
     for alert, price, change_pct in fired:
         change_str = f"{'+' if change_pct >= 0 else ''}{change_pct:.2f}%"
         color = "#D9352B" if change_pct >= 0 else "#1F8A4C"
-        label = cond_labels.get(alert.condition, alert.condition)
+        label = t(f"alert.email.cond.{alert.condition}")
         cond_str = f"{label} {alert.value}{'%' if 'change' in alert.condition else ''}"
         rows_html += (
             f"<tr>"
@@ -65,55 +51,33 @@ def build_summary_email(fired: list[tuple]) -> tuple[str, str, str]:
             f"<td style='padding:8px 0;border-bottom:1px solid #E7E1D5;font-family:monospace;color:{color};font-weight:600'>{change_str}</td>"
             f"</tr>"
         )
-        price_label = "价格" if is_zh else "price"
-        change_label = "涨跌" if is_zh else "change"
-        rows_text += f"• {_safe(alert.name)} ({_safe(alert.symbol)}): {cond_str}  {price_label}={price:.2f}  {change_label}={change_str}\n"
-
-    if is_zh:
-        h2_text = "📊 股票提醒触发"
-        sub_text = f"fin · {len(fired)} 个提醒已触发"
-        col_name, col_code, col_cond, col_price, col_change = (
-            "名称",
-            "代码",
-            "条件",
-            "价格",
-            "涨跌",
+        rows_text += (
+            f"• {_safe(alert.name)} ({_safe(alert.symbol)}): {cond_str}  "
+            f"{t('alert.email.text_price')}={price:.2f}  "
+            f"{t('alert.email.text_change')}={change_str}\n"
         )
-        footer = "以上提醒已自动禁用，请前往 fin 管理页面重新启用。"
-        text_footer = "以上提醒已自动禁用。"
-    else:
-        h2_text = "📊 Stock Alert Triggered"
-        sub_text = f"fin · {len(fired)} alert(s) triggered"
-        col_name, col_code, col_cond, col_price, col_change = (
-            "Name",
-            "Symbol",
-            "Condition",
-            "Price",
-            "Change",
-        )
-        footer = "These alerts have been auto-disabled. Visit fin to re-enable them."
-        text_footer = "These alerts have been auto-disabled."
 
     html_body = (
         f"<html><body style='font-family:sans-serif;color:#14161B;max-width:600px'>"
-        f"<h2 style='margin-bottom:4px'>{h2_text}</h2>"
-        f"<p style='color:#5C6270;margin-top:0'>{sub_text}</p>"
+        f"<h2 style='margin-bottom:4px'>{t('alert.email.header')}</h2>"
+        f"<p style='color:#5C6270;margin-top:0'>{t('alert.email.subtitle', count=count)}</p>"
         f"<table style='border-collapse:collapse;width:100%;font-size:14px'>"
         f"<thead><tr style='color:#5C6270;font-size:12px'>"
-        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{col_name}</th>"
-        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{col_code}</th>"
-        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{col_cond}</th>"
-        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{col_price}</th>"
-        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{col_change}</th>"
+        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{t('alert.email.col.name')}</th>"
+        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{t('alert.email.col.symbol')}</th>"
+        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{t('alert.email.col.condition')}</th>"
+        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{t('alert.email.col.price')}</th>"
+        f"<th style='padding:4px 0;border-bottom:2px solid #E7E1D5;text-align:left'>{t('alert.email.col.change')}</th>"
         f"</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         f"</table>"
-        f"<p style='font-size:12px;color:#8B8F9A;margin-top:16px'>{footer}</p>"
+        f"<p style='font-size:12px;color:#8B8F9A;margin-top:16px'>{t('alert.email.footer')}</p>"
         f"</body></html>"
     )
-    text_lead = (
-        f"触发 {len(fired)} 个提醒:" if is_zh else f"Triggered {len(fired)} alert(s):"
+    text_body = (
+        f"{t('alert.email.text_lead', count=count)}\n\n"
+        f"{rows_text}\n"
+        f"{t('alert.email.text_footer')}"
     )
-    text_body = f"{text_lead}\n\n{rows_text}\n{text_footer}"
 
     return subject, html_body, text_body

@@ -1,0 +1,26 @@
+{
+  "i18n": {
+    "default_lang": "en",
+    "supported_langs": ["en", "zh"]
+  },
+  "settings_defaults": {
+    "notify_email": "",
+    "notify_enabled": true,
+    "timezone": "",
+    "display_name": "",
+    "rebalance": null,
+    "birth_date": "",
+    "fire_monthly_exp": null,
+    "fire_cagr": null,
+    "fire_monthly": 8000,
+    "fire_swr": 4.0,
+    "fire_manual_age": 32,
+    "fire_inflation": 3,
+    "fire_target_age": 50,
+    "fire_mc_sigma": 15,
+    "fire_life_expectancy": 80,
+    "currency": "CNY",
+    "privacy_mask": false,
+    "enabled_markets": ["us"]
+  }
+}

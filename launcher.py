@@ -20,6 +20,7 @@ from pathlib import Path
 import uvicorn
 
 from fin._version import __version__ as APP_VERSION
+from fin.i18n import t
 
 # Write to a temp log file so errors are visible even with console=False
 _LOG_FILE = Path(tempfile.gettempdir()) / "fin_launcher.log"
@@ -173,6 +174,22 @@ def _open_action(icon, item) -> None:
     _open_browser()
 
 
+def _open_about(icon, item) -> None:
+    """Show a native About dialog. No browser jump — same info as the in-app page."""
+    body = "\n".join(
+        [
+            t("about.tagline"),
+            "",
+            f"{t('about.version')}: v{APP_VERSION}",
+            f"{t('about.license')}: MIT",
+            f"{t('about.github')}: https://github.com/{GITHUB_REPO}",
+            "",
+            t("about.copyright"),
+        ]
+    )
+    _show_info(t("about.title"), body)
+
+
 def _version_tuple(v: str) -> tuple[int, ...]:
     try:
         return tuple(int(x.split("-")[0]) for x in v.lstrip("v").split("."))
@@ -210,11 +227,15 @@ def _show_info(title: str, message: str) -> None:
         print(f"[{title}] {message}")
 
 
-def _prompt_update(latest_tag: str, release_notes: str = "") -> None:
+def _prompt_update(latest_tag: str) -> None:
     safe_tag = _sanitize_for_applescript(latest_tag)
-    safe_notes = _sanitize_for_applescript(release_notes[:300])
-    notes_line = f"\n\n{safe_notes}" if release_notes else ""
-    message = f"发现新版本 {safe_tag}（当前 v{APP_VERSION}）。{notes_line}\n\n是否前往下载页面？"
+    message = t(
+        "launcher.update.found",
+        tag=safe_tag,
+        current=APP_VERSION,
+    )
+    btn_later = t("launcher.update.button_later")
+    btn_download = t("launcher.update.button_download")
     should_open = False
     if sys.platform == "darwin":
         import subprocess
@@ -227,17 +248,19 @@ def _prompt_update(latest_tag: str, release_notes: str = "") -> None:
             [
                 "osascript",
                 "-e",
-                f'display dialog "{message}" buttons {{"稍后", "前往下载"}} default button "前往下载"{icon_clause}',
+                f'display dialog "{message}" buttons {{"{btn_later}", "{btn_download}"}} default button "{btn_download}"{icon_clause}',
             ],
             capture_output=True,
             text=True,
             check=False,
         )
-        should_open = "前往下载" in result.stdout
+        should_open = btn_download in result.stdout
     elif sys.platform == "win32":
         import ctypes
 
-        ret = ctypes.windll.user32.MessageBoxW(0, message, "Fin 更新", 0x24)
+        ret = ctypes.windll.user32.MessageBoxW(
+            0, message, t("launcher.update.title"), 0x24
+        )
         should_open = ret == 6  # IDYES
     if should_open:
         webbrowser.open(RELEASES_URL)
@@ -259,19 +282,19 @@ def _check_for_updates(icon, item) -> None:
                 data = json.loads(r.read())
             latest_tag = data.get("tag_name", "")
             if _version_tuple(latest_tag) > _version_tuple(APP_VERSION):
-                _prompt_update(latest_tag, data.get("body", ""))
+                _prompt_update(latest_tag)
             else:
-                _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+                _show_info("Fin", t("launcher.update.up_to_date", current=APP_VERSION))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 # No releases published yet — treat as up to date
-                _show_info("Fin", f"已是最新版本（v{APP_VERSION}）。")
+                _show_info("Fin", t("launcher.update.up_to_date", current=APP_VERSION))
             else:
                 logger.warning("Update check failed: %s", exc)
-                _show_error("Fin", "检查更新失败，请稍后重试。")
+                _show_error("Fin", t("launcher.update.check_failed"))
         except Exception as exc:
             logger.warning("Update check failed: %s", exc)
-            _show_error("Fin", "检查更新失败，请稍后重试。")
+            _show_error("Fin", t("launcher.update.check_failed"))
 
     threading.Thread(target=_do_check, daemon=True, name="update-check").start()
 
@@ -349,11 +372,12 @@ def main() -> None:
         image = Image.new("RGB", (32, 32), color=(30, 120, 200))
 
     menu = pystray.Menu(
-        pystray.MenuItem("Open Fin", _open_action, default=True),
+        pystray.MenuItem(t("launcher.tray.open"), _open_action, default=True),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Check for Updates…", _check_for_updates),
+        pystray.MenuItem(t("launcher.tray.about"), _open_about),
+        pystray.MenuItem(t("launcher.tray.check_updates"), _check_for_updates),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", _quit),
+        pystray.MenuItem(t("launcher.tray.quit"), _quit),
     )
     icon = pystray.Icon("fin", image, "Fin", menu)
     icon._fin_server = server

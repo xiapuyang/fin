@@ -15,8 +15,11 @@ const useLang = () => {
   return ready;
 };
 
+const KNOWN_ROUTES = ["dashboard", "alerts", "holdings", "ledger", "balance", "fire", "about"];
+
 const AppInner = () => {
-  const [route, setRoute] = React.useState("dashboard");
+  const initialHash = (typeof location !== "undefined" && location.hash || "").replace(/^#/, "");
+  const [route, setRoute] = React.useState(KNOWN_ROUTES.includes(initialHash) ? initialHash : "dashboard");
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
@@ -27,6 +30,7 @@ const AppInner = () => {
   const [showSettings, setShowSettings] = React.useState(false);
   const [marketNow, setMarketNow] = React.useState(new Date());
   const [serverMarket, setServerMarket] = React.useState({});
+  const [meta, setMeta] = React.useState({});
 
   React.useEffect(() => {
     fetch("/api/alerts").then(r => r.json()).then(setAlerts).catch(() => {});
@@ -43,6 +47,22 @@ const AppInner = () => {
       Object.assign(SYMBOLS, data);
       _rebuildSymbolIndex();
     }).catch(() => {});
+    fetch("/api/meta").then(r => r.json()).then(setMeta).catch(() => {});
+  }, []);
+
+  // Keep route ↔ URL hash in sync for tray "About" deep link & browser back/forward
+  React.useEffect(() => {
+    const nextHash = route === "dashboard" ? "" : `#${route}`;
+    if (location.hash !== nextHash) location.hash = nextHash;
+  }, [route]);
+  React.useEffect(() => {
+    const onHashChange = () => {
+      const h = location.hash.replace(/^#/, "");
+      if (KNOWN_ROUTES.includes(h)) setRoute(h);
+      else if (!h) setRoute("dashboard");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   // Fetch FX rates on load and every 5 minutes; also update global FX object
@@ -97,11 +117,12 @@ const AppInner = () => {
     ledger:    <Ledger fxRates={fxRates} currency={currency}/>,
     balance:   <BalanceSheet currency={currency}/>,
     fire:      <Fire currency={currency} birthDate={settings.birth_date || ""}/>,
+    about:     <About meta={meta}/>,
   }[route];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar route={route} setRoute={navigate}/>
+      <Sidebar route={route} setRoute={navigate} version={meta.version}/>
       <main style={{ flex: 1, minWidth: 0, background: "var(--bg)" }} className="scroll">
         <TopBar route={route} fxRates={fxRates} currency={currency} market={market} enabledMarkets={enabledMarkets} displayName={settings.display_name || ""} onCurrencyChange={c => {
           setCurrency(c);
@@ -125,7 +146,7 @@ const AppInner = () => {
   );
 };
 
-const Sidebar = ({ route, setRoute }) => (
+const Sidebar = ({ route, setRoute, version }) => (
   <aside style={{
     width: 220, flexShrink: 0, background: "var(--paper-2)",
     borderRight: "1px solid var(--line)", padding: "20px 14px",
@@ -136,6 +157,9 @@ const Sidebar = ({ route, setRoute }) => (
       <div>
         <div className="serif-cn" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>fin</div>
         <div style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: ".1em", marginTop: 2 }}>FINANCIAL INTELLIGENCE</div>
+        {version && (
+          <div className="mono" style={{ fontSize: 9.5, color: "var(--ink-5)", letterSpacing: ".05em", marginTop: 3 }}>v{version}</div>
+        )}
       </div>
     </div>
 
@@ -161,6 +185,22 @@ const Sidebar = ({ route, setRoute }) => (
         );
       })}
     </nav>
+
+    <div style={{ marginTop: "auto", paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+      <button onClick={() => setRoute("about")} style={{
+        display: "flex", alignItems: "center", gap: 10, width: "100%",
+        padding: "6px 14px", border: "none", borderRadius: 7,
+        background: route === "about" ? "var(--ink)" : "transparent",
+        color: route === "about" ? "#fff" : "var(--ink-4)",
+        fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "left",
+        transition: "background .12s",
+      }}
+      onMouseEnter={e => route !== "about" && (e.currentTarget.style.background = "var(--bg-deep)")}
+      onMouseLeave={e => route !== "about" && (e.currentTarget.style.background = "transparent")}
+      >
+        <span style={{ flex: 1 }}>{I18N.t("about.title")}</span>
+      </button>
+    </div>
   </aside>
 );
 
