@@ -1,5 +1,6 @@
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -85,24 +86,45 @@ def get_quote(symbol: str, db: Session = Depends(get_db)):
     return result
 
 
+def _fetch_quote_for_code(code: str) -> tuple[str, dict | None]:
+    """Fetch a single quote in its own DB session (safe for thread pool use)."""
+    from fin.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        svc = QuoteService(db, build_default_providers())
+        return code, svc.get_quote(code)
+    finally:
+        db.close()
+
+
 @router.get("/prices")
-def get_prices(symbols: str = "", db: Session = Depends(get_db)):
-    """Return cached price data for a comma-separated list of symbols."""
+def get_prices(symbols: str = "", db: Session = Depends(get_db)):  # noqa: ARG001
+    """Return price data for a comma-separated list of symbols.
+
+    Fetches all symbols concurrently (up to 10 workers). Whether a cache miss
+    triggers a live yfinance call or returns stale DB data is controlled by
+    ``PRICES_CACHE_ONLY`` in ``fin.services.quote``.
+    """
     codes = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    svc = QuoteService(db, build_default_providers())
+    if not codes:
+        return {}
+
     result = {}
-    for code in codes:
-        q = svc.get_quote(code)
-        if q:
-            result[code] = {
-                "price": q["price"],
-                "prev_close": q["prev_close"],
-                "regular_close": q.get("regular_close"),
-                "after_hours_change_pct": q.get("after_hours_change_pct"),
-                "market_state": q.get("market_state"),
-                "asset_type": q.get("asset_type"),
-                "name": q.get("name"),
-            }
+    with ThreadPoolExecutor(max_workers=min(len(codes), 10)) as pool:
+        futures = {pool.submit(_fetch_quote_for_code, code): code for code in codes}
+        for future in as_completed(futures):
+            code, q = future.result()
+            if q:
+                result[code] = {
+                    "price": q["price"],
+                    "prev_close": q["prev_close"],
+                    "regular_close": q.get("regular_close"),
+                    "after_hours_change_pct": q.get("after_hours_change_pct"),
+                    "market_state": q.get("market_state"),
+                    "asset_type": q.get("asset_type"),
+                    "name": q.get("name"),
+                }
     return result
 
 
