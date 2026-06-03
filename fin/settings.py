@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 
-from fin.config import SETTINGS_PATH
+from fin.config import APP_CONFIG, SETTINGS_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -55,42 +55,31 @@ def _detect_os_locale() -> str:
     return "zh" if code.lower().startswith("zh") else "en"
 
 
-_DEFAULTS = {
-    "notify_email": "",
-    "notify_enabled": True,
-    "timezone": "",
-    "display_name": "",
-    "rebalance": None,
-    "birth_date": "",
-    "fire_monthly_exp": None,
-    "fire_cagr": None,
-    "fire_monthly": 8000,
-    "fire_swr": 4.0,
-    "fire_manual_age": 32,
-    "fire_inflation": 3,
-    "fire_target_age": 50,
-    "fire_mc_sigma": 15,
-    "fire_life_expectancy": 80,
-    "currency": "CNY",
-    "privacy_mask": False,
-    "language": _detect_os_locale(),
-    "enabled_markets": ["us"],
-}
+# Static defaults come from config/app.json so frontend + backend share one source.
+# `language` is dynamic (depends on OS) so it's layered on at load time.
+_STATIC_DEFAULTS = APP_CONFIG.get("settings_defaults", {})
+
+
+def _defaults() -> dict:
+    """Return the full default settings dict, including dynamic OS-detected language."""
+    return {**_STATIC_DEFAULTS, "language": _detect_os_locale()}
 
 
 def load() -> dict:
+    defaults = _defaults()
     if not SETTINGS_PATH.exists():
-        return dict(_DEFAULTS)
+        return defaults
     try:
-        return {**_DEFAULTS, **json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))}
+        return {**defaults, **json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))}
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to load settings, using defaults: %s", exc)
-        return dict(_DEFAULTS)
+        return defaults
 
 
 def save(data: dict) -> dict:
     current = load()
-    current.update({k: v for k, v in data.items() if k in _DEFAULTS})
+    allowed = set(_defaults().keys())
+    current.update({k: v for k, v in data.items() if k in allowed})
     with tempfile.NamedTemporaryFile(
         mode="w", dir=SETTINGS_PATH.parent, suffix=".tmp", delete=False
     ) as f:

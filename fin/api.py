@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 import time
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fin.config import API_HOST, API_PORT, CONFIG_DIR, FRONTEND_DIR
+from fin.config import API_HOST, API_PORT, APP_CONFIG_PATH, CONFIG_DIR, FRONTEND_DIR
 from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
@@ -17,6 +18,7 @@ from fin.routers.balance import router as balance_router
 from fin.routers.categories import router as categories_router
 from fin.routers.holdings import router as holdings_router
 from fin.routers.ledger import router as ledger_router
+from fin.routers.meta import router as meta_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
 from fin.services.alert_scheduler import start_alert_scheduler, stop_alert_scheduler
@@ -80,6 +82,7 @@ app.include_router(balance_router)
 app.include_router(categories_router)
 app.include_router(holdings_router)
 app.include_router(ledger_router)
+app.include_router(meta_router)
 app.include_router(settings_router)
 app.include_router(watchlist_router)
 
@@ -95,6 +98,12 @@ async def index():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/config/app.json")
+async def serve_app_config():
+    """Serve config/app.json so the frontend reads the same source as the backend."""
+    return JSONResponse(content=json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8")))
 
 
 @app.get("/i18n", response_class=HTMLResponse)

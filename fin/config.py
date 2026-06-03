@@ -1,9 +1,13 @@
+import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 import platformdirs
 from dotenv import load_dotenv
+
+_logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 HOME_FIN = Path.home() / ".fin"
@@ -23,6 +27,8 @@ if _FROZEN:
     FRONTEND_DIR = BUNDLE_DIR / "frontend"
     CONFIG_DIR = BUNDLE_DIR / "config"
     SYMBOLS_PATH = CONFIG_DIR / "symbols.json"
+    I18N_DIR = CONFIG_DIR / "i18n"
+    APP_CONFIG_PATH = CONFIG_DIR / "app.json"
     load_dotenv(DATA_DIR / ".env")
     FIN_DEV = False
     DB_PATH = DATA_DIR / "fin.db"
@@ -36,6 +42,8 @@ else:
     FRONTEND_DIR = PROJECT_ROOT / "frontend"
     CONFIG_DIR = PROJECT_ROOT / "config"
     SYMBOLS_PATH = CONFIG_DIR / "symbols.json"
+    I18N_DIR = CONFIG_DIR / "i18n"
+    APP_CONFIG_PATH = CONFIG_DIR / "app.json"
 
     if FIN_DEV:
         DATA_DIR = HOME_FIN / "data-dev"
@@ -70,3 +78,15 @@ AGENTMAIL_INBOX = os.environ.get("FIN_AGENTMAIL_INBOX", "")
 # Ensure directories exist at import time
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_app_config() -> dict:
+    """Read config/app.json: i18n langs + settings defaults shared across modules."""
+    try:
+        return json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _logger.warning("Failed to load %s: %s", APP_CONFIG_PATH, exc)
+        return {}
+
+
+APP_CONFIG = load_app_config()
