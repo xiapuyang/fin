@@ -248,7 +248,7 @@
   "holdings.stat.mwrr.loading": "Loading prices…",
   "holdings.stat.mwrr.noDeposit": "Add deposit records to calculate",
   "holdings.stat.mwrr.allAccounts": "All accounts · based on deposit records",
-  "holdings.stat.mwrr.depositBased": "based on deposit records",
+  "holdings.stat.mwrr.depositBased": "based on deposits & current market value",
   "holdings.stat.realized.detail": "Realized {realized} · Income {income}",
   "holdings.stat.netDeposits": "Net deposits",
   "holdings.col.position": "Position",
