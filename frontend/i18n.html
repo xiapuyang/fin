@@ -92,7 +92,7 @@ let _search = "";
 let _lastIssues = [];
 let _valExpanded = {};
 
-const VALID_MODS = new Set(['base', 'cat', 'nav', 'app', 'dashboard', 'alerts', 'holdings', 'balance', 'ledger', 'fire']);
+const VALID_MODS = new Set(['base', 'cat', 'nav', 'app', 'dashboard', 'alerts', 'alert', 'holdings', 'balance', 'ledger', 'fire', 'about', 'launcher']);
 
 async function load() {
   try {
@@ -172,7 +172,7 @@ function runValidations(enText, zhText, en, zh) {
 
   // 5. Unknown module prefix — likely a typo in the key
   const badMod = enKeys.filter(k => !VALID_MODS.has(k.split('.')[0]));
-  if (badMod.length) issues.push({ level: 'warn', msg: `${badMod.length} keys use an unknown module prefix (allowed: base/nav/app/dashboard/alerts/holdings/balance/ledger/fire)`, keys: badMod });
+  if (badMod.length) issues.push({ level: 'warn', msg: `${badMod.length} keys use an unknown module prefix (allowed: ${[...VALID_MODS].join('/')})`, keys: badMod });
 
   return issues;
 }

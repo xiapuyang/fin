@@ -136,7 +136,7 @@ Before adding a new key, search `config/i18n/en.json` for existing keys that exp
 3. Add `"module.key": "中文文案"` to `config/i18n/zh.json`
 4. Missing keys fall back to displaying the key itself — easy to catch visually
 
-Module prefixes: `base`, `cat`, `nav`, `app`, `dashboard`, `alerts`, `holdings`, `balance`, `ledger`, `fire`.
+Module prefixes: `base`, `cat`, `nav`, `app`, `dashboard`, `alerts` (UI page), `alert` (cron email template, e.g. `alert.email.*`), `holdings`, `balance`, `ledger`, `fire`, `about` (About page), `launcher` (Electron tray + auto-update).
 
 ### Category display rule
 
