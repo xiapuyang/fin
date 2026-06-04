@@ -72,7 +72,7 @@ def _build_portfolio_scheme(
 
     Returns None when holdings are empty or total value is zero.
     """
-    from fin.services.benchmark_service import _fetch_current_price
+    from fin.services.benchmark_service import _holding_current_price
 
     usd_rate = fx.get("USD", 7.2)
 
@@ -128,8 +128,7 @@ def _build_portfolio_scheme(
             price = 1.0
         else:
             series = price_cache.get(code, [])
-            live = _fetch_current_price(code)
-            price = live if live else (series[-1]["close"] if series else None)
+            price = _holding_current_price(db, code, series)
         if price is None:
             continue
         values[code] = live_shares * price * fx.get(h.currency, 1.0) / usd_rate

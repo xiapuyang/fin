@@ -339,6 +339,40 @@ def _fetch_current_price(symbol: str) -> Optional[float]:
         return None
 
 
+def _holding_current_price(
+    db: Session, code: str, fallback_series: list[dict]
+) -> Optional[float]:
+    """Return current price for a portfolio holding using the full provider chain.
+
+    Tries the QuoteService (stocks cache → provider) so CN mutual funds
+    (6-digit codes via EastMoney), HK stocks, and A-shares all resolve
+    correctly. Falls back to the latest price_history entry, then bare
+    yfinance (works for US symbols even without a cached row).
+
+    Args:
+        db: SQLAlchemy session.
+        code: Raw holding code as stored in HoldingModel (e.g. "013308",
+              "00700", "000651.SZ", "NVDA").
+        fallback_series: price_history entries for this code; used when
+            QuoteService has no price.
+
+    Returns:
+        Float price, or None if all methods fail.
+    """
+    try:
+        from fin.services.providers import build_default_providers
+        from fin.services.quote import QuoteService
+
+        q = QuoteService(db, build_default_providers()).get_quote(code)
+        if q and q.get("price"):
+            return float(q["price"])
+    except Exception as exc:
+        logger.debug("QuoteService price lookup failed for holding %s: %s", code, exc)
+    if fallback_series:
+        return fallback_series[-1]["close"]
+    return _fetch_current_price(code)
+
+
 def compute(db: Session, account_id: int) -> dict:
     """Compute benchmark XIRR for all active schemes for *account_id*.
 
@@ -618,8 +652,7 @@ def _compute_portfolio_xirr(
                     logger.warning("Price fetch failed for holding %s: %s", code, exc)
                     price_cache[code] = []
             series = price_cache.get(code, [])
-            live = _fetch_current_price(code)
-            price = live if live else (series[-1]["close"] if series else None)
+            price = _holding_current_price(db, code, series)
         if price is None:
             continue
         h_fx = fx.get(h.currency, 1.0)

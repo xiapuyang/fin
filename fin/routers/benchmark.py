@@ -396,9 +396,11 @@ def get_history(
     _get_account_or_404(db, account_id)
 
     if since is None:
-        # Skip the first 3 months after the first deposit: early XIRR is
+        # Skip the first 3 months after the first result: early XIRR is
         # very noisy because a small portfolio with few deposits produces
         # extreme swings from minor price moves.
+        # Cap at today so newly-enabled accounts (whose earliest = today) still
+        # see their current data rather than getting an empty response.
         earliest = (
             db.query(func.min(BenchmarkResultModel.computed_date))
             .filter(BenchmarkResultModel.account_id == account_id)
@@ -406,7 +408,9 @@ def get_history(
         )
         if earliest:
             earliest_dt = datetime.strptime(earliest, "%Y-%m-%d").date()
-            since = str(earliest_dt + timedelta(days=91))
+            skipped_dt = earliest_dt + timedelta(days=91)
+            today_dt = datetime.now(timezone.utc).date()
+            since = str(min(skipped_dt, today_dt))
         else:
             since = str((datetime.now(timezone.utc) - timedelta(days=365)).date())
 

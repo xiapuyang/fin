@@ -2290,15 +2290,15 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                         {ds.length > 0 ? (<>
                           <MultiLineChart series={ds} granularity={history.granularity} width={560} height={240} colorMap={diffColorMap}/>
                           {/* Stats table */}
-                          <div style={{ marginTop: 14 }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 130px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                          <div style={{ marginTop: 14, display: "inline-block", minWidth: 460 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "180px 110px 140px 140px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
                               <span>{I18N.t("benchmark.diff.scheme")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.beat")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxOut")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxLag")}</span>
                             </div>
                             {_diffStats.map(st => (
-                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 130px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
+                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "180px 110px 140px 140px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: diffColorMap[st.name] || nameColor(st.name), flexShrink: 0 }}/>
                                   <span>{st.name}</span>
