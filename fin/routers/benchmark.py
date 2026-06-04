@@ -406,7 +406,7 @@ def get_history(
         )
         if earliest:
             earliest_dt = datetime.strptime(earliest, "%Y-%m-%d").date()
-            since = str((earliest_dt + timedelta(days=91)).date())
+            since = str(earliest_dt + timedelta(days=91))
         else:
             since = str((datetime.now(timezone.utc) - timedelta(days=365)).date())
 
