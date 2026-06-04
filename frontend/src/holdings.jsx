@@ -165,6 +165,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   usePrivacyMasked(); // re-render whole module on privacy toggle so totals refresh
   const [accounts, setAccounts] = React.useState([]);
   const [selectedAccountId, setSelectedAccountId] = React.useState(null);
+  const [benchXirr, setBenchXirr] = React.useState(null);
   const [viewMode, setViewMode] = React.useState("portfolio");
   const [tab, setTab] = React.useState("positions");
   const [holdings, setHoldings] = React.useState([]);
@@ -267,6 +268,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     if (tab === "benchmark" && acct && !acct.benchmark_enabled) {
       setTab("positions");
     }
+    setBenchXirr(null);
   }, [selectedAccountId, selectedAccount?.benchmark_enabled]);
 
   // Holdings filtered to selected snapshot only (prevents double-counting)
@@ -568,12 +570,19 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               sub={pricesReady ? `${I18N.t("holdings.stat.hpr")} ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
             />
             <StatTile label={I18N.t("holdings.stat.realized")} value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(I18N.tf("holdings.stat.realized.detail", { realized: `${sym}${fmtNum(acctRealized, 0)}`, income: `${sym}${fmtNum(acctIncomeTotal, 0)}` }))}/>
-            {!pricesReady
-              ? <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.loading")}/>
-              : acctXIRR != null
-                ? <StatTile label={I18N.t("holdings.stat.mwrr")} value={`${acctXIRR >= 0 ? "+" : ""}${acctXIRR.toFixed(1)}%`} tone={acctXIRR >= 0 ? "up" : "down"} sub={`${selectedAccount.name} · ${I18N.t("holdings.stat.mwrr.depositBased")}`}/>
-                : <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.noDeposit")}/>
-            }
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              {benchXirr != null && (
+                <div style={{ fontSize: 10, color: "var(--ink-3)", marginBottom: 3 }}>
+                  {I18N.t("benchmark.stat.backendXirr")}: {benchXirr >= 0 ? "+" : ""}{benchXirr.toFixed(1)}%
+                </div>
+              )}
+              {!pricesReady
+                ? <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.loading")}/>
+                : acctXIRR != null
+                  ? <StatTile label={I18N.t("holdings.stat.mwrr")} value={`${acctXIRR >= 0 ? "+" : ""}${acctXIRR.toFixed(1)}%`} tone={acctXIRR >= 0 ? "up" : "down"} sub={`${selectedAccount.name} · ${I18N.t("holdings.stat.mwrr.depositBased")}`}/>
+                  : <StatTile label={I18N.t("holdings.stat.mwrr")} value="—" tone="neutral" sub={I18N.t("holdings.stat.mwrr.noDeposit")}/>
+              }
+            </div>
           </div>
         );
       })()}
@@ -625,6 +634,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         <BenchmarkTab
           account={selectedAccount}
           onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
+          onBenchXirr={setBenchXirr}
         />
       )}
 
@@ -1975,7 +1985,7 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
   );
 };
 
-const BenchmarkTab = ({ account, onAccountUpdated }) => {
+const BenchmarkTab = ({ account, onAccountUpdated, onBenchXirr }) => {
   const [defaults, setDefaults] = React.useState([]);
   const [results, setResults] = React.useState(null);
   const [customSchemes, setCustomSchemes] = React.useState([]);
@@ -1985,6 +1995,10 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const [error, setError] = React.useState(null);
   const [localEnabled, setLocalEnabled] = React.useState(null); // null = all defaults on
   const [editingCustomId, setEditingCustomId] = React.useState(null);
+
+  React.useEffect(() => {
+    if (onBenchXirr) onBenchXirr(results?.portfolio_xirr ?? null);
+  }, [results]);
   const [addingCustom, setAddingCustom] = React.useState(false);
   const today = new Date().toISOString().slice(0, 10);
 

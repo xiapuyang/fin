@@ -190,12 +190,19 @@ def compute_benchmark(
 ):
     """Compute benchmark results for an account.
 
-    Always recomputes so the terminal value reflects the latest available price.
-    The price_history layer caches today's row after the first yfinance fetch,
-    so repeated calls within the same day are fast (no extra network roundtrips).
+    Skips computation if a valid result already exists today (portfolio xirr is
+    non-NULL). The price_history layer fetches today's price once (STALE_DAYS=0)
+    so the first compute of the day gets an intraday price; subsequent same-day
+    calls return the cached result quickly.
     """
     _get_account_or_404(db, account_id)
-    from fin.services.benchmark_service import compute as benchmark_compute
+    from fin.services.benchmark_service import (
+        compute as benchmark_compute,
+        has_valid_result_today,
+    )
+
+    if has_valid_result_today(db, account_id):
+        return _build_results_response(db, account_id)
 
     try:
         result = benchmark_compute(db, account_id)
@@ -371,16 +378,13 @@ def get_history(
         since = str((datetime.now(timezone.utc) - timedelta(days=365)).date())
 
     try:
-        since_date = datetime.strptime(since, "%Y-%m-%d").date()
+        datetime.strptime(since, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(
             status_code=422, detail="Invalid since date format, use YYYY-MM-DD"
         )
 
     today = datetime.now(timezone.utc).date()
-    range_days = (today - since_date).days
-    granularity = "month" if range_days >= 90 else "day"
-
     rows = (
         db.query(BenchmarkResultModel)
         .filter(
@@ -390,6 +394,15 @@ def get_history(
         .order_by(BenchmarkResultModel.computed_date.asc())
         .all()
     )
+
+    # Base granularity on actual data spread, not query range.
+    # Until 90 days of data accumulate, daily dates are more readable.
+    if rows:
+        earliest_result = datetime.strptime(rows[0].computed_date, "%Y-%m-%d").date()
+        data_days = (today - earliest_result).days
+    else:
+        data_days = 0
+    granularity = "month" if data_days >= 90 else "day"
 
     by_bench: dict[str, list] = {}
     for row in rows:
