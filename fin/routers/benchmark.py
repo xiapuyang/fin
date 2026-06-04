@@ -65,6 +65,7 @@ class SchemesPayload(BaseModel):
 
 class BenchmarkResultResponse(BaseModel):
     portfolio_xirr: Optional[float]
+    portfolio_value_usd: Optional[float] = None
     schemes: list[dict]
     computed_date: Optional[str]
     excluded_deposits: int = 0
@@ -147,20 +148,30 @@ def _build_results_response(db: Session, account_id: int) -> dict:
     custom_map = {str(cs.id): cs.name for cs in customs}
 
     portfolio_xirr = None
+    portfolio_value_usd = None
     schemes = []
     for row in rows:
         if row.bench_id == _PORTFOLIO_BENCH_ID:
             portfolio_xirr = row.xirr
+            portfolio_value_usd = row.current_value_usd
         else:
             name = (
                 defaults_map.get(row.bench_id)
                 or custom_map.get(row.bench_id)
                 or row.bench_id
             )
-            schemes.append({"id": row.bench_id, "name": name, "xirr": row.xirr})
+            schemes.append(
+                {
+                    "id": row.bench_id,
+                    "name": name,
+                    "xirr": row.xirr,
+                    "current_value_usd": row.current_value_usd,
+                }
+            )
 
     return {
         "portfolio_xirr": portfolio_xirr,
+        "portfolio_value_usd": portfolio_value_usd,
         "schemes": schemes,
         "computed_date": latest_date,
         "excluded_deposits": 0,
@@ -198,10 +209,10 @@ def compute_benchmark(
     _get_account_or_404(db, account_id)
     from fin.services.benchmark_service import (
         compute as benchmark_compute,
-        has_valid_result_today,
+        has_recent_result,
     )
 
-    if has_valid_result_today(db, account_id):
+    if has_recent_result(db, account_id):
         return _build_results_response(db, account_id)
 
     try:

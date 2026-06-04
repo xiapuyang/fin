@@ -13,6 +13,8 @@ class BenchmarkResultModel(Base):
     bench_id = Column(String, nullable=False)  # "__portfolio__" or scheme ID
     computed_date = Column(String, nullable=False)  # "YYYY-MM-DD"
     xirr = Column(Float, nullable=True)
+    current_value_usd = Column(Float, nullable=True)  # terminal value in USD
+    computed_at = Column(DateTime, nullable=True)  # exact timestamp of last compute
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

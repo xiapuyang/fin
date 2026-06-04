@@ -778,7 +778,6 @@
   "benchmark.excludedDeposits": "{n} deposit(s) excluded (no price data on that date)",
   "benchmark.disclaimer": "Non-USD account: benchmark returns calculated in USD at today's FX rate. May differ by 1–2% annualized.",
   "benchmark.return.portfolio": "My Portfolio",
-  "benchmark.stat.backendXirr": "Backend XIRR",
   "benchmark.return.effectiveStart": "Based on deposits since {date}",
   "benchmark.defaults.title": "Default Benchmarks",
   "benchmark.defaults.hint": "Toggle on/off — cannot be edited or deleted",

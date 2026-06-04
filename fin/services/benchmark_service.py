@@ -164,7 +164,7 @@ def simulate_scheme(
         flows.append((today, terminal))
 
     flows.sort(key=lambda x: x[0])
-    return xirr(flows), excluded
+    return xirr(flows), excluded, terminal
 
 
 # ── ID-integrity check ───────────────────────────────────────────────────────
@@ -207,24 +207,35 @@ def warn_orphaned_bench_ids() -> None:
 # ── Dedup helper ─────────────────────────────────────────────────────────────
 
 
-def has_valid_result_today(db: Session, account_id: int) -> bool:
-    """Return True if today's computation is complete and covers all active schemes.
+def has_recent_result(db: Session, account_id: int) -> bool:
+    """Return True if a valid result was computed within the configured interval.
 
+    Reads benchmark_recompute_interval_minutes from config/app.json (default 10).
     Returns False when:
-    - The portfolio XIRR row is missing or NULL (failed / no deposits)
-    - Any currently-active scheme lacks a result row for today (e.g. newly added)
+    - No portfolio row with a non-NULL xirr exists within the interval
+    - Any currently-active scheme is missing a result within the interval
     """
+    try:
+        cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
+        interval = int(cfg.get("benchmark_recompute_interval_minutes", 10))
+    except Exception:
+        interval = 10
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=interval)
     today = str(datetime.now(timezone.utc).date())
+
     portfolio_row = (
         db.query(BenchmarkResultModel)
         .filter(
             BenchmarkResultModel.account_id == account_id,
             BenchmarkResultModel.computed_date == today,
             BenchmarkResultModel.bench_id == _PORTFOLIO_BENCH_ID,
+            BenchmarkResultModel.xirr.isnot(None),
+            BenchmarkResultModel.computed_at >= cutoff,
         )
         .first()
     )
-    if portfolio_row is None or portfolio_row.xirr is None:
+    if portfolio_row is None:
         return False
 
     account = db.query(AccountModel).filter(AccountModel.id == account_id).first()
@@ -240,6 +251,7 @@ def has_valid_result_today(db: Session, account_id: int) -> bool:
         for row in db.query(BenchmarkResultModel.bench_id).filter(
             BenchmarkResultModel.account_id == account_id,
             BenchmarkResultModel.computed_date == today,
+            BenchmarkResultModel.computed_at >= cutoff,
         )
     }
     return active_ids.issubset(computed_ids)
@@ -421,7 +433,7 @@ def compute(db: Session, account_id: int) -> dict:
 
     fx = _fetch_fx(db)
 
-    portfolio_xirr = _compute_portfolio_xirr(
+    portfolio_xirr, portfolio_value_usd = _compute_portfolio_xirr(
         db, account, income_plain, fx, price_cache, earliest_date
     )
 
@@ -438,39 +450,53 @@ def compute(db: Session, account_id: int) -> dict:
         for future in as_completed(future_to_scheme):
             s = future_to_scheme[future]
             try:
-                xirr_pct, excl = future.result()
+                xirr_pct, excl, scheme_value_usd = future.result()
                 total_excluded = max(total_excluded, excl)
             except Exception as exc:
                 logger.warning("Scheme %s simulation failed: %s", s.get("id"), exc)
                 xirr_pct = None
+                scheme_value_usd = None
             scheme_results.append(
-                {"id": s.get("id"), "name": s.get("name"), "xirr": xirr_pct}
+                {
+                    "id": s.get("id"),
+                    "name": s.get("name"),
+                    "xirr": xirr_pct,
+                    "current_value_usd": scheme_value_usd,
+                }
             )
 
     scheme_order = {s.get("id"): i for i, s in enumerate(schemes)}
     scheme_results.sort(key=lambda r: scheme_order.get(r["id"], 999))
 
     # Write one row per bench_id (portfolio + each scheme)
-    rows_to_write = [((_PORTFOLIO_BENCH_ID, portfolio_xirr))]
+    now_utc = datetime.now(timezone.utc)
+    rows_to_write = [(_PORTFOLIO_BENCH_ID, portfolio_xirr, portfolio_value_usd)]
     for sr in scheme_results:
-        rows_to_write.append((sr["id"], sr.get("xirr")))
+        rows_to_write.append((sr["id"], sr.get("xirr"), sr.get("current_value_usd")))
 
-    for bench_id, xirr_val in rows_to_write:
+    for bench_id, xirr_val, value_usd in rows_to_write:
         stmt = sqlite_insert(BenchmarkResultModel).values(
             account_id=account_id,
             bench_id=bench_id,
             computed_date=today,
             xirr=xirr_val,
+            current_value_usd=value_usd,
+            computed_at=now_utc,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["account_id", "bench_id", "computed_date"],
-            set_={"xirr": stmt.excluded.xirr},
+            set_={
+                "xirr": stmt.excluded.xirr,
+                "current_value_usd": stmt.excluded.current_value_usd,
+                "computed_at": stmt.excluded.computed_at,
+            },
         )
         db.execute(stmt)
     db.commit()
 
     return {
         "portfolio_xirr": portfolio_xirr,
+        "portfolio_value_usd": portfolio_value_usd,
         "schemes": scheme_results,
         "computed_date": today,
         "excluded_deposits": total_excluded,
@@ -582,4 +608,4 @@ def _compute_portfolio_xirr(
         flows.append((today, terminal_usd))
 
     flows.sort(key=lambda x: x[0])
-    return xirr(flows)
+    return xirr(flows), terminal_usd

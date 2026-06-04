@@ -455,6 +455,27 @@ def _drop_old_benchmark_results(db: "Session") -> None:
         db.commit()
 
 
+def _migrate_benchmark_result_columns(db: "Session") -> None:
+    """Add current_value_usd and computed_at columns to benchmark_results if missing."""
+    from sqlalchemy import text
+
+    cols = {
+        row[1]
+        for row in db.execute(text("PRAGMA table_info(benchmark_results)")).fetchall()
+    }
+    if not cols:
+        return
+    for col, typedef in [
+        ("current_value_usd", "REAL"),
+        ("computed_at", "DATETIME"),
+    ]:
+        if col not in cols:
+            db.execute(
+                text(f"ALTER TABLE benchmark_results ADD COLUMN {col} {typedef}")
+            )
+    db.commit()
+
+
 def _drop_holdings_as_of_date(db: "Session") -> None:
     """Drop the as_of_date column from holdings.
 
@@ -524,5 +545,6 @@ def init_db() -> None:
         _migrate_indexes(db)
         _migrate_balance_indexes(db)
         _drop_holdings_as_of_date(db)
+        _migrate_benchmark_result_columns(db)
     finally:
         db.close()

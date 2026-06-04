@@ -145,6 +145,8 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
     const wrappedLabels = data.map(d => _wrapLabel(d.label));
     const maxLines = Math.max(...wrappedLabels.map(ls => ls.length));
     const padB = 18 + maxLines * lineH;
+    const hasTopLabels = data.some(d => d.topLabel);
+    const padT = hasTopLabels ? 34 : 20;
     const svgH = height + (maxLines - 1) * lineH;
     const w = width - padL - padR, h = svgH - padT - padB;
     const bw = Math.min(w / data.length * 0.7, 48);
@@ -176,6 +178,11 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
           return (
             <g key={i}>
               {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
+              {d.topLabel && (
+                <text x={cx} y={valueY - 12} fontSize="8.5" fill="var(--ink-3)" textAnchor="middle" className="mono">
+                  {d.topLabel}
+                </text>
+              )}
               <text x={cx} y={valueY} fontSize="9.5" fill={c} textAnchor="middle" className="mono">
                 {labelText}
               </text>

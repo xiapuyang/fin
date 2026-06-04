@@ -1,5 +1,6 @@
 {
   "_note": "benchmark_defaults[].id is immutable once stored in the database as bench_id. Never rename or remove a used id — add a new entry instead. name/description/allocations/cash_pct are safe to change.",
+  "benchmark_recompute_interval_minutes": 10,
   "benchmark_defaults": [
     {
       "id": "sp500",
