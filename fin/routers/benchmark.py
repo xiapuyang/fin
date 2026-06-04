@@ -396,10 +396,14 @@ def get_history(
     _get_account_or_404(db, account_id)
 
     if since is None:
-        since = str(
-            (
-                datetime.now(timezone.utc) - timedelta(days=_DEFAULT_SINCE_YEARS * 365)
-            ).date()
+        # Default to the earliest data available for this account
+        earliest = (
+            db.query(func.min(BenchmarkResultModel.computed_date))
+            .filter(BenchmarkResultModel.account_id == account_id)
+            .scalar()
+        )
+        since = earliest or str(
+            (datetime.now(timezone.utc) - timedelta(days=365)).date()
         )
 
     try:
