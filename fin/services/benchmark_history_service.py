@@ -195,7 +195,7 @@ def _get_or_create_portfolio_snapshot(
         # Daily backfill incrementally extends the latest snapshot's historical curve.
         try:
             latest_date_str = (
-                latest.name.split("Portfolio ", 1)[1]
+                latest.name.split("Portfolio ", 1)[1].split(" ")[0]
                 if latest.name.startswith("Portfolio ")
                 else ""
             )
@@ -214,7 +214,7 @@ def _get_or_create_portfolio_snapshot(
 
     row = BenchmarkCustomSchemeModel(
         account_id=account_id,
-        name=f"Portfolio {snap_date}",
+        name=f"Portfolio {snap_date} Simulation",
         allocations_json=new_allocs,
         cash_pct=new_cash,
         enabled=1,

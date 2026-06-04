@@ -2134,6 +2134,14 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
     }
   };
 
+  const rowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" };
+  const xirrStyle = { fontSize: 13, fontWeight: 600, fontFamily: "monospace", width: 58, textAlign: "right", flexShrink: 0 };
+  const sectionHead = (label, hint) => (
+    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 6, marginTop: 20 }}>
+      {label}{hint && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
+    </div>
+  );
+
   const _fmtSchemeDesc = (allocations, cashPct) => {
     const parts = (allocations || []).map(a => `${a.symbol} ${a.pct.toFixed(1)}%`);
     if (cashPct > 0) parts.push(`Cash ${cashPct.toFixed(1)}%`);
@@ -2142,8 +2150,9 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
 
   const _fmtValue = (usdVal) => {
     if (usdVal == null) return null;
-    const v = usdVal * (FX.USD || 7.24) / (FX[currency] || 1);
-    const sym = ccySymbol(currency);
+    const acctCcy = account?.currency || "CNY";
+    const v = usdVal * (FX.USD || 7.24) / (FX[acctCcy] || 1);
+    const sym = ccySymbol(acctCcy);
     let s;
     if (v >= 1e6) s = `${sym}${(v / 1e6).toFixed(1)}M`;
     else if (v >= 1e3) s = `${sym}${Math.round(v / 1e3)}k`;
@@ -2171,7 +2180,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
             .sort((a, b) => (b.xirr ?? -Infinity) - (a.xirr ?? -Infinity))[0]
         : null;
       const bestSnapLabel = bestSnap
-        ? I18N.tf("benchmark.portfolio.snap", { date: (snapshots.find(s => s.id === bestSnap.id)?.name || "").replace("Portfolio ", "") })
+        ? I18N.tf("benchmark.portfolio.snap", { date: (snapshots.find(s => s.id === bestSnap.id)?.name || "").replace(/^Portfolio /, "").split(" ")[0] })
         : null;
       const allLabels = [portfolioLabel, ...(bestSnapLabel ? [bestSnapLabel] : []), ...visible.map(s => _schemeLabel(s.id, s.name))];
       const cmap = nameColors(allLabels);
@@ -2191,7 +2200,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
       return data;
     }
     return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtValue(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
-  }, [results, defaults, activeIds, snapshots, currency, PRIVACY.masked]);
+  }, [results, defaults, activeIds, snapshots, account?.currency, PRIVACY.masked]);
 
   // Shared dedup color map — same colors in bar chart and line chart
   const sharedColorMap = React.useMemo(
@@ -2387,13 +2396,6 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
 
       {/* Scheme table — defaults + customs share the same row layout */}
       {(defaults.length > 0 || customSchemes.length > 0 || true) && (() => {
-        const rowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" };
-        const xirrStyle = { fontSize: 13, fontWeight: 600, fontFamily: "monospace", width: 58, textAlign: "right", flexShrink: 0 };
-        const sectionHead = (label, hint) => (
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 6, marginTop: 20 }}>
-            {label}{hint && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
-          </div>
-        );
         return (
           <div style={{ marginBottom: 20 }}>
             {/* Default schemes */}
@@ -2466,7 +2468,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
 
       {/* ── Portfolio Snapshots ─────────────────────────────────────────────── */}
       <div>
-        <div style={{ ...sectionHead() }}>{I18N.t("benchmark.snapshots.title")}</div>
+        {sectionHead(I18N.t("benchmark.snapshots.title"))}
         <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, marginTop: -4 }}>{I18N.t("benchmark.snapshots.subtitle")}</div>
         {snapshots.length === 0
           ? <div style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("benchmark.snapshots.empty")}</div>
@@ -2474,7 +2476,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
             const snapEnabled = snap.enabled !== 0;
             const xirr = snapEnabled ? (results?.schemes || []).find(s => s.id === snap.id)?.xirr ?? null : null;
             const isExpanded = expandedSnapId === snap.id;
-            const snapDate = snap.name.startsWith("Portfolio ") ? snap.name.slice("Portfolio ".length) : snap.name;
+            const snapDate = snap.name.startsWith("Portfolio ") ? snap.name.slice("Portfolio ".length).split(" ")[0] : snap.name;
             return (
               <div key={snap.id} style={{ marginBottom: 4 }}>
                 <div style={{ ...rowStyle, opacity: snapEnabled ? 1 : 0.45 }}>

@@ -798,7 +798,7 @@
   "benchmark.excludedDeposits": "{n} 笔入金被排除（当日无价格数据）",
   "benchmark.disclaimer": "非美元账户：基准收益率以今日汇率折算为美元计算，可能存在 1–2% 年化误差。",
   "benchmark.return.portfolio": "我的持仓",
-  "benchmark.portfolio.snap": "持仓快照 {date}",
+  "benchmark.portfolio.snap": "持仓快照 {date} 模拟推演",
   "benchmark.return.effectiveStart": "基于 {date} 起的入金记录",
   "benchmark.defaults.title": "默认基准方案",
   "benchmark.defaults.hint": "可开启/关闭，不可编辑或删除",
