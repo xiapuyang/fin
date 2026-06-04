@@ -437,11 +437,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
             <div>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.mkt")} </span>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allMarketValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.cash")} </span>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allCashValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -525,11 +525,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               </div>
               <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.mkt")} </span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctMarketValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.cash")} </span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctCashValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -625,6 +625,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         <BenchmarkTab
           account={selectedAccount}
           onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
+          currency={currency}
         />
       )}
 
@@ -911,9 +912,9 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
           : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "100px 110px 1.4fr 130px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-                <span>DATE</span><span>TYPE</span><span>SOURCE</span>
-                <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>≈ {acctCcy}</span>
-                <span>NOTE</span><span/>
+                <span>{I18N.t("holdings.income.col.date")}</span><span>{I18N.t("holdings.income.col.type")}</span><span>{I18N.t("holdings.income.col.source")}</span>
+                <span style={{textAlign:"right"}}>{I18N.t("holdings.income.col.amount")}</span><span style={{textAlign:"right"}}>{I18N.tf("holdings.income.col.equiv", { ccy: acctCcy })}</span>
+                <span>{I18N.t("holdings.income.col.note")}</span><span/>
               </div>
               {sorted.map((i, idx) => {
                 const acctAmt = i.amount * (FX[i.currency] || 1) / acctFx;
@@ -974,7 +975,7 @@ const DivUpcomingStrip = ({ upcoming, posByCode, acctFx, sym }) => {
             <Card key={u.code} padding={14} style={{ minWidth: 120 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{u.code}</div>
               <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{u.ex_date}</div>
-              {perShare && <div className="mono" style={{ fontSize: 11, color: "var(--up)", marginTop: 2 }}>{ccySymbol(pos?.currency || "USD")}{perShare.toFixed(3)}/sh</div>}
+              {perShare && <div className="mono" style={{ fontSize: 11, color: "var(--up)", marginTop: 2 }}>{ccySymbol(pos?.currency || "USD")}{perShare.toFixed(3)}{I18N.t("holdings.calendar.perShare")}</div>}
               {estPmt && <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--up)", marginTop: 3 }}>≈ {sym}{fmtNum(estPmt, 0)}</div>}
             </Card>
           );
@@ -1051,7 +1052,7 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
                 </Badge>
               </div>
               <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>
-                {e.type === "income" ? `+${fmtMoney(e.amount, e.currency, 2)}` : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}/sh` : "—"}
+                {e.type === "income" ? `+${fmtMoney(e.amount, e.currency, 2)}` : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}${I18N.t("holdings.calendar.perShare")}` : "—"}
               </span>
             </div>
           ))}
@@ -1082,7 +1083,7 @@ const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
               {d.ex_date && <div style={{ fontSize: 11, color: d.ex_date >= today ? "var(--up)" : "var(--ink-4)", marginTop: 2 }}>{I18N.t("holdings.calendar.exDate")} {d.ex_date}</div>}
             </div>
             <div style={{ textAlign: "right" }}>
-              {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}/sh/yr</div>}
+              {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}{I18N.t("holdings.calendar.perShareYear")}</div>}
               {yieldPct && <div className="mono" style={{ fontSize: 12, color: "var(--up)", marginTop: 2 }}>{yieldPct.toFixed(2)}%</div>}
             </div>
           </div>
@@ -1975,7 +1976,7 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
   );
 };
 
-const BenchmarkTab = ({ account, onAccountUpdated }) => {
+const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
   const [defaults, setDefaults] = React.useState([]);
   const [results, setResults] = React.useState(null);
   const [customSchemes, setCustomSchemes] = React.useState([]);
@@ -2121,12 +2122,14 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     return parts.join(' · ');
   };
 
-  const _fmtUSD = (v) => {
-    if (v == null) return null;
+  const _fmtValue = (usdVal) => {
+    if (usdVal == null) return null;
+    const v = usdVal * (FX.USD || 7.24) / (FX[currency] || 1);
+    const sym = ccySymbol(currency);
     let s;
-    if (v >= 1e6) s = `$${(v / 1e6).toFixed(1)}M`;
-    else if (v >= 1e3) s = `$${Math.round(v / 1e3)}k`;
-    else s = `$${Math.round(v)}`;
+    if (v >= 1e6) s = `${sym}${(v / 1e6).toFixed(1)}M`;
+    else if (v >= 1e3) s = `${sym}${Math.round(v / 1e3)}k`;
+    else s = `${sym}${Math.round(v)}`;
     return maskDigits(s);
   };
 
@@ -2146,16 +2149,16 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
       const data = [{
         label: portfolioLabel,
         value: results?.portfolio_xirr ?? null,
-        topLabel: _fmtUSD(results?.portfolio_value_usd),
+        topLabel: _fmtValue(results?.portfolio_value_usd),
         color: cmap[portfolioLabel],
       }];
       visible.forEach(s => {
         const label = _schemeLabel(s.id, s.name);
-        data.push({ label, value: s.xirr, topLabel: _fmtUSD(s.current_value_usd), color: cmap[label] });
+        data.push({ label, value: s.xirr, topLabel: _fmtValue(s.current_value_usd), color: cmap[label] });
       });
       return data;
     }
-    return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtUSD(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
+    return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtValue(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
   }, [results, defaults, activeIds, PRIVACY.masked]);
 
   // Shared dedup color map — same colors in bar chart and line chart

@@ -511,6 +511,55 @@ def compute(db: Session, account_id: int) -> dict:
     scheme_order = {s.get("id"): i for i, s in enumerate(schemes)}
     scheme_results.sort(key=lambda r: scheme_order.get(r["id"], 999))
 
+    # Also compute today's result for the most recent portfolio snapshot so the
+    # trend chart's last data point uses today's live prices (backfill only runs
+    # to yesterday).
+    latest_snap = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+        )
+        .order_by(BenchmarkCustomSchemeModel.id.desc())
+        .first()
+    )
+    if latest_snap:
+        snap_scheme = {
+            "id": str(latest_snap.id),
+            "name": latest_snap.name,
+            "allocations": json.loads(latest_snap.allocations_json),
+            "cash_pct": latest_snap.cash_pct,
+        }
+        for a in snap_scheme["allocations"]:
+            sym = a["symbol"]
+            if sym not in price_cache:
+                try:
+                    price_cache[sym] = fetch_symbol(db, sym, earliest_date)
+                except Exception:
+                    price_cache[sym] = []
+            if sym not in current_prices:
+                live = _fetch_current_price(sym)
+                if live:
+                    current_prices[sym] = live
+                elif price_cache.get(sym):
+                    current_prices[sym] = price_cache[sym][-1]["close"]
+        try:
+            snap_xirr, _, snap_value = simulate_scheme(
+                snap_scheme, income_plain, price_cache, current_prices, fx
+            )
+            scheme_results.append(
+                {
+                    "id": str(latest_snap.id),
+                    "name": latest_snap.name,
+                    "xirr": snap_xirr,
+                    "current_value_usd": snap_value,
+                }
+            )
+        except Exception as exc:
+            logger.warning(
+                "Portfolio snapshot compute failed for %s: %s", latest_snap.id, exc
+            )
+
     # Write one row per bench_id (portfolio + each scheme)
     now_utc = datetime.now(timezone.utc)
     rows_to_write = [(_PORTFOLIO_BENCH_ID, portfolio_xirr, portfolio_value_usd)]
