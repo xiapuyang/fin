@@ -475,7 +475,9 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
     if (entries.length) setHover({ date, x: xOf(date), entries });
   };
 
-  const TIP_W = 164;
+  const _charW = c => c.charCodeAt(0) > 255 ? 10 : 6;
+  const _nameW = name => [...(name || "")].reduce((s, c) => s + _charW(c), 0);
+  const TIP_W = Math.max(164, 11 + Math.max(...series.map(s => _nameW(s.name))) + 50);
   const tipEntries = hover ? hover.entries : [];
   const tipH = tipEntries.length * 17 + 22;
   const tipX = hover ? (hover.x + 8 + TIP_W > width ? hover.x - TIP_W - 8 : hover.x + 8) : 0;

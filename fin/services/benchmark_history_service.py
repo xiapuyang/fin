@@ -214,7 +214,7 @@ def _get_or_create_portfolio_snapshot(
 
     row = BenchmarkCustomSchemeModel(
         account_id=account_id,
-        name=f"Portfolio {snap_date} Simulation",
+        name=f"Portfolio {snap_date}",
         allocations_json=new_allocs,
         cash_pct=new_cash,
         enabled=1,
