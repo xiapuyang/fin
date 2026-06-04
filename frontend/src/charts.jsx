@@ -588,21 +588,33 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
 
 // ── XIRR Range Chart ─────────────────────────────────────────────────────────
 // Horizontal range bars showing min–max XIRR per scheme with current value dot.
+const _fmtMonthDate = (d) => {
+  if (!d) return "";
+  const _mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  if (d.length === 7) { const [y,m] = d.split("-"); return `${_mn[+m-1]} '${y.slice(2)}`; }
+  const [y,m,day] = d.split("-"); return `${_mn[+m-1]} ${+day} '${y.slice(2)}`;
+};
+
 const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width = 560 }) => {
   if (!series.length) return null;
 
-  // Compute min/max per series from historical data
+  // Compute min/max (with dates) per series from historical data
   const rows = series.map(s => {
-    const vals = s.data.map(d => d.xirr).filter(v => v != null);
-    if (!vals.length) return null;
+    const pts = s.data.filter(d => d.xirr != null);
+    if (!pts.length) return null;
+    const minPt = pts.reduce((a, b) => b.xirr < a.xirr ? b : a);
+    const maxPt = pts.reduce((a, b) => b.xirr > a.xirr ? b : a);
     return {
-      id: s.id,
-      name: s.name,
-      min: Math.min(...vals),
-      max: Math.max(...vals),
+      id: s.id, name: s.name,
+      min: minPt.xirr, minDate: minPt.date,
+      max: maxPt.xirr, maxDate: maxPt.date,
       current: currentMap[s.id] ?? null,
     };
   }).filter(Boolean);
+
+  // Overall date range across all series
+  const allDates = series.flatMap(s => s.data.map(d => d.date)).filter(Boolean).sort();
+  const rangeStart = allDates[0], rangeEnd = allDates[allDates.length - 1];
 
   if (!rows.length) return null;
 
@@ -614,9 +626,9 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const xMax = globalMax + vPad;
 
   const _colorMap = colorMap || nameColors(rows.map(r => r.name));
-  const rowH = 28, padL = 110, padR = 48, barH = 8;
+  const rowH = 38, padL = 110, padR = 48, barH = 8;
   const chartW = width - padL - padR;
-  const svgH = rows.length * rowH + 28;
+  const svgH = rows.length * rowH + 36;
 
   const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
 
@@ -659,11 +671,16 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
               stroke={color} strokeWidth="1.5" opacity="0.6"/>
             <line x1={x2} x2={x2} y1={cy - barH / 2 - 3} y2={cy + barH / 2 + 3}
               stroke={color} strokeWidth="1.5" opacity="0.6"/>
-            {/* min/max labels */}
-            <text x={x1 - 3} y={cy + 4} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8"
+            {/* min label + date */}
+            <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8"
               fontFamily="monospace">{r.min >= 0 ? `+${r.min.toFixed(1)}` : r.min.toFixed(1)}%</text>
-            <text x={x2 + 3} y={cy + 4} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8"
+            <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5"
+              fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+            {/* max label + date */}
+            <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8"
               fontFamily="monospace">{r.max >= 0 ? `+${r.max.toFixed(1)}` : r.max.toFixed(1)}%</text>
+            <text x={x2 + 3} y={cy + 9} textAnchor="start" fontSize="7.5" fill={color} opacity="0.5"
+              fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
             {/* current XIRR dot */}
             {curX != null && (
               <>
@@ -677,6 +694,12 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
           </g>
         );
       })}
+      {/* date range caption */}
+      {rangeStart && rangeEnd && (
+        <text x={padL + chartW / 2} y={svgH - 4} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
+          {_fmtMonthDate(rangeStart)} – {_fmtMonthDate(rangeEnd)}
+        </text>
+      )}
     </svg>
   );
 };

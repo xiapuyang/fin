@@ -2122,9 +2122,11 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
 
   const _fmtUSD = (v) => {
     if (v == null) return null;
-    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-    if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
-    return `$${Math.round(v)}`;
+    let s;
+    if (v >= 1e6) s = `$${(v / 1e6).toFixed(1)}M`;
+    else if (v >= 1e3) s = `$${Math.round(v / 1e3)}k`;
+    else s = `$${Math.round(v)}`;
+    return maskDigits(s);
   };
 
   const chartData = React.useMemo(() => {
@@ -2179,10 +2181,15 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
       {!computing && results && (
         <>
           {/* Bar chart — current snapshot */}
-          <div style={{ marginBottom: 4 }}>
+          <div style={{ marginBottom: 4, display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
               {I18N.t("benchmark.chart.title")}
             </span>
+            {results?.computed_date && (
+              <span style={{ fontSize: 10, color: "var(--ink-4)" }}>
+                {I18N.tf("benchmark.chart.asOf", { date: results.computed_date })}
+              </span>
+            )}
           </div>
           <div style={{ overflowX: "auto", marginBottom: 16 }}>
             <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
