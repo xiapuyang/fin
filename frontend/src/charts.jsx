@@ -402,17 +402,19 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const allValues = visible.flatMap(s => s.data.map(d => d.xirr).filter(v => v != null));
   if (allValues.length === 0) return <svg width={width} height={height}/>;
 
-  // IQR-based fence: cap y-axis at Q3 + 2*IQR so one extreme outlier
-  // doesn't compress all other lines (user can hide the outlier via legend)
+  // Percentile fence: clip to p5–p95 so extreme early-period XIRR spikes
+  // (when portfolio has few deposits, XIRR is very noisy) don't compress
+  // the stable region. Lines outside the fence are clipped by SVG clipPath.
   const sv = [...allValues].sort((a, b) => a - b);
-  const q1 = sv[Math.floor(sv.length * 0.25)];
-  const q3 = sv[Math.floor(sv.length * 0.75)];
-  const iqr = Math.max(q3 - q1, 1);
   const rawMin = Math.min(...allValues), rawMax = Math.max(...allValues);
-  const fenceMin = q1 - 2 * iqr, fenceMax = q3 + 2 * iqr;
+  const p5  = sv[Math.max(0, Math.floor(sv.length * 0.05))];
+  const p95 = sv[Math.min(sv.length - 1, Math.floor(sv.length * 0.95))];
+  const pRange = Math.max(p95 - p5, 1);
+  const fenceMin = p5  - pRange * 0.25;
+  const fenceMax = p95 + pRange * 0.25;
   const minV = Math.max(rawMin, fenceMin);
   const maxV = Math.min(rawMax, fenceMax);
-  const vPad = (maxV - minV) * 0.12 || 2;
+  const vPad = (maxV - minV) * 0.08 || 2;
   const yMin = minV - vPad, yMax = maxV + vPad;
 
   const dateIndex = new Map(allDates.map((d, i) => [d, i]));
@@ -422,7 +424,7 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
 
   const yRange = yMax - yMin;
-  const yStep = yRange <= 5 ? 1 : yRange <= 15 ? 2 : yRange <= 30 ? 5 : yRange <= 70 ? 10 : 20;
+  const yStep = yRange <= 5 ? 1 : yRange <= 15 ? 2 : yRange <= 40 ? 5 : yRange <= 80 ? 10 : 20;
   const yTicks = [];
   for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
 
