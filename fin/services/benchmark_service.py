@@ -14,6 +14,7 @@ from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
 from fin.models.benchmark_result import BenchmarkResultModel
 from fin.models.holding import HoldingModel
 from fin.models.income import IncomeModel
+from fin.models.transaction import TransactionModel
 from fin.models.user import MOCK_USER_ID
 from fin.services.price_history_service import fetch_symbol
 
@@ -514,7 +515,7 @@ def _compute_portfolio_xirr(
         else:
             flows.append((dep["date"], amount_usd))
 
-    holdings = (
+    holdings_all = (
         db.query(HoldingModel)
         .filter(
             HoldingModel.user_id == MOCK_USER_ID,
@@ -522,28 +523,59 @@ def _compute_portfolio_xirr(
         )
         .all()
     )
+    # Keep latest snapshot per code (matches frontend snapshotHoldings logic)
+    best: dict[str, HoldingModel] = {}
+    for h in holdings_all:
+        if h.code not in best or (h.snapshot_name or "") > (
+            best[h.code].snapshot_name or ""
+        ):
+            best[h.code] = h
+
+    # Apply post-snapshot transactions so share counts match the frontend's computePositions
+    transactions = (
+        db.query(TransactionModel)
+        .filter(
+            TransactionModel.user_id == MOCK_USER_ID,
+            TransactionModel.account == account.name,
+        )
+        .order_by(TransactionModel.date)
+        .all()
+    )
+    cutoff = account.cutoff_date or ""
+    # share delta: code -> float (positive = net bought since snapshot)
+    delta: dict[str, float] = defaultdict(float)
+    for t in transactions:
+        if cutoff and t.date < cutoff:
+            continue
+        snap_date = (best[t.code].snapshot_name if t.code in best else "") or ""
+        if t.date <= snap_date:
+            continue
+        if t.side == "buy":
+            delta[t.code] += t.shares
+        else:
+            delta[t.code] -= t.shares
 
     terminal_usd = 0.0
-    for h in holdings:
-        if h.shares <= 0:
+    for code, h in best.items():
+        live_shares = h.shares + delta.get(code, 0.0)
+        if live_shares <= 0:
             continue
         # CASH is a virtual position where shares == amount in the holding currency
-        if h.code == "CASH":
+        if code == "CASH":
             price = 1.0
         else:
-            if h.code not in price_cache:
+            if code not in price_cache:
                 try:
-                    price_cache[h.code] = fetch_symbol(db, h.code, earliest_date)
+                    price_cache[code] = fetch_symbol(db, code, earliest_date)
                 except Exception as exc:
-                    logger.warning("Price fetch failed for holding %s: %s", h.code, exc)
-                    price_cache[h.code] = []
-            series = price_cache.get(h.code, [])
-            price = series[-1]["close"] if series else _fetch_current_price(h.code)
+                    logger.warning("Price fetch failed for holding %s: %s", code, exc)
+                    price_cache[code] = []
+            series = price_cache.get(code, [])
+            price = series[-1]["close"] if series else _fetch_current_price(code)
         if price is None:
             continue
         h_fx = fx.get(h.currency, 1.0)
-        value_usd = h.shares * price * h_fx / usd_rate
-        terminal_usd += value_usd
+        terminal_usd += live_shares * price * h_fx / usd_rate
 
     if terminal_usd > 0:
         today = str(datetime.now(timezone.utc).date())
