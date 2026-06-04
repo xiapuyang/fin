@@ -396,7 +396,11 @@ def get_history(
     _get_account_or_404(db, account_id)
 
     if since is None:
-        since = str((datetime.now(timezone.utc) - timedelta(days=365)).date())
+        since = str(
+            (
+                datetime.now(timezone.utc) - timedelta(days=_DEFAULT_SINCE_YEARS * 365)
+            ).date()
+        )
 
     try:
         datetime.strptime(since, "%Y-%m-%d")

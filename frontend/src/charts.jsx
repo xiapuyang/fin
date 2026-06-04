@@ -380,6 +380,8 @@ const nameColors = (names) => {
 };
 
 const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month", colorMap = null }) => {
+  const [hover, setHover] = React.useState(null); // {date, x, entries:[{name,color,xirr}]}
+
   const padT = 14, padR = 16, padB = 30, padL = 44;
   const w = width - padL - padR;
   const h = height - padT - padB;
@@ -395,26 +397,26 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const vPad = (maxV - minV) * 0.12 || 2;
   const yMin = minV - vPad, yMax = maxV + vPad;
 
-  // When there is only one date, center the single point horizontally
+  // Build index map once for O(1) xOf lookups
+  const dateIndex = new Map(allDates.map((d, i) => [d, i]));
   const xOf = (date) => allDates.length === 1
     ? padL + w / 2
-    : padL + (allDates.indexOf(date) / (allDates.length - 1)) * w;
+    : padL + ((dateIndex.get(date) ?? 0) / (allDates.length - 1)) * w;
   const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
 
-  // y-axis ticks
+  // y-axis ticks — finer granularity than default recharts
   const yRange = yMax - yMin;
-  const yStep = yRange <= 8 ? 2 : yRange <= 20 ? 5 : yRange <= 60 ? 10 : 20;
+  const yStep = yRange <= 5 ? 1 : yRange <= 15 ? 2 : yRange <= 30 ? 5 : yRange <= 70 ? 10 : 20;
   const yTicks = [];
   for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
 
-  // x-axis ticks: ~5 evenly spaced; always include all dates when few
+  // x-axis ticks: ~5 evenly spaced
   const xStep = Math.max(1, Math.floor(allDates.length / 5));
   const xTicks = allDates.filter((_, i) => i % xStep === 0 || i === allDates.length - 1);
 
   const _months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fmtX = (d) => {
     const parts = d.split("-");
-    // Single-point: show exact date; handle both YYYY-MM-DD and YYYY-MM formats
     if (allDates.length === 1) {
       const mo = _months[+parts[1] - 1];
       return parts[2] ? `${mo} ${+parts[2]}, ${parts[0]}` : `${mo} ${parts[0]}`;
@@ -423,13 +425,46 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
     return d.slice(5);
   };
 
-  // Dedup-aware colors so no two series share a color within this chart
   const _colorMap = colorMap || nameColors(series.map(s => s.name));
   const seriesColor = (name) => _colorMap[name] || nameColor(name);
 
+  // Build per-date lookup for O(1) hover queries
+  const dateMap = React.useMemo(() => {
+    const m = new Map();
+    series.forEach(s => {
+      s.data.forEach(d => {
+        if (d.xirr != null) {
+          if (!m.has(d.date)) m.set(d.date, []);
+          m.get(d.date).push({ name: s.name, color: seriesColor(s.name), xirr: d.xirr });
+        }
+      });
+    });
+    return m;
+  }, [series]);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    // Find nearest date index
+    let nearestIdx = 0, nearestDist = Infinity;
+    allDates.forEach((d, i) => {
+      const dist = Math.abs(mx - xOf(d));
+      if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
+    });
+    const date = allDates[nearestIdx];
+    const entries = (dateMap.get(date) || []).slice().sort((a, b) => b.xirr - a.xirr);
+    if (entries.length) setHover({ date, x: xOf(date), entries });
+  };
+
+  const TIP_W = 164;
+  const tipEntries = hover ? hover.entries : [];
+  const tipH = tipEntries.length * 17 + 22;
+  const tipX = hover ? (hover.x + 8 + TIP_W > width ? hover.x - TIP_W - 8 : hover.x + 8) : 0;
+
   return (
     <div>
-      <svg width={width} height={height} style={{ display: "block", overflow: "visible" }}>
+      <svg width={width} height={height} style={{ display: "block", overflow: "visible", cursor: "crosshair" }}
+        onMouseMove={handleMouseMove} onMouseLeave={() => setHover(null)}>
         {/* y-axis grid + labels */}
         {yTicks.map(y => (
           <g key={y}>
@@ -439,7 +474,7 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
             </text>
           </g>
         ))}
-        {/* zero line (bold) */}
+        {/* zero line */}
         {yMin < 0 && yMax > 0 && (
           <line x1={padL} x2={padL + w} y1={yOf(0)} y2={yOf(0)} stroke="var(--line-2)" strokeWidth="1.5"/>
         )}
@@ -453,24 +488,55 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
           const pts = s.data.filter(d => d.xirr != null).map(d => `${xOf(d.date)},${yOf(d.xirr)}`).join(" ");
           return pts ? <polyline key={s.id} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/> : null;
         })}
-        {/* terminal dots */}
-        {series.map((s) => {
-          const color = seriesColor(s.name);
-          const last = s.data.filter(d => d.xirr != null).at(-1);
-          return last ? <circle key={s.id} cx={xOf(last.date)} cy={yOf(last.xirr)} r={3} fill={color}/> : null;
-        })}
-        {/* value labels next to terminal dots */}
-        {series.map((s) => {
+        {/* terminal dots + labels (hidden when hovering) */}
+        {!hover && series.map((s) => {
           const color = seriesColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           if (!last) return null;
-          const x = xOf(last.date);
-          const y = yOf(last.xirr);
-          const label = `${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%`;
-          return <text key={`lbl-${s.id}`} x={x + 6} y={y + 4} fontSize="9" fill={color} fontFamily="monospace">{label}</text>;
+          return (
+            <g key={s.id}>
+              <circle cx={xOf(last.date)} cy={yOf(last.xirr)} r={3} fill={color}/>
+              <text x={xOf(last.date) + 6} y={yOf(last.xirr) + 4} fontSize="9" fill={color} fontFamily="monospace">
+                {last.xirr >= 0 ? `+${last.xirr.toFixed(1)}` : last.xirr.toFixed(1)}%
+              </text>
+            </g>
+          );
         })}
+        {/* hover crosshair + tooltip */}
+        {hover && (
+          <g>
+            <line x1={hover.x} x2={hover.x} y1={padT} y2={padT + h}
+              stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3,2" opacity="0.5"/>
+            {tipEntries.map(e => (
+              <circle key={e.name} cx={hover.x} cy={yOf(e.xirr)} r={3.5} fill={e.color}/>
+            ))}
+            <g transform={`translate(${tipX},${padT + 2})`}>
+              <rect width={TIP_W} height={tipH} rx={5} fill="var(--paper)"
+                stroke="var(--line-2)" strokeWidth="1" style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.08))" }}/>
+              <text x={7} y={15} fontSize="9.5" fill="var(--ink-3)" fontFamily="monospace">
+                {(() => {
+                  const p = hover.date.split("-");
+                  return p.length === 2
+                    ? `${_months[+p[1]-1]} ${p[0]}`
+                    : `${_months[+p[1]-1]} ${+p[2]}, ${p[0]}`;
+                })()}
+              </text>
+              {tipEntries.map((e, i) => (
+                <g key={e.name} transform={`translate(7,${20 + i * 17})`}>
+                  <rect width={7} height={7} rx={1.5} y={0} fill={e.color}/>
+                  <text x={11} y={7.5} fontSize="10" fill="var(--ink-2)"
+                    style={{ overflow: "hidden" }}>{e.name}</text>
+                  <text x={TIP_W - 10} y={7.5} fontSize="10" fill={e.color}
+                    textAnchor="end" fontFamily="monospace" fontWeight="600">
+                    {e.xirr >= 0 ? `+${e.xirr.toFixed(1)}` : e.xirr.toFixed(1)}%
+                  </text>
+                </g>
+              ))}
+            </g>
+          </g>
+        )}
       </svg>
-      {/* legend row — names only; values shown on dots */}
+      {/* legend */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
         {series.map((s) => {
           const color = seriesColor(s.name);
