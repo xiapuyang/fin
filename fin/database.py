@@ -104,6 +104,7 @@ _KNOWN_TABLES = {
     "balance_items",
     "price_history",
     "benchmark_results",
+    "benchmark_custom_schemes",
 }
 
 
@@ -358,11 +359,6 @@ def _migrate_indexes(db: "Session") -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_history_sym_date "
             "ON price_history(symbol, date)",
         ),
-        (
-            "uq_benchmark_results_acct_date",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_results_acct_date "
-            "ON benchmark_results(account_id, computed_date)",
-        ),
     ]
     existing = {
         row[1]
@@ -437,6 +433,23 @@ def _migrate_balance_indexes(db: "Session") -> None:
     db.commit()
 
 
+def _drop_old_benchmark_results(db: "Session") -> None:
+    """Drop benchmark_results if it has the old schema (results_json column).
+
+    The table is recreated by create_all with the new per-bench_id row design.
+    Safe to call with no data present.
+    """
+    from sqlalchemy import text
+
+    cols = {
+        row[1]
+        for row in db.execute(text("PRAGMA table_info(benchmark_results)")).fetchall()
+    }
+    if cols and "bench_id" not in cols:
+        db.execute(text("DROP TABLE IF EXISTS benchmark_results"))
+        db.commit()
+
+
 def _drop_holdings_as_of_date(db: "Session") -> None:
     """Drop the as_of_date column from holdings.
 
@@ -482,10 +495,12 @@ def init_db() -> None:
     import fin.models.dividend_history  # noqa: F401
     import fin.models.price_history  # noqa: F401
     import fin.models.benchmark_result  # noqa: F401
+    import fin.models.benchmark_custom_scheme  # noqa: F401
 
     db: Session = SessionLocal()
     try:
         _migrate_alerts_to_int_id(db)
+        _drop_old_benchmark_results(db)
     finally:
         db.close()
 

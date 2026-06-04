@@ -791,5 +791,6 @@
   "benchmark.scheme.alloc": "配置比例",
   "benchmark.scheme.allocSum": "合计：{n}%",
   "benchmark.scheme.validationError": "配置比例与现金仓位之和必须为 100%",
-  "benchmark.saveChanges": "保存更改"
+  "benchmark.saveChanges": "保存更改",
+  "benchmark.history.title": "历史收益率"
 }

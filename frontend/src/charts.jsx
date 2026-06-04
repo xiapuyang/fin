@@ -246,4 +246,97 @@ const StackedBar = ({ data, width = 560, height = 18, gap = 2 }) => {
   );
 };
 
-Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar });
+// === Multi-series line chart (for benchmark history) =========================
+
+const _LINE_COLORS = ["#e5484d", "#3b82f6", "#f59e0b", "#8b5cf6", "#06b6d4", "#10b981", "#f43f5e"];
+
+const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month" }) => {
+  const padT = 14, padR = 16, padB = 30, padL = 44;
+  const w = width - padL - padR;
+  const h = height - padT - padB;
+
+  const allDates = [...new Set(series.flatMap(s => s.data.map(d => d.date)))].sort();
+  if (allDates.length === 0) return <svg width={width} height={height}/>;
+
+  const allValues = series.flatMap(s => s.data.map(d => d.xirr).filter(v => v != null));
+  if (allValues.length === 0) return <svg width={width} height={height}/>;
+
+  const minV = Math.min(...allValues);
+  const maxV = Math.max(...allValues);
+  const vPad = (maxV - minV) * 0.12 || 2;
+  const yMin = minV - vPad, yMax = maxV + vPad;
+
+  const xOf = (date) => padL + (allDates.indexOf(date) / Math.max(allDates.length - 1, 1)) * w;
+  const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
+
+  // y-axis ticks
+  const yRange = yMax - yMin;
+  const yStep = yRange <= 8 ? 2 : yRange <= 20 ? 5 : yRange <= 60 ? 10 : 20;
+  const yTicks = [];
+  for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
+
+  // x-axis ticks: ~5 evenly spaced
+  const xStep = Math.max(1, Math.floor(allDates.length / 5));
+  const xTicks = allDates.filter((_, i) => i % xStep === 0 || i === allDates.length - 1);
+
+  const fmtX = (d) => {
+    if (granularity === "month") {
+      const [y, m] = d.split("-");
+      return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m-1]} '${y.slice(2)}`;
+    }
+    return d.slice(5);
+  };
+
+  return (
+    <div>
+      <svg width={width} height={height} style={{ display: "block", overflow: "visible" }}>
+        {/* y-axis grid + labels */}
+        {yTicks.map(y => (
+          <g key={y}>
+            <line x1={padL} x2={padL + w} y1={yOf(y)} y2={yOf(y)} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
+            <text x={padL - 4} y={yOf(y) + 4} textAnchor="end" fontSize="9.5" fill="var(--ink-4)">
+              {y > 0 ? `+${y}%` : `${y}%`}
+            </text>
+          </g>
+        ))}
+        {/* zero line (bold) */}
+        {yMin < 0 && yMax > 0 && (
+          <line x1={padL} x2={padL + w} y1={yOf(0)} y2={yOf(0)} stroke="var(--line-2)" strokeWidth="1.5"/>
+        )}
+        {/* x-axis labels */}
+        {xTicks.map(d => (
+          <text key={d} x={xOf(d)} y={padT + h + 16} textAnchor="middle" fontSize="9.5" fill="var(--ink-4)">{fmtX(d)}</text>
+        ))}
+        {/* series lines */}
+        {series.map((s, i) => {
+          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+          const pts = s.data.filter(d => d.xirr != null).map(d => `${xOf(d.date)},${yOf(d.xirr)}`).join(" ");
+          return pts ? <polyline key={s.id} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/> : null;
+        })}
+        {/* terminal dots */}
+        {series.map((s, i) => {
+          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+          const last = s.data.filter(d => d.xirr != null).at(-1);
+          return last ? <circle key={s.id} cx={xOf(last.date)} cy={yOf(last.xirr)} r={3} fill={color}/> : null;
+        })}
+      </svg>
+      {/* legend row */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
+        {series.map((s, i) => {
+          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+          const last = s.data.filter(d => d.xirr != null).at(-1);
+          const label = last ? ` ${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%` : "";
+          return (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }}/>
+              <span>{s.name}</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 600, color: last && last.xirr >= 0 ? "var(--up)" : "var(--down)" }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart });

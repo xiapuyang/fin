@@ -10,10 +10,9 @@ class BenchmarkResultModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, nullable=False)
+    bench_id = Column(String, nullable=False)  # "__portfolio__" or scheme ID
     computed_date = Column(String, nullable=False)  # "YYYY-MM-DD"
-    portfolio_xirr = Column(Float, nullable=True)
-    results_json = Column(String, nullable=True)  # JSON: [{id, name, xirr}]
-    excluded_deposits = Column(Integer, nullable=True, default=0)
+    xirr = Column(Float, nullable=True)
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
@@ -26,6 +25,9 @@ class BenchmarkResultModel(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "account_id", "computed_date", name="uq_benchmark_results_acct_date"
+            "account_id",
+            "bench_id",
+            "computed_date",
+            name="uq_benchmark_results_acct_bench_date",
         ),
     )

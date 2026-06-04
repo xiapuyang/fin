@@ -791,5 +791,6 @@
   "benchmark.scheme.alloc": "Allocations",
   "benchmark.scheme.allocSum": "Sum: {n}%",
   "benchmark.scheme.validationError": "Allocations + Cash must sum to 100%",
-  "benchmark.saveChanges": "Save Changes"
+  "benchmark.saveChanges": "Save Changes",
+  "benchmark.history.title": "Historical Returns"
 }

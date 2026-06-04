@@ -98,6 +98,11 @@ async function apiGetBenchmarkDefaults()                  { return _apiFetch("/a
 async function apiGetBenchmarkResults(accountId)          { return _apiFetch(`/api/benchmark/results/${accountId}`); }
 async function apiComputeBenchmark(accountId)             { return _apiFetch(`/api/benchmark/compute/${accountId}`, { method: "POST" }); }
 async function apiUpdateBenchmarkSchemes(accountId, data) { return _apiFetch(`/api/benchmark/schemes/${accountId}`, _PUT(data)); }
+async function apiGetCustomSchemes(accountId)             { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}`); }
+async function apiCreateCustomScheme(accountId, data)     { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}`, _JSON(data)); }
+async function apiUpdateCustomScheme(accountId, id, data) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _PUT(data)); }
+async function apiDeleteCustomScheme(accountId, id)       { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _DEL()); }
+async function apiGetBenchmarkHistory(accountId, since)   { return _apiFetch(`/api/benchmark/history/${accountId}${since ? `?since=${since}` : ""}`); }
 
 // Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).
 const BS_CAT_COLORS = {

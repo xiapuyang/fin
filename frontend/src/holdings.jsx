@@ -624,7 +624,6 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {tab === "benchmark" && selectedAccount?.benchmark_enabled && (
         <BenchmarkTab
           account={selectedAccount}
-          acctXIRR={acctXIRR}
           onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
         />
       )}
@@ -1962,13 +1961,15 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
   );
 };
 
-const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
+const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const [defaults, setDefaults] = React.useState([]);
   const [results, setResults] = React.useState(null);
+  const [customSchemes, setCustomSchemes] = React.useState([]);
+  const [history, setHistory] = React.useState(null);
   const [computing, setComputing] = React.useState(false);
+  const [crudLoading, setCrudLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [localEnabled, setLocalEnabled] = React.useState(null); // null = all defaults on
-  const [localCustoms, setLocalCustoms] = React.useState([]);
   const [dirty, setDirty] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [editingCustomId, setEditingCustomId] = React.useState(null);
@@ -1979,15 +1980,16 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
     let cancelled = false;
     const init = async () => {
       try {
-        const [defs, res] = await Promise.all([
+        const [defs, res, customs] = await Promise.all([
           apiGetBenchmarkDefaults(),
           apiGetBenchmarkResults(account.id),
+          apiGetCustomSchemes(account.id),
         ]);
         if (cancelled) return;
         setDefaults(defs);
+        setCustomSchemes(customs);
         const stored = account.benchmark_schemes;
         setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
-        setLocalCustoms(stored ? (stored.custom_schemes || []) : []);
         setDirty(false);
 
         if (!res.computed_date || res.computed_date !== today) {
@@ -2002,13 +2004,18 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
       }
     };
     init();
+    apiGetBenchmarkHistory(account.id)
+      .then(h => { if (!cancelled) setHistory(h); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [account.id]);
 
-  const activeDefaultIds = React.useMemo(() => {
-    if (localEnabled === null) return new Set(defaults.map(d => d.id));
-    return new Set(localEnabled);
-  }, [localEnabled, defaults]);
+  // Active bench IDs for bar chart display
+  const activeIds = React.useMemo(() => {
+    const ids = localEnabled === null ? new Set(defaults.map(d => d.id)) : new Set(localEnabled);
+    customSchemes.forEach(cs => ids.add(String(cs.id)));
+    return ids;
+  }, [localEnabled, defaults, customSchemes]);
 
   const toggleDefault = (id) => {
     const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
@@ -2022,12 +2029,15 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
     try {
       await apiUpdateBenchmarkSchemes(account.id, {
         enabled_defaults: localEnabled === null ? defaults.map(d => d.id) : localEnabled,
-        custom_schemes: localCustoms,
       });
       setDirty(false);
       setComputing(true);
-      const computed = await apiComputeBenchmark(account.id);
+      const [computed, h] = await Promise.all([
+        apiComputeBenchmark(account.id),
+        apiGetBenchmarkHistory(account.id),
+      ]);
       setResults(computed);
+      setHistory(h);
       setComputing(false);
       if (onAccountUpdated) onAccountUpdated();
     } catch (err) {
@@ -2037,34 +2047,54 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
     }
   };
 
-  const handleSaveCustom = (scheme) => {
-    if (editingCustomId !== null) {
-      setLocalCustoms(cs => cs.map(c => c.id === editingCustomId ? scheme : c));
-    } else {
-      setLocalCustoms(cs => [...cs, { ...scheme, id: scheme.id || Math.random().toString(36).slice(2, 8) }]);
+  const _reloadAfterCRUD = async () => {
+    const [customs, computed, h] = await Promise.all([
+      apiGetCustomSchemes(account.id),
+      apiComputeBenchmark(account.id),
+      apiGetBenchmarkHistory(account.id),
+    ]);
+    setCustomSchemes(customs);
+    setResults(computed);
+    setHistory(h);
+  };
+
+  const handleSaveCustom = async (schemeData) => {
+    setCrudLoading(true);
+    try {
+      if (editingCustomId !== null) {
+        await apiUpdateCustomScheme(account.id, editingCustomId, schemeData);
+      } else {
+        await apiCreateCustomScheme(account.id, schemeData);
+      }
+      setEditingCustomId(null);
+      setAddingCustom(false);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
     }
-    setEditingCustomId(null);
-    setAddingCustom(false);
-    setDirty(true);
   };
 
-  const handleDeleteCustom = (id) => {
-    setLocalCustoms(cs => cs.filter(c => c.id !== id));
-    setDirty(true);
+  const handleDeleteCustom = async (id) => {
+    setCrudLoading(true);
+    try {
+      await apiDeleteCustomScheme(account.id, id);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
+    }
   };
 
-  // Build bar chart data from results
   const chartData = React.useMemo(() => {
-    const data = [{ label: I18N.t("benchmark.return.portfolio"), value: acctXIRR ?? null }];
+    const data = [{ label: I18N.t("benchmark.return.portfolio"), value: results?.portfolio_xirr ?? null }];
     if (results?.schemes) {
-      results.schemes.forEach(s => {
-        if (activeDefaultIds.has(s.id) || localCustoms.find(c => c.id === s.id)) {
-          data.push({ label: s.name, value: s.xirr });
-        }
-      });
+      results.schemes.filter(s => activeIds.has(s.id)).forEach(s => data.push({ label: s.name, value: s.xirr }));
     }
     return data;
-  }, [results, acctXIRR, activeDefaultIds, localCustoms]);
+  }, [results, activeIds]);
 
   const getXIRR = (id) => results?.schemes?.find(s => s.id === id)?.xirr ?? null;
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -2083,10 +2113,22 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
 
       {!computing && results && (
         <>
-          {/* Bar chart */}
-          <div style={{ overflowX: "auto", marginBottom: 20 }}>
+          {/* Bar chart — current snapshot */}
+          <div style={{ overflowX: "auto", marginBottom: 16 }}>
             <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
           </div>
+
+          {/* History line chart */}
+          {history && history.series.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
+                {I18N.t("benchmark.history.title")}
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <MultiLineChart series={history.series} granularity={history.granularity} width={560} height={180}/>
+              </div>
+            </div>
+          )}
 
           {/* Warnings */}
           {results.excluded_deposits > 0 && (
@@ -2115,10 +2157,10 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
           </div>
           {defaults.map(d => (
             <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-              <Toggle value={activeDefaultIds.has(d.id)} onChange={() => toggleDefault(d.id)} size="sm"/>
+              <Toggle value={activeIds.has(d.id)} onChange={() => toggleDefault(d.id)} size="sm"/>
               <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{d.name}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: activeDefaultIds.has(d.id) && getXIRR(d.id) != null ? (getXIRR(d.id) >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
-                {activeDefaultIds.has(d.id) ? fmtPct(getXIRR(d.id)) : "—"}
+              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: activeIds.has(d.id) && getXIRR(d.id) != null ? (getXIRR(d.id) >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                {activeIds.has(d.id) ? fmtPct(getXIRR(d.id)) : "—"}
               </span>
             </div>
           ))}
@@ -2130,17 +2172,19 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
           {I18N.t("benchmark.custom.title")}
         </div>
-        {localCustoms.map(cs => (
+        {customSchemes.map(cs => (
           <div key={cs.id}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
               <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{cs.name}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: "var(--ink-3)" }}>{fmtPct(getXIRR(cs.id))}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: "var(--ink-3)" }}>{fmtPct(getXIRR(String(cs.id)))}</span>
               <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
-                style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer" }}>
+                disabled={crudLoading}
+                style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer" }}>
                 {I18N.t("benchmark.custom.edit")}
               </button>
               <button type="button" onClick={() => handleDeleteCustom(cs.id)}
-                style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer" }}>
+                disabled={crudLoading}
+                style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer" }}>
                 {I18N.t("benchmark.custom.delete")}
               </button>
             </div>
@@ -2160,7 +2204,7 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
         )}
       </div>
 
-      {/* Save changes */}
+      {/* Save changes — only for enabled_defaults toggle */}
       {dirty && (
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button type="button" onClick={handleSaveChanges} disabled={saving}
@@ -2170,7 +2214,6 @@ const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
           <button type="button" onClick={() => {
             const stored = account.benchmark_schemes;
             setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
-            setLocalCustoms(stored ? (stored.custom_schemes || []) : []);
             setDirty(false); setEditingCustomId(null); setAddingCustom(false);
           }}
             style={{ fontSize: 13, padding: "7px 14px", border: "1px solid var(--line)", borderRadius: 6, background: "none", color: "var(--ink-3)", cursor: "pointer" }}>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from fin.config import APP_CONFIG_PATH
 from fin.models.account import AccountModel
+from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
 from fin.models.benchmark_result import BenchmarkResultModel
 from fin.models.holding import HoldingModel
 from fin.models.income import IncomeModel
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _NEAREST_PRICE_WINDOW_DAYS = 10  # covers Chinese New Year holiday gap
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
+_PORTFOLIO_BENCH_ID = "__portfolio__"
 
 
 # ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
@@ -138,7 +140,6 @@ def simulate_scheme(
                     shares[sym] += investable * pct / price
                 else:
                     any_missing = True
-                    # Uninvested portion falls into cash
                     cash_balance += investable * pct
             cash_balance += amount_usd * scheme.get("cash_pct", 0) / 100
             if any_missing:
@@ -174,24 +175,40 @@ def _load_benchmark_defaults() -> list[dict]:
         return []
 
 
-def _resolve_schemes(account: AccountModel) -> list[dict]:
+def _resolve_schemes(db: Session, account: AccountModel) -> list[dict]:
     """Return the list of active schemes for *account*.
 
-    When benchmark_schemes is null, all defaults are active.
+    Default schemes are filtered by enabled_defaults stored in account.benchmark_schemes.
+    Custom schemes are loaded from the benchmark_custom_schemes table.
     """
     defaults = {d["id"]: d for d in _load_benchmark_defaults()}
 
-    if not account.benchmark_schemes:
-        return list(defaults.values())
+    enabled_ids = list(defaults.keys())
+    if account.benchmark_schemes:
+        try:
+            stored = json.loads(account.benchmark_schemes)
+            enabled_ids = stored.get("enabled_defaults", list(defaults.keys()))
+        except (json.JSONDecodeError, TypeError):
+            pass
 
-    try:
-        stored = json.loads(account.benchmark_schemes)
-    except (json.JSONDecodeError, TypeError):
-        return list(defaults.values())
-
-    enabled_ids = stored.get("enabled_defaults", list(defaults.keys()))
     active = [defaults[i] for i in enabled_ids if i in defaults]
-    active.extend(stored.get("custom_schemes", []))
+
+    customs = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(BenchmarkCustomSchemeModel.account_id == account.id)
+        .order_by(BenchmarkCustomSchemeModel.id)
+        .all()
+    )
+    for row in customs:
+        active.append(
+            {
+                "id": str(row.id),
+                "name": row.name,
+                "allocations": json.loads(row.allocations_json),
+                "cash_pct": row.cash_pct,
+            }
+        )
+
     return active
 
 
@@ -221,8 +238,8 @@ def _fetch_current_price(symbol: str) -> Optional[float]:
 def compute(db: Session, account_id: int) -> dict:
     """Compute benchmark XIRR for all active schemes for *account_id*.
 
-    Writes results to benchmark_results (upserts today's row). Returns the
-    same shape as GET /api/benchmark/results/{id}.
+    Writes one BenchmarkResultModel row per bench_id (including __portfolio__).
+    Always recomputes — callers handle same-day caching.
 
     Args:
         db: Active SQLAlchemy session.
@@ -248,7 +265,7 @@ def compute(db: Session, account_id: int) -> dict:
     if account.benchmark_enabled != "1":
         raise ValueError(f"Account {account_id} has benchmark disabled")
 
-    schemes = _resolve_schemes(account)
+    schemes = _resolve_schemes(db, account)
     if not schemes:
         return {
             "portfolio_xirr": None,
@@ -257,7 +274,6 @@ def compute(db: Session, account_id: int) -> dict:
             "excluded_deposits": 0,
         }
 
-    # Load income (deposit/withdrawal) for this account
     income = (
         db.query(IncomeModel)
         .filter(
@@ -281,13 +297,11 @@ def compute(db: Session, account_id: int) -> dict:
 
     earliest_date = income[0].date
 
-    # Collect symbols from all schemes
     all_symbols: set[str] = set()
     for scheme in schemes:
         for alloc in scheme.get("allocations", []):
             all_symbols.add(alloc["symbol"])
 
-    # Fetch price history sequentially (avoid yfinance rate limits)
     price_cache: dict[str, list[dict]] = {}
     for sym in sorted(all_symbols):
         try:
@@ -296,7 +310,6 @@ def compute(db: Session, account_id: int) -> dict:
             logger.warning("Price fetch failed for %s: %s", sym, exc)
             price_cache[sym] = []
 
-    # Current prices: latest close from price_history or live yfinance
     current_prices: dict[str, float] = {}
     for sym in all_symbols:
         series = price_cache.get(sym, [])
@@ -309,10 +322,8 @@ def compute(db: Session, account_id: int) -> dict:
 
     fx = _fetch_fx(db)
 
-    # Portfolio XIRR: all income flows + current holdings value
     portfolio_xirr = _compute_portfolio_xirr(db, account, income, fx)
 
-    # Scheme XIRRs via ThreadPoolExecutor
     scheme_results = []
     total_excluded = 0
 
@@ -335,27 +346,26 @@ def compute(db: Session, account_id: int) -> dict:
                 {"id": s.get("id"), "name": s.get("name"), "xirr": xirr_pct}
             )
 
-    # Preserve original scheme order
     scheme_order = {s.get("id"): i for i, s in enumerate(schemes)}
     scheme_results.sort(key=lambda r: scheme_order.get(r["id"], 999))
 
-    # Upsert benchmark_results
-    stmt = sqlite_insert(BenchmarkResultModel).values(
-        account_id=account_id,
-        computed_date=today,
-        portfolio_xirr=portfolio_xirr,
-        results_json=json.dumps(scheme_results),
-        excluded_deposits=total_excluded,
-    )
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["account_id", "computed_date"],
-        set_={
-            "portfolio_xirr": stmt.excluded.portfolio_xirr,
-            "results_json": stmt.excluded.results_json,
-            "excluded_deposits": stmt.excluded.excluded_deposits,
-        },
-    )
-    db.execute(stmt)
+    # Write one row per bench_id (portfolio + each scheme)
+    rows_to_write = [((_PORTFOLIO_BENCH_ID, portfolio_xirr))]
+    for sr in scheme_results:
+        rows_to_write.append((sr["id"], sr.get("xirr")))
+
+    for bench_id, xirr_val in rows_to_write:
+        stmt = sqlite_insert(BenchmarkResultModel).values(
+            account_id=account_id,
+            bench_id=bench_id,
+            computed_date=today,
+            xirr=xirr_val,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["account_id", "bench_id", "computed_date"],
+            set_={"xirr": stmt.excluded.xirr},
+        )
+        db.execute(stmt)
     db.commit()
 
     return {
@@ -394,7 +404,6 @@ def _compute_portfolio_xirr(
         else:
             flows.append((dep.date, amount_usd))
 
-    # Terminal value: current holdings for this account
     holdings = (
         db.query(HoldingModel)
         .filter(
