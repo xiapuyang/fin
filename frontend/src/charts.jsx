@@ -326,7 +326,23 @@ const StackedBar = ({ data, width = 560, height = 18, gap = 2 }) => {
 
 // === Multi-series line chart (for benchmark history) =========================
 
-const _LINE_COLORS = ["#e5484d", "#3b82f6", "#f59e0b", "#8b5cf6", "#06b6d4", "#10b981", "#f43f5e"];
+const _LINE_COLORS = [
+  "#3b82f6", // blue
+  "#e5484d", // red
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#8b5cf6", // purple
+  "#06b6d4", // cyan
+  "#f97316", // orange
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#14b8a6", // teal
+  "#6366f1", // indigo
+  "#f43f5e", // rose
+  "#a78bfa", // violet
+  "#22d3ee", // sky
+  "#fbbf24", // yellow
+];
 
 // Deterministic color from series name — consistent across chart types and rerenders
 const nameColor = (name) => {

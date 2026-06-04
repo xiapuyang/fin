@@ -1941,7 +1941,7 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
                     }}
                     style={{ width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
                     {knownSymbols.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    <option value="__custom__">Custom symbol…</option>
+                    <option value="__custom__">{I18N.t("benchmark.scheme.customSymbol")}</option>
                   </select>
                   {(!knownOpt) && (
                     <input value={r.symbol} onChange={e => updateRow(i, "symbol", e.target.value.toUpperCase())} autoComplete="off"
@@ -2017,18 +2017,18 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         if (!res.computed_date || res.computed_date !== today || missingScheme) {
           setComputing(true);
           const computed = await apiComputeBenchmark(account.id);
-          if (!cancelled) { setResults(computed); setComputing(false); }
+          const h = await apiGetBenchmarkHistory(account.id);
+          if (!cancelled) { setResults(computed); setHistory(h); setComputing(false); }
         } else {
           setResults(res);
+          const h = await apiGetBenchmarkHistory(account.id);
+          if (!cancelled) setHistory(h);
         }
       } catch (err) {
         if (!cancelled) setError(err.message);
       }
     };
     init();
-    apiGetBenchmarkHistory(account.id)
-      .then(h => { if (!cancelled) setHistory(h); })
-      .catch(() => {});
     return () => { cancelled = true; };
   }, [account.id]);
 
@@ -2038,6 +2038,22 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     customSchemes.forEach(cs => { if (cs.enabled !== 0) ids.add(String(cs.id)); });
     return ids;
   }, [localEnabled, defaults, customSchemes]);
+
+  // Localized name for a default scheme — falls back to d.name if no i18n key exists
+  const _defLabel = (d) => {
+    const key = `benchmark.default.${d.id}.name`;
+    const v = I18N.t(key);
+    return v !== key ? v : d.name;
+  };
+  const defById = React.useMemo(() => {
+    const m = {};
+    defaults.forEach(d => { m[d.id] = d; });
+    return m;
+  }, [defaults]);
+  const _schemeLabel = (id, fallback) => {
+    const d = defById[id];
+    return d ? _defLabel(d) : fallback;
+  };
 
   const toggleDefault = (id) => {
     const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
@@ -2054,10 +2070,8 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
       });
       setDirty(false);
       setComputing(true);
-      const [computed, h] = await Promise.all([
-        apiComputeBenchmark(account.id),
-        apiGetBenchmarkHistory(account.id),
-      ]);
+      const computed = await apiComputeBenchmark(account.id);
+      const h = await apiGetBenchmarkHistory(account.id);
       setResults(computed);
       setHistory(h);
       setComputing(false);
@@ -2071,11 +2085,11 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
 
   const _reloadAfterCRUD = async () => {
     setComputing(true);
-    const [customs, computed, h] = await Promise.all([
+    const [customs, computed] = await Promise.all([
       apiGetCustomSchemes(account.id),
       apiComputeBenchmark(account.id),
-      apiGetBenchmarkHistory(account.id),
     ]);
+    const h = await apiGetBenchmarkHistory(account.id);
     setCustomSchemes(customs);
     setResults(computed);
     setHistory(h);
@@ -2129,10 +2143,13 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         return aIdx - bIdx;
       });
       const visible = sorted.filter(s => activeIds.has(s.id));
-      const allLabels = [portfolioLabel, ...visible.map(s => s.name)];
+      const allLabels = [portfolioLabel, ...visible.map(s => _schemeLabel(s.id, s.name))];
       const cmap = nameColors(allLabels);
       const data = [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, color: cmap[portfolioLabel] }];
-      visible.forEach(s => data.push({ label: s.name, value: s.xirr, color: cmap[s.name] }));
+      visible.forEach(s => {
+        const label = _schemeLabel(s.id, s.name);
+        data.push({ label, value: s.xirr, color: cmap[label] });
+      });
       return data;
     }
     return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, color: nameColor(portfolioLabel) }];
@@ -2181,7 +2198,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 <MultiLineChart
                   series={history.series
                     .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
-                    .map(s => s.id === "__portfolio__" ? { ...s, name: I18N.t("benchmark.return.portfolio") } : s)}
+                    .map(s => s.id === "__portfolio__"
+                      ? { ...s, name: I18N.t("benchmark.return.portfolio") }
+                      : { ...s, name: _schemeLabel(s.id, s.name) })}
                   granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
               </div>
             </div>
@@ -2223,11 +2242,12 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 {defaults.map(d => {
                   const xirr = getXIRR(d.id);
                   const active = activeIds.has(d.id);
+                  const label = _defLabel(d);
                   return (
                     <div key={d.id} style={rowStyle}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[d.name] || nameColor(d.name), flexShrink: 0 }}/>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[label] || nameColor(label), flexShrink: 0 }}/>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: "var(--ink)" }}>{d.name}</div>
+                        <div style={{ fontSize: 13, color: "var(--ink)" }}>{label}</div>
                         {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{d.description}</div>}
                       </div>
                       <span style={{ ...xirrStyle, color: active && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
