@@ -10,7 +10,7 @@ from fin.services.quote import normalize_symbol
 
 logger = logging.getLogger(__name__)
 
-_STALE_DAYS = 1  # re-fetch if most recent row is older than this
+_STALE_DAYS = 0  # re-fetch if today's row is not yet stored
 
 
 def fetch_symbol(db: Session, symbol: str, since_date: str) -> list[dict]:
