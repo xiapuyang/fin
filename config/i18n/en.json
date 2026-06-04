@@ -817,5 +817,12 @@
   "symbol.BSV": "Short-Term Bond ETF",
   "symbol.BTC": "Bitcoin",
   "benchmark.history.tab.trend": "Trend",
-  "benchmark.history.tab.range": "Range"
+  "benchmark.history.tab.range": "Range",
+  "benchmark.history.tab.diff": "Relative",
+  "benchmark.diff.ref": "Reference",
+  "benchmark.diff.scheme": "Scheme",
+  "benchmark.diff.beat": "Beat Rate",
+  "benchmark.diff.maxOut": "Max Outperformance",
+  "benchmark.diff.maxLag": "Max Underperformance",
+  "benchmark.diff.noData": "Not enough data to compute relative performance"
 }

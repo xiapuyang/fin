@@ -1980,7 +1980,8 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const [results, setResults] = React.useState(null);
   const [customSchemes, setCustomSchemes] = React.useState([]);
   const [history, setHistory] = React.useState(null);
-  const [historyView, setHistoryView] = React.useState("trend"); // "trend" | "range"
+  const [historyView, setHistoryView] = React.useState("trend"); // "trend" | "range" | "diff"
+  const [diffRefId, setDiffRefId] = React.useState("sp500");
   const [computing, setComputing] = React.useState(false);
   const [crudLoading, setCrudLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -2167,6 +2168,45 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
   const isNonUSD = account.currency && account.currency !== "USD";
 
+  // Delta series for the "diff" tab — XIRR relative to a reference scheme
+  const _diffData = React.useMemo(() => {
+    if (!history || !history.series.length) return { series: [], ref: null, options: [] };
+    const portfolioLabel = I18N.t("benchmark.return.portfolio");
+    const allSeries = history.series
+      .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
+      .map(s => ({ ...s, name: s.id === "__portfolio__" ? portfolioLabel : _schemeLabel(s.id, s.name) }));
+    const options = allSeries.map(s => ({ id: s.id, name: s.name }));
+    const refId = allSeries.some(s => s.id === diffRefId) ? diffRefId
+      : (allSeries.find(s => s.id === "sp500") || allSeries[0])?.id;
+    const refSeries = allSeries.find(s => s.id === refId);
+    if (!refSeries) return { series: [], ref: null, options };
+    const refMap = {};
+    refSeries.data.forEach(d => { if (d.xirr != null) refMap[d.date] = d.xirr; });
+    const deltaSeries = allSeries
+      .filter(s => s.id !== refId)
+      .map(s => ({
+        ...s,
+        data: s.data
+          .filter(d => d.xirr != null && refMap[d.date] != null)
+          .map(d => ({ date: d.date, xirr: d.xirr - refMap[d.date] })),
+      }))
+      .filter(s => s.data.length > 0);
+    return { series: deltaSeries, ref: refSeries, options };
+  }, [history, diffRefId, activeIds]);
+
+  const _diffStats = React.useMemo(() =>
+    _diffData.series.map(s => {
+      const diffs = s.data;
+      if (!diffs.length) return null;
+      const beatCount = diffs.filter(d => d.xirr > 0).length;
+      const maxD = diffs.reduce((a, b) => b.xirr > a.xirr ? b : a);
+      const minD = diffs.reduce((a, b) => b.xirr < a.xirr ? b : a);
+      return { id: s.id, name: s.name, beatPct: beatCount / diffs.length * 100,
+        beatDays: beatCount, totalDays: diffs.length,
+        maxDiff: maxD.xirr, maxDate: maxD.date, minDiff: minD.xirr, minDate: minD.date };
+    }).filter(Boolean),
+  [_diffData]);
+
   if (error) return <Empty text={I18N.t("benchmark.error")}/>;
 
   return (
@@ -2217,21 +2257,73 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                       tabs={[
                         { id: "trend",  label: I18N.t("benchmark.history.tab.trend") },
                         { id: "range",  label: I18N.t("benchmark.history.tab.range") },
+                        { id: "diff",   label: I18N.t("benchmark.history.tab.diff") },
                       ]}/>
                   )}
                 </div>
                 <div style={{ overflowX: "auto" }}>
-                  {historyView === "trend" ? (
+                  {historyView === "trend" && (
                     <MultiLineChart
                       series={visibleSeries}
                       granularity={history.granularity} width={560} height={320} colorMap={sharedColorMap}/>
-                  ) : (
+                  )}
+                  {historyView === "range" && (
                     <XirrRangeChart
                       series={visibleSeries}
                       currentMap={currentMap}
                       colorMap={sharedColorMap}
                       width={560}/>
                   )}
+                  {historyView === "diff" && (() => {
+                    const { series: ds, ref: refS, options: refOpts } = _diffData;
+                    const diffColorMap = nameColors(ds.map(s => s.name));
+                    return (
+                      <div>
+                        {/* Reference selector */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{I18N.t("benchmark.diff.ref")}:</span>
+                          <select value={diffRefId} onChange={e => setDiffRefId(e.target.value)} autoComplete="off"
+                            style={{ fontSize: 11, padding: "3px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
+                            {refOpts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                          </select>
+                        </div>
+                        {ds.length > 0 ? (<>
+                          <MultiLineChart series={ds} granularity={history.granularity} width={560} height={240} colorMap={diffColorMap}/>
+                          {/* Stats table */}
+                          <div style={{ marginTop: 14 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 130px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                              <span>{I18N.t("benchmark.diff.scheme")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.beat")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxOut")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxLag")}</span>
+                            </div>
+                            {_diffStats.map(st => (
+                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 130px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: diffColorMap[st.name] || nameColor(st.name), flexShrink: 0 }}/>
+                                  <span>{st.name}</span>
+                                </div>
+                                <span className="mono" style={{ textAlign: "right", color: st.beatPct >= 50 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                                  {st.beatPct.toFixed(0)}%
+                                  <span style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 400, marginLeft: 3 }}>({st.beatDays}/{st.totalDays})</span>
+                                </span>
+                                <div style={{ textAlign: "right" }}>
+                                  <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>+{st.maxDiff.toFixed(1)}pp</span>
+                                  <div style={{ fontSize: 10, color: "var(--ink-4)" }}>{st.maxDate}</div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <span className="mono" style={{ color: "var(--down)", fontWeight: 600 }}>{st.minDiff.toFixed(1)}pp</span>
+                                  <div style={{ fontSize: 10, color: "var(--ink-4)" }}>{st.minDate}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>) : (
+                          <div style={{ color: "var(--ink-4)", fontSize: 12, padding: "16px 0" }}>{I18N.t("benchmark.diff.noData")}</div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );

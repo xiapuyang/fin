@@ -646,6 +646,7 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const _pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
   return (
+  <div>
     <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }}>
       {/* grid lines */}
       {ticks.map(t => (
@@ -671,10 +672,10 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
         const clipped = rawX2 > padL + chartW;
         const x2 = clipped ? padL + chartW : rawX2;
         const curX = r.current != null ? clampX(r.current) : null;
+        const showMinLabel = (x1 - padL) > 24;
         return (
           <g key={r.id} style={{ cursor: "pointer" }} onClick={() => toggle(r.id)}>
-            {/* colored dot + label */}
-            <circle cx={padL - 8} cy={cy} r={3.5} fill={color} opacity={isHidden ? 0.3 : 0.9}/>
+            {/* row label — dot kept here as alignment anchor */}
             <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="10.5"
               fill={isHidden ? "var(--ink-4)" : "var(--ink-2)"}
               style={{ fontWeight: 500, textDecoration: isHidden ? "line-through" : "none" }}>
@@ -689,9 +690,11 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
                 stroke={color} strokeWidth="1.5" opacity="0.6"/>
               {!clipped && <line x1={x2} x2={x2} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
                 stroke={color} strokeWidth="1.5" opacity="0.6"/>}
-              {/* min label + date */}
-              <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
-              <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+              {/* min label — only when bar starts far enough from left edge */}
+              {showMinLabel && <>
+                <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
+                <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+              </>}
               {/* max label + date — at clip edge if clipped, with → prefix */}
               <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">
                 {clipped ? `→${_pct(r.max)}` : _pct(r.max)}
@@ -715,6 +718,22 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
         </text>
       )}
     </svg>
+    {/* Legend — colored dots matching bar colors, click to hide/show */}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 8, paddingLeft: padL }}>
+      {allRows.map(r => {
+        const color = (_colorMap[r.name] || nameColor(r.name));
+        const isHidden = hidden.has(r.id);
+        return (
+          <div key={r.id}
+            style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", opacity: isHidden ? 0.35 : 1 }}
+            onClick={() => toggle(r.id)}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: color, flexShrink: 0 }}/>
+            <span style={{ fontSize: 11, color: "var(--ink-3)", textDecoration: isHidden ? "line-through" : "none" }}>{r.name}</span>
+          </div>
+        );
+      })}
+    </div>
+  </div>
   );
 };
 

@@ -817,5 +817,12 @@
   "symbol.BSV": "短期债券 ETF",
   "symbol.BTC": "比特币",
   "benchmark.history.tab.trend": "走势",
-  "benchmark.history.tab.range": "区间"
+  "benchmark.history.tab.range": "区间",
+  "benchmark.history.tab.diff": "波动",
+  "benchmark.diff.ref": "参考方案",
+  "benchmark.diff.scheme": "方案",
+  "benchmark.diff.beat": "跑赢概率",
+  "benchmark.diff.maxOut": "最大超越",
+  "benchmark.diff.maxLag": "最大落后",
+  "benchmark.diff.noData": "数据不足，无法计算相对收益"
 }
