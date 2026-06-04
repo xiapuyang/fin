@@ -15,6 +15,7 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from fin.config import APP_CONFIG_PATH
 from fin.models.account import AccountModel
 from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
 from fin.models.benchmark_result import BenchmarkResultModel
@@ -164,6 +165,7 @@ def _get_or_create_portfolio_snapshot(
     account_id: int,
     portfolio_scheme: dict,
     snap_date: str,
+    interval_days: int = 30,
 ) -> BenchmarkCustomSchemeModel:
     """Get or create a portfolio composition snapshot for *snap_date*.
 
@@ -197,7 +199,7 @@ def _get_or_create_portfolio_snapshot(
             )
             latest_snap_dt = datetime.strptime(latest_date_str, "%Y-%m-%d").date()
             snap_dt = datetime.strptime(snap_date, "%Y-%m-%d").date()
-            if (snap_dt - latest_snap_dt).days < 30:
+            if (snap_dt - latest_snap_dt).days < interval_days:
                 return latest
         except (ValueError, IndexError):
             pass
@@ -290,6 +292,13 @@ def backfill_account(db: Session, account_id: int) -> int:
             logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
             price_cache[sym] = []
 
+    # Read configurable snapshot interval (default 30 days)
+    try:
+        _cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
+        snapshot_interval = int(_cfg.get("benchmark_snapshot_interval_days", 30))
+    except Exception:
+        snapshot_interval = 30
+
     # Build a composition snapshot from current holdings and add it to backfill
     portfolio_scheme = _build_portfolio_scheme(db, account, fx, price_cache)
     all_schemes = list(schemes)
@@ -303,9 +312,11 @@ def backfill_account(db: Session, account_id: int) -> int:
                     logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
                     price_cache[sym] = []
         snap = _get_or_create_portfolio_snapshot(
-            db, account_id, portfolio_scheme, yesterday
+            db, account_id, portfolio_scheme, yesterday, interval_days=snapshot_interval
         )
         all_schemes.append({**portfolio_scheme, "id": str(snap.id)})
+        # Also backfill __portfolio__ rows (actual portfolio XIRR for trend chart)
+        all_schemes.append(portfolio_scheme)
 
     # Load existing (bench_id, date) pairs to skip
     existing = {

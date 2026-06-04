@@ -2169,7 +2169,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const isNonUSD = account.currency && account.currency !== "USD";
 
   const _portfolioSeriesLabel = (s) => {
-    if (s.is_latest_portfolio_snap) return I18N.t("benchmark.return.portfolio");
+    if (s.id === "__portfolio__") return I18N.t("benchmark.return.portfolio");
     if (s.is_portfolio_snap && s.snap_date) return I18N.tf("benchmark.portfolio.snap", { date: s.snap_date });
     return _schemeLabel(s.id, s.name);
   };
@@ -2178,7 +2178,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const _diffData = React.useMemo(() => {
     if (!history || !history.series.length) return { series: [], ref: null, options: [] };
     const allSeries = history.series
-      .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
+      .filter(s => s.id === "__portfolio__" || s.is_portfolio_snap || activeIds.has(s.id))
       .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
     const options = allSeries.map(s => ({ id: s.id, name: s.name }));
     const refId = allSeries.some(s => s.id === diffRefId) ? diffRefId
@@ -2243,7 +2243,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
           {/* History charts — Trend line + XIRR Range */}
           {history && history.series.length > 0 && (() => {
             const visibleSeries = history.series
-              .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
+              .filter(s => s.id === "__portfolio__" || s.is_portfolio_snap || activeIds.has(s.id))
               .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
             // currentMap: name → current XIRR for range chart dots
             const currentMap = {};
@@ -2403,12 +2403,12 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                     <span style={{ ...xirrStyle, color: csEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
                       {csEnabled ? fmtPct(xirr) : "—"}
                     </span>
+                    <Toggle value={csEnabled} onChange={() => handleToggleCustomEnabled(cs.id, csEnabled)} size="sm" disabled={crudLoading}/>
                     <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
                       disabled={crudLoading}
                       style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
                       {I18N.t("benchmark.custom.edit")}
                     </button>
-                    <Toggle value={csEnabled} onChange={() => handleToggleCustomEnabled(cs.id, csEnabled)} size="sm" disabled={crudLoading}/>
                   </div>
                   {editingCustomId === cs.id && (
                     <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>

@@ -256,23 +256,19 @@ def update_schemes(
 # ── Custom scheme CRUD ────────────────────────────────────────────────────────
 
 
-def _sample_portfolio_snaps(snap_ids: list[str], max_total: int = 6) -> set[str]:
+def _sample_portfolio_snaps(snap_ids: list[str], max_total: int = 5) -> set[str]:
     """Return a sampled subset of portfolio snapshot bench_ids.
 
-    Always includes the latest (last element). Returns at most max_total IDs.
+    Spreads up to max_total IDs evenly across the full period.
     snap_ids must be sorted oldest-first by integer ID.
     """
     if not snap_ids:
         return set()
-    if len(snap_ids) <= max_total:
+    n = len(snap_ids)
+    if n <= max_total:
         return set(snap_ids)
-    latest = snap_ids[-1]
-    older = snap_ids[:-1]
-    n_older = max_total - 1
-    step = max(1, len(older) // n_older)
-    sampled = {older[i] for i in range(0, len(older), step)}
-    sampled.add(latest)
-    return sampled
+    indices = {round(i * (n - 1) / (max_total - 1)) for i in range(max_total)}
+    return {snap_ids[i] for i in indices}
 
 
 @router.get("/custom-schemes/{account_id}")
@@ -484,7 +480,7 @@ def get_history(
     )
     custom_map = {str(cs.id): cs.name for cs in customs}
 
-    # Portfolio snapshots: sampled for display; __portfolio__ excluded from trend
+    # Portfolio snapshots: sample up to 5 evenly spread across the full period
     snap_schemes = [cs for cs in customs if cs.is_portfolio_snapshot]
     snap_schemes.sort(key=lambda cs: cs.id)
     snap_id_list = [str(cs.id) for cs in snap_schemes]
@@ -497,12 +493,9 @@ def get_history(
     for i, d in enumerate(_get_defaults()):
         order_map[d["id"]] = i
 
-    latest_snap_id = snap_id_list[-1] if snap_id_list else None
     snap_id_set = set(snap_id_list)
     series_list = []
     for bid, data in by_bench.items():
-        if bid == _PORTFOLIO_BENCH_ID:
-            continue  # real-time only; trend chart uses snapshot curves instead
         if bid in snap_id_set and bid not in sampled_snap_ids:
             continue  # unsampled portfolio snapshot
         s: dict = {"id": bid, "name": bench_name(bid), "data": data}
@@ -515,8 +508,6 @@ def get_history(
             )
             s["is_portfolio_snap"] = True
             s["snap_date"] = snap_date_str
-            if bid == latest_snap_id:
-                s["is_latest_portfolio_snap"] = True
         series_list.append(s)
 
     series = sorted(series_list, key=lambda s: order_map.get(s["id"], 999))
