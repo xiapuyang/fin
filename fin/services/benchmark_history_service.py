@@ -145,10 +145,12 @@ def _build_portfolio_scheme(
     if equity_total <= 0:
         return None
 
-    # cash_pct = % of total kept as cash; pct = % of investable (sums to 100)
+    # cash_pct = % of total kept as cash. equity allocations are scaled so that
+    # sum(alloc.pct) + cash_pct == 100, matching how simulate_scheme expects them.
     cash_pct = round(cash_val / total_with_cash * 100, 4)
+    equity_fraction = (100 - cash_pct) / 100
     allocations = [
-        {"symbol": code, "pct": round(val / equity_total * 100, 4)}
+        {"symbol": code, "pct": round(val / equity_total * equity_fraction * 100, 4)}
         for code, val in values.items()
         if val > 0
     ]
@@ -299,7 +301,7 @@ def backfill_account(db: Session, account_id: int) -> int:
     except Exception:
         snapshot_interval = 30
 
-    # Build a composition snapshot from current holdings and add it to backfill
+    # Build current composition snapshot; create a new DB row if the interval elapsed
     portfolio_scheme = _build_portfolio_scheme(db, account, fx, price_cache)
     all_schemes = list(schemes)
     if portfolio_scheme:
@@ -311,12 +313,38 @@ def backfill_account(db: Session, account_id: int) -> int:
                 except Exception as exc:
                     logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
                     price_cache[sym] = []
-        snap = _get_or_create_portfolio_snapshot(
+        _get_or_create_portfolio_snapshot(
             db, account_id, portfolio_scheme, yesterday, interval_days=snapshot_interval
         )
-        all_schemes.append({**portfolio_scheme, "id": str(snap.id)})
-        # Also backfill __portfolio__ rows (actual portfolio XIRR for trend chart)
-        all_schemes.append(portfolio_scheme)
+
+    # Backfill ALL enabled portfolio snapshots (not just the latest)
+    existing_snaps = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+            BenchmarkCustomSchemeModel.enabled != 0,
+        )
+        .all()
+    )
+    for snap_row in existing_snaps:
+        snap_allocs = json.loads(snap_row.allocations_json)
+        for a in snap_allocs:
+            sym = a["symbol"]
+            if sym not in price_cache:
+                try:
+                    price_cache[sym] = fetch_symbol(db, sym, earliest)
+                except Exception as exc:
+                    logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
+                    price_cache[sym] = []
+        all_schemes.append(
+            {
+                "id": str(snap_row.id),
+                "name": snap_row.name,
+                "allocations": snap_allocs,
+                "cash_pct": snap_row.cash_pct,
+            }
+        )
 
     # Load existing (bench_id, date) pairs to skip
     existing = {

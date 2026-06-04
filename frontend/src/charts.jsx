@@ -647,14 +647,14 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
 
   return (
   <div>
-    <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }}>
+    <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }} textRendering="geometricPrecision">
       {/* grid lines */}
       {ticks.map(t => (
         <g key={t}>
           <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={tickY - 4} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
           {/* 0% label shifted right so it doesn't crowd left-side min labels */}
           <text x={t === 0 ? xOf(0) + 4 : xOf(t)} y={tickY + 10}
-            textAnchor={t === 0 ? "start" : "middle"} fontSize="9" fill="var(--ink-4)">
+            textAnchor={t === 0 ? "start" : "middle"} fontSize="10" fill="var(--ink-4)">
             {t === 0 ? "0%" : _pct(t)}
           </text>
         </g>
@@ -676,7 +676,7 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
         return (
           <g key={r.id} style={{ cursor: "pointer" }} onClick={() => toggle(r.id)}>
             {/* row label — dot kept here as alignment anchor */}
-            <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="10.5"
+            <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="11.5"
               fill={isHidden ? "var(--ink-4)" : "var(--ink-2)"}
               style={{ fontWeight: 500, textDecoration: isHidden ? "line-through" : "none" }}>
               {r.name}
@@ -692,18 +692,18 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
                 stroke={color} strokeWidth="1.5" opacity="0.6"/>}
               {/* min label — only when bar starts far enough from left edge */}
               {showMinLabel && <>
-                <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
-                <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+                <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
+                <text x={x1 - 3} y={cy + 10} textAnchor="end" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
               </>}
               {/* max label + date — at clip edge if clipped, with → prefix */}
-              <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">
+              <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">
                 {clipped ? `→${_pct(r.max)}` : _pct(r.max)}
               </text>
-              <text x={x2 + 3} y={cy + 9} textAnchor="start" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
+              <text x={x2 + 3} y={cy + 10} textAnchor="start" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
               {/* current XIRR dot */}
               {curX != null && (<>
                 <circle cx={curX} cy={cy} r={5} fill={color}/>
-                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="8.5" fill={color} fontFamily="monospace" fontWeight="600">
+                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="10" fill={color} fontFamily="monospace" fontWeight="600">
                   {_pct(r.current)}
                 </text>
               </>)}
@@ -713,7 +713,7 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
       })}
       {/* date range caption below ticks */}
       {rangeStart && rangeEnd && (
-        <text x={padL + chartW / 2} y={captionY} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
+        <text x={padL + chartW / 2} y={captionY} textAnchor="middle" fontSize="10" fill="var(--ink-4)">
           {_fmtMonthDate(rangeStart)} – {_fmtMonthDate(rangeEnd)}
         </text>
       )}

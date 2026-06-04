@@ -810,10 +810,10 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
         : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-              <span>DATE</span><span>TYPE</span><span>SYMBOL</span>
-              <span style={{textAlign:"right"}}>SHARES</span><span style={{textAlign:"right"}}>PRICE</span>
-              <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>REALIZED</span>
-              <span style={{paddingLeft:24}}>NOTE</span><span/>
+              <span>{I18N.t("holdings.txns.col.date")}</span><span>{I18N.t("holdings.txns.col.type")}</span><span>{I18N.t("holdings.txns.col.symbol")}</span>
+              <span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.shares")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.price")}</span>
+              <span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.amount")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.realized")}</span>
+              <span style={{paddingLeft:24}}>{I18N.t("holdings.txns.col.note")}</span><span/>
             </div>
             {data.items.map((t, i) => {
               const amt = t.shares * t.price;
@@ -1980,7 +1980,9 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
   const [defaults, setDefaults] = React.useState([]);
   const [results, setResults] = React.useState(null);
   const [customSchemes, setCustomSchemes] = React.useState([]);
+  const [snapshots, setSnapshots] = React.useState([]);
   const [history, setHistory] = React.useState(null);
+  const [expandedSnapId, setExpandedSnapId] = React.useState(null);
   const [historyView, setHistoryView] = React.useState("trend"); // "trend" | "range" | "diff"
   const [diffRefId, setDiffRefId] = React.useState("sp500");
   const [computing, setComputing] = React.useState(false);
@@ -1995,14 +1997,16 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
     let cancelled = false;
     const init = async () => {
       try {
-        const [defs, res, customs] = await Promise.all([
+        const [defs, res, customs, snaps] = await Promise.all([
           apiGetBenchmarkDefaults(),
           apiGetBenchmarkResults(account.id),
           apiGetCustomSchemes(account.id),
+          apiGetPortfolioSnapshots(account.id),
         ]);
         if (cancelled) return;
         setDefaults(defs);
         setCustomSchemes(customs);
+        setSnapshots(snaps);
         const stored = account.benchmark_schemes;
         const storedEnabled = stored ? (stored.enabled_defaults ?? null) : null;
         setLocalEnabled(storedEnabled);
@@ -2075,12 +2079,14 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
 
   const _reloadAfterCRUD = async () => {
     setComputing(true);
-    const [customs, computed] = await Promise.all([
+    const [customs, snaps, computed] = await Promise.all([
       apiGetCustomSchemes(account.id),
+      apiGetPortfolioSnapshots(account.id),
       apiComputeBenchmark(account.id),
     ]);
     const h = await apiGetBenchmarkHistory(account.id);
     setCustomSchemes(customs);
+    setSnapshots(snaps);
     setResults(computed);
     setHistory(h);
     setComputing(false);
@@ -2116,9 +2122,21 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
     }
   };
 
+  const handleToggleSnapshotEnabled = async (id, currentEnabled) => {
+    setCrudLoading(true);
+    try {
+      await apiSetCustomSchemeEnabled(account.id, id, !currentEnabled);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
+    }
+  };
+
   const _fmtSchemeDesc = (allocations, cashPct) => {
-    const parts = (allocations || []).map(a => `${a.symbol} ${a.pct}%`);
-    if (cashPct > 0) parts.push(`Cash ${cashPct}%`);
+    const parts = (allocations || []).map(a => `${a.symbol} ${a.pct.toFixed(1)}%`);
+    if (cashPct > 0) parts.push(`Cash ${cashPct.toFixed(1)}%`);
     return parts.join(' · ');
   };
 
@@ -2138,13 +2156,24 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
     if (results?.schemes) {
       // Sort: defaults in config order first, then customs
       const defaultOrder = new Map(defaults.map((d, i) => [d.id, i]));
+      const snapIds = new Set(snapshots.map(s => s.id));
       const sorted = [...results.schemes].sort((a, b) => {
         const aIdx = defaultOrder.has(a.id) ? defaultOrder.get(a.id) : 999;
         const bIdx = defaultOrder.has(b.id) ? defaultOrder.get(b.id) : 999;
         return aIdx - bIdx;
       });
       const visible = sorted.filter(s => activeIds.has(s.id));
-      const allLabels = [portfolioLabel, ...visible.map(s => _schemeLabel(s.id, s.name))];
+      // Best-performing enabled snapshot to show in bar chart
+      const enabledSnaps = snapshots.filter(s => s.enabled !== 0);
+      const bestSnap = enabledSnaps.length
+        ? results.schemes
+            .filter(s => snapIds.has(s.id) && s.xirr != null)
+            .sort((a, b) => (b.xirr ?? -Infinity) - (a.xirr ?? -Infinity))[0]
+        : null;
+      const bestSnapLabel = bestSnap
+        ? I18N.tf("benchmark.portfolio.snap", { date: (snapshots.find(s => s.id === bestSnap.id)?.name || "").replace("Portfolio ", "") })
+        : null;
+      const allLabels = [portfolioLabel, ...(bestSnapLabel ? [bestSnapLabel] : []), ...visible.map(s => _schemeLabel(s.id, s.name))];
       const cmap = nameColors(allLabels);
       const data = [{
         label: portfolioLabel,
@@ -2152,6 +2181,9 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         topLabel: _fmtValue(results?.portfolio_value_usd),
         color: cmap[portfolioLabel],
       }];
+      if (bestSnap && bestSnapLabel) {
+        data.push({ label: bestSnapLabel, value: bestSnap.xirr, topLabel: _fmtValue(bestSnap.current_value_usd), color: cmap[bestSnapLabel] });
+      }
       visible.forEach(s => {
         const label = _schemeLabel(s.id, s.name);
         data.push({ label, value: s.xirr, topLabel: _fmtValue(s.current_value_usd), color: cmap[label] });
@@ -2159,7 +2191,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
       return data;
     }
     return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtValue(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
-  }, [results, defaults, activeIds, PRIVACY.masked]);
+  }, [results, defaults, activeIds, snapshots, currency, PRIVACY.masked]);
 
   // Shared dedup color map — same colors in bar chart and line chart
   const sharedColorMap = React.useMemo(
@@ -2431,6 +2463,46 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
           </div>
         );
       })()}
+
+      {/* ── Portfolio Snapshots ─────────────────────────────────────────────── */}
+      <div>
+        <div style={{ ...sectionHead() }}>{I18N.t("benchmark.snapshots.title")}</div>
+        <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, marginTop: -4 }}>{I18N.t("benchmark.snapshots.subtitle")}</div>
+        {snapshots.length === 0
+          ? <div style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("benchmark.snapshots.empty")}</div>
+          : snapshots.map(snap => {
+            const snapEnabled = snap.enabled !== 0;
+            const xirr = snapEnabled ? (results?.schemes || []).find(s => s.id === snap.id)?.xirr ?? null : null;
+            const isExpanded = expandedSnapId === snap.id;
+            const snapDate = snap.name.startsWith("Portfolio ") ? snap.name.slice("Portfolio ".length) : snap.name;
+            return (
+              <div key={snap.id} style={{ marginBottom: 4 }}>
+                <div style={{ ...rowStyle, opacity: snapEnabled ? 1 : 0.45 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[I18N.tf("benchmark.portfolio.snap", { date: snapDate })] || nameColor(snap.name), flexShrink: 0 }}/>
+                  <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+                    <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {I18N.tf("benchmark.portfolio.snap", { date: snapDate })}
+                    </div>
+                  </div>
+                  <span style={{ ...xirrStyle, color: snapEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                    {snapEnabled ? fmtPct(xirr) : "—"}
+                  </span>
+                  <Toggle value={snapEnabled} onChange={() => handleToggleSnapshotEnabled(snap.id, snapEnabled)} size="sm" disabled={crudLoading}/>
+                  <button type="button" onClick={() => setExpandedSnapId(isExpanded ? null : snap.id)}
+                    style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}>
+                    {isExpanded ? I18N.t("benchmark.snapshots.hide") : I18N.t("benchmark.snapshots.view")}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div style={{ paddingLeft: 22, paddingTop: 4, paddingBottom: 6, fontSize: 11, color: "var(--ink-3)", lineHeight: 1.7 }}>
+                    {_fmtSchemeDesc(snap.allocations, snap.cash_pct)}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        }
+      </div>
 
     </div>
   );

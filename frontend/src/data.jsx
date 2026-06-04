@@ -104,6 +104,7 @@ async function apiUpdateCustomScheme(accountId, id, data) { return _apiFetch(`/a
 async function apiDeleteCustomScheme(accountId, id)       { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _DEL()); }
 async function apiSetCustomSchemeEnabled(accountId, id, enabled) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}/enabled`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: enabled ? 1 : 0 }) }); }
 async function apiGetBenchmarkHistory(accountId, since)   { return _apiFetch(`/api/benchmark/history/${accountId}${since ? `?since=${since}` : ""}`); }
+async function apiGetPortfolioSnapshots(accountId)        { return _apiFetch(`/api/benchmark/portfolio-snapshots/${accountId}`); }
 async function apiTriggerBackfill(accountId)              { return _apiFetch(`/api/benchmark/backfill/${accountId}`, { method: "POST" }); }
 
 // Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).
@@ -144,6 +145,7 @@ Object.assign(window, {
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiGetTransactionsPaged, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
+  apiGetPortfolioSnapshots,
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
   apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,
   apiGetBalanceSnapshots, apiCreateBalanceSnapshot, apiUpdateBalanceSnapshot, apiDeleteBalanceSnapshot, apiCopyBalanceSnapshot,

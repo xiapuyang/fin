@@ -113,6 +113,7 @@ def _cs_to_dict(row: BenchmarkCustomSchemeModel) -> dict:
         "allocations": json.loads(row.allocations_json),
         "cash_pct": row.cash_pct,
         "enabled": row.enabled if row.enabled is not None else 1,
+        "is_snapshot": bool(row.is_portfolio_snapshot),
     }
 
 
@@ -282,6 +283,22 @@ def list_custom_schemes(account_id: int, db: Session = Depends(get_db)):
             BenchmarkCustomSchemeModel.is_portfolio_snapshot == 0,
         )
         .order_by(BenchmarkCustomSchemeModel.id)
+        .all()
+    )
+    return [_cs_to_dict(r) for r in rows]
+
+
+@router.get("/portfolio-snapshots/{account_id}")
+def list_portfolio_snapshots(account_id: int, db: Session = Depends(get_db)):
+    """List portfolio composition snapshots for an account (newest first)."""
+    _get_account_or_404(db, account_id)
+    rows = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+        )
+        .order_by(BenchmarkCustomSchemeModel.id.desc())
         .all()
     )
     return [_cs_to_dict(r) for r in rows]
