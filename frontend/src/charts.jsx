@@ -407,11 +407,11 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   // the stable region. Lines outside the fence are clipped by SVG clipPath.
   const sv = [...allValues].sort((a, b) => a - b);
   const rawMin = Math.min(...allValues), rawMax = Math.max(...allValues);
-  const p10 = sv[Math.max(0, Math.floor(sv.length * 0.10))];
-  const p90 = sv[Math.min(sv.length - 1, Math.floor(sv.length * 0.90))];
-  const pRange = Math.max(p90 - p10, 1);
-  const fenceMin = p10 - pRange * 0.15;
-  const fenceMax = p90 + pRange * 0.15;
+  const p5  = sv[Math.max(0, Math.floor(sv.length * 0.05))];
+  const p95 = sv[Math.min(sv.length - 1, Math.floor(sv.length * 0.95))];
+  const pRange = Math.max(p95 - p5, 1);
+  const fenceMin = p5  - pRange * 0.15;
+  const fenceMax = p95 + pRange * 0.15;
   const minV = Math.max(rawMin, fenceMin);
   const maxV = Math.min(rawMax, fenceMax);
   const vPad = (maxV - minV) * 0.08 || 2;
@@ -424,9 +424,9 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
 
   const yRange = yMax - yMin;
-  // Target ~5 gridlines; pick the smallest "nice" step that keeps ≤6 ticks.
+  // Target ~7 gridlines; pick the smallest "nice" step that keeps ≤8 ticks.
   const _niceSteps = [1, 2, 5, 10, 20, 50, 100];
-  const yStep = _niceSteps.find(s => yRange / s <= 6) || 100;
+  const yStep = _niceSteps.find(s => yRange / s <= 8) || 100;
   const yTicks = [];
   for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
 

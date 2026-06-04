@@ -2217,7 +2217,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                   {historyView === "trend" ? (
                     <MultiLineChart
                       series={visibleSeries}
-                      granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
+                      granularity={history.granularity} width={560} height={320} colorMap={sharedColorMap}/>
                   ) : (
                     <XirrRangeChart
                       series={visibleSeries}
