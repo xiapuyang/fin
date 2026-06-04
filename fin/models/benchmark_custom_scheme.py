@@ -15,6 +15,7 @@ class BenchmarkCustomSchemeModel(Base):
         String, nullable=False
     )  # JSON: [{"symbol": str, "pct": float}]
     cash_pct = Column(Float, nullable=False, default=0.0)
+    enabled = Column(Integer, nullable=False, default=1)
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

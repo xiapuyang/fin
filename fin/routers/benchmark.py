@@ -111,6 +111,7 @@ def _cs_to_dict(row: BenchmarkCustomSchemeModel) -> dict:
         "name": row.name,
         "allocations": json.loads(row.allocations_json),
         "cash_pct": row.cash_pct,
+        "enabled": row.enabled if row.enabled is not None else 1,
     }
 
 
@@ -311,6 +312,34 @@ def delete_custom_scheme(
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+class EnabledPayload(BaseModel):
+    enabled: int
+
+
+@router.patch("/custom-schemes/{account_id}/{scheme_id}/enabled")
+def set_custom_scheme_enabled(
+    account_id: int,
+    scheme_id: int,
+    payload: EnabledPayload,
+    db: Session = Depends(get_db),
+):
+    """Enable or disable a custom benchmark scheme."""
+    _get_account_or_404(db, account_id)
+    row = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.id == scheme_id,
+            BenchmarkCustomSchemeModel.account_id == account_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Custom scheme not found")
+    row.enabled = 1 if payload.enabled else 0
+    db.commit()
+    return _cs_to_dict(row)
 
 
 # ── History ───────────────────────────────────────────────────────────────────

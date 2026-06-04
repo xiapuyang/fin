@@ -1889,9 +1889,11 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
   );
   const [cashPct, setCashPct] = React.useState(String(scheme?.cash_pct ?? 0));
   const [customSymbol, setCustomSymbol] = React.useState({});
+  const [editConfirmed, setEditConfirmed] = React.useState(false);
 
+  const isEditMode = !!scheme;
   const allocSum = rows.reduce((s, r) => s + (parseFloat(r.pct) || 0), 0) + (parseFloat(cashPct) || 0);
-  const isValid = name.trim() && Math.abs(allocSum - 100) < 0.01 && rows.length > 0;
+  const isValid = name.trim() && Math.abs(allocSum - 100) < 0.01 && rows.length > 0 && (!isEditMode || editConfirmed);
 
   const updateRow = (i, field, val) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [field]: val } : r));
   const removeRow = (i) => setRows(rs => rs.filter((_, j) => j !== i));
@@ -1907,9 +1909,14 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
 
   return (
     <div style={{ background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "14px 16px", marginTop: 10 }}>
-      {scheme && (
-        <div style={{ fontSize: 12, color: "var(--ink-3)", background: "var(--paper-3, var(--paper))", border: "1px solid var(--line-2)", borderRadius: 6, padding: "7px 10px", marginBottom: 12 }}>
-          ⚠ {I18N.t("benchmark.custom.editWarning")}
+      {isEditMode && (
+        <div style={{ fontSize: 12, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", marginBottom: 12 }}>
+          <div style={{ marginBottom: 7 }}>⚠ {I18N.t("benchmark.custom.editWarning")}</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", userSelect: "none" }}>
+            <input type="checkbox" checked={editConfirmed} onChange={e => setEditConfirmed(e.target.checked)}
+              style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#d97706" }}/>
+            <span>{I18N.t("benchmark.custom.editConfirm")}</span>
+          </label>
         </div>
       )}
       <div style={{ marginBottom: 10 }}>
@@ -2084,10 +2091,10 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     }
   };
 
-  const handleDeleteCustom = async (id) => {
+  const handleToggleCustomEnabled = async (id, currentEnabled) => {
     setCrudLoading(true);
     try {
-      await apiDeleteCustomScheme(account.id, id);
+      await apiSetCustomSchemeEnabled(account.id, id, !currentEnabled);
       await _reloadAfterCRUD();
     } catch (err) {
       setError(err.message);
@@ -2225,29 +2232,26 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
             {/* Custom schemes */}
             {sectionHead(I18N.t("benchmark.custom.title"))}
             {customSchemes.map(cs => {
-              const xirr = getXIRR(String(cs.id));
+              const csEnabled = cs.enabled !== 0;
+              const xirr = csEnabled ? getXIRR(String(cs.id)) : null;
               const desc = _fmtSchemeDesc(cs.allocations, cs.cash_pct);
               return (
                 <div key={cs.id}>
-                  <div style={rowStyle}>
+                  <div style={{ ...rowStyle, opacity: csEnabled ? 1 : 0.45 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[cs.name] || nameColor(cs.name), flexShrink: 0 }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: "var(--ink)" }}>{cs.name}</div>
                       {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{desc}</div>}
                     </div>
-                    <span style={{ ...xirrStyle, color: xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
-                      {fmtPct(xirr)}
+                    <span style={{ ...xirrStyle, color: csEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                      {csEnabled ? fmtPct(xirr) : "—"}
                     </span>
                     <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
                       disabled={crudLoading}
                       style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
                       {I18N.t("benchmark.custom.edit")}
                     </button>
-                    <button type="button" onClick={() => handleDeleteCustom(cs.id)}
-                      disabled={crudLoading}
-                      style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
-                      {I18N.t("benchmark.custom.delete")}
-                    </button>
+                    <Toggle value={csEnabled} onChange={() => handleToggleCustomEnabled(cs.id, csEnabled)} size="sm" disabled={crudLoading}/>
                   </div>
                   {editingCustomId === cs.id && (
                     <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>

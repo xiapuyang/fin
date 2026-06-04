@@ -787,6 +787,7 @@
   "benchmark.custom.save": "保存",
   "benchmark.custom.cancel": "取消",
   "benchmark.custom.editWarning": "修改配置项会清除该方案的历史数据，建议通过新增方案而非修改现有方案。",
+  "benchmark.custom.editConfirm": "我已了解，保存将清除该方案的历史数据",
   "benchmark.scheme.name": "方案名称",
   "benchmark.scheme.cashPct": "现金仓位 %",
   "benchmark.scheme.alloc": "配置比例",

@@ -280,15 +280,16 @@ const Select = ({ value, onChange, options, style = {} }) => {
 };
 
 // === Toggle ================================================================
-const Toggle = ({ value, onChange, size = "md" }) => {
+const Toggle = ({ value, onChange, size = "md", disabled = false }) => {
   const w = size === "sm" ? 28 : 34;
   const h = size === "sm" ? 16 : 20;
   const knob = h - 4;
   return (
-    <button onClick={() => onChange(!value)} style={{
+    <button onClick={() => !disabled && onChange(!value)} disabled={disabled} style={{
       width: w, height: h, padding: 0, borderRadius: h, border: "none",
       background: value ? "var(--ink)" : "var(--line-strong)",
-      position: "relative", cursor: "pointer", transition: "background .15s",
+      position: "relative", cursor: disabled ? "not-allowed" : "pointer",
+      transition: "background .15s", opacity: disabled ? 0.5 : 1,
     }}>
       <span style={{
         position: "absolute", top: 2, left: value ? w - knob - 2 : 2,

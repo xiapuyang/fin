@@ -102,6 +102,7 @@ async function apiGetCustomSchemes(accountId)             { return _apiFetch(`/a
 async function apiCreateCustomScheme(accountId, data)     { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}`, _JSON(data)); }
 async function apiUpdateCustomScheme(accountId, id, data) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _PUT(data)); }
 async function apiDeleteCustomScheme(accountId, id)       { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _DEL()); }
+async function apiSetCustomSchemeEnabled(accountId, id, enabled) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}/enabled`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: enabled ? 1 : 0 }) }); }
 async function apiGetBenchmarkHistory(accountId, since)   { return _apiFetch(`/api/benchmark/history/${accountId}${since ? `?since=${since}` : ""}`); }
 
 // Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).

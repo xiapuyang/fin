@@ -166,6 +166,11 @@ def _migrate_columns(db: "Session") -> None:
             "benchmark_schemes",
             "ALTER TABLE accounts ADD COLUMN benchmark_schemes TEXT",
         ),
+        (
+            "benchmark_custom_schemes",
+            "enabled",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:

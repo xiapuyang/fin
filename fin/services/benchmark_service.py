@@ -199,7 +199,10 @@ def _resolve_schemes(db: Session, account: AccountModel) -> list[dict]:
 
     customs = (
         db.query(BenchmarkCustomSchemeModel)
-        .filter(BenchmarkCustomSchemeModel.account_id == account.id)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account.id,
+            BenchmarkCustomSchemeModel.enabled != 0,
+        )
         .order_by(BenchmarkCustomSchemeModel.id)
         .all()
     )

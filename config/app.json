@@ -3,18 +3,21 @@
     {
       "id": "sp500",
       "name": "S&P 500",
+      "description": "SPY 100%",
       "allocations": [{"symbol": "SPY", "pct": 100}],
       "cash_pct": 0
     },
     {
       "id": "global_6040",
       "name": "Global 60/40",
+      "description": "VT 60% · BNDW 40%",
       "allocations": [{"symbol": "VT", "pct": 60}, {"symbol": "BNDW", "pct": 40}],
       "cash_pct": 0
     },
     {
       "id": "us_8110",
       "name": "US 80/10/10",
+      "description": "VOO 80% · BSV 10% · Cash 10%",
       "allocations": [{"symbol": "VOO", "pct": 80}, {"symbol": "BSV", "pct": 10}],
       "cash_pct": 10
     }
