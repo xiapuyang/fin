@@ -135,21 +135,22 @@ def simulate_scheme(
         flows.append((dep["date"], -amount_usd if is_deposit else amount_usd))
 
         if is_deposit:
-            investable = amount_usd * (1 - scheme.get("cash_pct", 0) / 100)
             any_missing = False
             for alloc in scheme.get("allocations", []):
                 sym = alloc["symbol"]
-                pct = alloc["pct"] / 100
+                pct = (
+                    alloc["pct"] / 100
+                )  # fraction of total deposit (not of investable)
                 sym_series = price_cache.get(sym, [])
                 price = nearest_price(sym_series, dep["date"])
                 # If deposit predates instrument launch, use first available price
                 if price is None and sym_series and dep["date"] < sym_series[0]["date"]:
                     price = sym_series[0]["close"]
                 if price and price > 0:
-                    shares[sym] += investable * pct / price
+                    shares[sym] += amount_usd * pct / price
                 else:
                     any_missing = True
-                    cash_balance += investable * pct
+                    cash_balance += amount_usd * pct
             cash_balance += amount_usd * scheme.get("cash_pct", 0) / 100
             if any_missing:
                 excluded += 1
