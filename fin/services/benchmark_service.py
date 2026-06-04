@@ -326,9 +326,10 @@ def _fetch_current_price(symbol: str) -> Optional[float]:
     """Fetch the current close price for *symbol* via yfinance."""
     try:
         hist = yf.Ticker(symbol).history(period="2d")
-        if hist.empty:
+        closes = hist["Close"].dropna()
+        if closes.empty:
             return None
-        return float(hist["Close"].iloc[-1])
+        return float(closes.iloc[-1])
     except Exception:
         return None
 
