@@ -91,7 +91,14 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
   if (signed) {
     const maxAbs = Math.max(...data.map(d => Math.abs(d.value ?? 0))) || 1;
     const zeroY = padT + h / 2;
-    const sqSz = 6, sqGap = 4; // color square size and gap before label text
+    const sqSz = 6, sqGap = 4;
+    // Max chars that fit under a bar — CJK chars count double
+    const charWidth = (s) => [...s].reduce((n, c) => n + (c.charCodeAt(0) > 0x2E7F ? 2 : 1), 0);
+    const truncLabel = (s, max = 10) => {
+      let w = 0; let out = "";
+      for (const c of s) { const cw = c.charCodeAt(0) > 0x2E7F ? 2 : 1; if (w + cw > max) { out += "…"; break; } w += cw; out += c; }
+      return out;
+    };
     return (
       <svg width={width} height={height} style={{ display: "block" }}>
         {showAxis && (
@@ -106,11 +113,10 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
           const barY = isNeg ? zeroY : zeroY - bh;
           const c = d.color || (isNeg ? "var(--down)" : color);
           const labelText = d.value == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-          // Value label: above bar for positive, below bar for negative — clamped so it never overlaps x-axis text
           const rawValueY = isNeg ? zeroY + bh + 11 : barY - 3;
           const valueY = Math.min(rawValueY, height - padB - 14);
-          // Estimated half-width of label text for color square placement
-          const estHalfW = d.label.length * 3 + sqSz / 2 + sqGap;
+          const axisLabel = truncLabel(d.label);
+          const estHalfW = charWidth(axisLabel) * 3 + sqSz / 2 + sqGap;
           return (
             <g key={i}>
               {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
@@ -118,7 +124,10 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
                 {labelText}
               </text>
               {d.color && <rect x={cx - estHalfW} y={height - padB + 5} width={sqSz} height={sqSz} fill={d.color} rx="1"/>}
-              <text x={cx - estHalfW + sqSz + sqGap} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="start">{d.label}</text>
+              <text x={cx - estHalfW + sqSz + sqGap} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="start">
+                <title>{d.label}</title>
+                {axisLabel}
+              </text>
             </g>
           );
         })}

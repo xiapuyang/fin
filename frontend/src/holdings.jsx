@@ -2157,7 +2157,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 {I18N.t("benchmark.history.title")}
               </div>
               <div style={{ overflowX: "auto" }}>
-                <MultiLineChart series={history.series} granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
+                <MultiLineChart
+                  series={history.series.map(s => s.id === "__portfolio__" ? { ...s, name: I18N.t("benchmark.return.portfolio") } : s)}
+                  granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
               </div>
             </div>
           )}

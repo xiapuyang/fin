@@ -273,12 +273,21 @@ def update_custom_scheme(
     if row is None:
         raise HTTPException(status_code=404, detail="Custom scheme not found")
     _validate_scheme_payload(payload)
+    old_allocs = row.allocations_json
     row.name = payload.name
     row.allocations_json = json.dumps(
         [{"symbol": a.symbol, "pct": a.pct} for a in payload.allocations]
     )
     row.cash_pct = payload.cash_pct
     db.commit()
+    # If allocations changed, historical results are stale — wipe them so the
+    # history chart only shows data computed with the current allocations.
+    if old_allocs != row.allocations_json:
+        db.query(BenchmarkResultModel).filter(
+            BenchmarkResultModel.account_id == account_id,
+            BenchmarkResultModel.bench_id == str(scheme_id),
+        ).delete()
+        db.commit()
     db.refresh(row)
     return _cs_to_dict(row)
 
