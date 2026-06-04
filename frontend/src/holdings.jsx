@@ -1980,6 +1980,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const [results, setResults] = React.useState(null);
   const [customSchemes, setCustomSchemes] = React.useState([]);
   const [history, setHistory] = React.useState(null);
+  const [historyView, setHistoryView] = React.useState("trend"); // "trend" | "range"
   const [computing, setComputing] = React.useState(false);
   const [crudLoading, setCrudLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -2187,23 +2188,47 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
             <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
           </div>
 
-          {/* History line chart */}
-          {history && history.series.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
-                {I18N.t("benchmark.history.title")}
+          {/* History charts — Trend line + XIRR Range */}
+          {history && history.series.length > 0 && (() => {
+            const visibleSeries = history.series
+              .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
+              .map(s => s.id === "__portfolio__"
+                ? { ...s, name: I18N.t("benchmark.return.portfolio") }
+                : { ...s, name: _schemeLabel(s.id, s.name) });
+            // currentMap: name → current XIRR for range chart dots
+            const currentMap = {};
+            chartData.forEach(d => { if (d.value != null) currentMap[d.label] = d.value; });
+            const hasEnoughForRange = visibleSeries.some(s => s.data.length >= 2);
+            return (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                    {I18N.t("benchmark.history.title")}
+                  </span>
+                  {hasEnoughForRange && (
+                    <Tabs variant="pill" value={historyView} onChange={setHistoryView}
+                      tabs={[
+                        { id: "trend",  label: I18N.t("benchmark.history.tab.trend") },
+                        { id: "range",  label: I18N.t("benchmark.history.tab.range") },
+                      ]}/>
+                  )}
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  {historyView === "trend" ? (
+                    <MultiLineChart
+                      series={visibleSeries}
+                      granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
+                  ) : (
+                    <XirrRangeChart
+                      series={visibleSeries}
+                      currentMap={currentMap}
+                      colorMap={sharedColorMap}
+                      width={560}/>
+                  )}
+                </div>
               </div>
-              <div style={{ overflowX: "auto" }}>
-                <MultiLineChart
-                  series={history.series
-                    .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
-                    .map(s => s.id === "__portfolio__"
-                      ? { ...s, name: I18N.t("benchmark.return.portfolio") }
-                      : { ...s, name: _schemeLabel(s.id, s.name) })}
-                  granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Warnings */}
           {results.excluded_deposits > 0 && (

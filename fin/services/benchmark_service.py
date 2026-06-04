@@ -102,20 +102,24 @@ def simulate_scheme(
     price_cache: dict[str, list[dict]],
     current_prices: dict[str, float],
     fx: dict[str, float],
-) -> tuple[Optional[float], int]:
+    terminal_date: Optional[str] = None,
+) -> tuple[Optional[float], int, float]:
     """Simulate investing all deposits per *scheme* and compute the XIRR.
 
     Args:
         scheme: {"id", "name", "allocations": [{"symbol", "pct"}], "cash_pct": int}
         deposits: IncomeModel rows sorted by date.
         price_cache: symbol → [{date, close}] sorted ascending.
-        current_prices: symbol → current close price.
+        current_prices: symbol → price at terminal_date (or current price when live).
         fx: currency → CNY-based rate (e.g. {"USD": 7.2, "CNY": 1.0}).
+        terminal_date: If set, treat this date as "today" and only include deposits
+            on or before this date. Used for historical backfill.
 
     Returns:
-        (xirr_pct, excluded_deposit_count). xirr_pct is None on failure.
+        (xirr_pct, excluded_deposit_count, terminal_value_usd).
     """
-    today = str(datetime.now(timezone.utc).date())
+    today = terminal_date or str(datetime.now(timezone.utc).date())
+    relevant = [d for d in deposits if d["date"] <= today]
     shares: dict[str, float] = defaultdict(float)
     cash_balance = 0.0
     flows: list[tuple[str, float]] = []
@@ -123,7 +127,7 @@ def simulate_scheme(
 
     usd_rate = fx.get("USD", 7.2)  # CNY per USD
 
-    for dep in sorted(deposits, key=lambda d: d["date"]):
+    for dep in sorted(relevant, key=lambda d: d["date"]):
         dep_fx = fx.get(dep["currency"], 1.0)
         amount_usd = dep["amount"] * dep_fx / usd_rate
 

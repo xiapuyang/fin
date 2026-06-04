@@ -766,10 +766,8 @@
   "alert.email.text_lead": "触发 {count} 个提醒:",
   "alert.email.text_price": "价格",
   "alert.email.text_change": "涨跌",
-
   "benchmark.acct.toggle": "对比大盘",
   "benchmark.acct.toggleHint": "在持仓页面显示大盘对比标签，展示年化收益率与基准指数的比较",
-
   "benchmark.tab.title": "大盘对比",
   "benchmark.loading": "加载中…",
   "benchmark.error": "加载大盘对比数据失败",
@@ -816,5 +814,7 @@
   "symbol.BNDW": "全球债券 ETF",
   "symbol.VOO": "标普500 ETF",
   "symbol.BSV": "短期债券 ETF",
-  "symbol.BTC": "比特币"
+  "symbol.BTC": "比特币",
+  "benchmark.history.tab.trend": "走势",
+  "benchmark.history.tab.range": "区间"
 }

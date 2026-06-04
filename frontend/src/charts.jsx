@@ -486,4 +486,99 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   );
 };
 
-Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, nameColor, nameColors });
+// ── XIRR Range Chart ─────────────────────────────────────────────────────────
+// Horizontal range bars showing min–max XIRR per scheme with current value dot.
+const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width = 560 }) => {
+  if (!series.length) return null;
+
+  // Compute min/max per series from historical data
+  const rows = series.map(s => {
+    const vals = s.data.map(d => d.xirr).filter(v => v != null);
+    if (!vals.length) return null;
+    return {
+      id: s.id,
+      name: s.name,
+      min: Math.min(...vals),
+      max: Math.max(...vals),
+      current: currentMap[s.id] ?? null,
+    };
+  }).filter(Boolean);
+
+  if (!rows.length) return null;
+
+  const allVals = rows.flatMap(r => [r.min, r.max, r.current].filter(v => v != null));
+  const globalMin = Math.min(...allVals);
+  const globalMax = Math.max(...allVals);
+  const vPad = (globalMax - globalMin) * 0.08 || 2;
+  const xMin = globalMin - vPad;
+  const xMax = globalMax + vPad;
+
+  const _colorMap = colorMap || nameColors(rows.map(r => r.name));
+  const rowH = 28, padL = 110, padR = 48, barH = 8;
+  const chartW = width - padL - padR;
+  const svgH = rows.length * rowH + 28;
+
+  const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
+
+  // x-axis ticks
+  const range = xMax - xMin;
+  const step = range <= 8 ? 2 : range <= 20 ? 5 : range <= 60 ? 10 : 20;
+  const ticks = [];
+  for (let y = Math.ceil(xMin / step) * step; y <= xMax + 0.001; y += step) ticks.push(y);
+
+  return (
+    <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }}>
+      {/* grid lines */}
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={svgH - 20} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
+          <text x={xOf(t)} y={svgH - 6} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
+            {t >= 0 ? `+${t}%` : `${t}%`}
+          </text>
+        </g>
+      ))}
+      {/* zero line */}
+      {xMin < 0 && xMax > 0 && (
+        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={svgH - 20} stroke="var(--line-2)" strokeWidth="1.5"/>
+      )}
+      {rows.map((r, i) => {
+        const cy = i * rowH + rowH / 2;
+        const color = (_colorMap[r.name] || nameColor(r.name));
+        const x1 = xOf(r.min), x2 = xOf(r.max);
+        const curX = r.current != null ? xOf(r.current) : null;
+        return (
+          <g key={r.id}>
+            {/* scheme label */}
+            <text x={padL - 6} y={cy + 4} textAnchor="end" fontSize="10.5" fill="var(--ink-2)"
+              style={{ fontWeight: 500 }}>{r.name}</text>
+            {/* range bar */}
+            <rect x={x1} y={cy - barH / 2} width={Math.max(x2 - x1, 2)} height={barH}
+              rx={barH / 2} fill={color} opacity="0.22"/>
+            {/* end caps */}
+            <line x1={x1} x2={x1} y1={cy - barH / 2 - 3} y2={cy + barH / 2 + 3}
+              stroke={color} strokeWidth="1.5" opacity="0.6"/>
+            <line x1={x2} x2={x2} y1={cy - barH / 2 - 3} y2={cy + barH / 2 + 3}
+              stroke={color} strokeWidth="1.5" opacity="0.6"/>
+            {/* min/max labels */}
+            <text x={x1 - 3} y={cy + 4} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8"
+              fontFamily="monospace">{r.min >= 0 ? `+${r.min.toFixed(1)}` : r.min.toFixed(1)}%</text>
+            <text x={x2 + 3} y={cy + 4} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8"
+              fontFamily="monospace">{r.max >= 0 ? `+${r.max.toFixed(1)}` : r.max.toFixed(1)}%</text>
+            {/* current XIRR dot */}
+            {curX != null && (
+              <>
+                <circle cx={curX} cy={cy} r={5} fill={color}/>
+                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="8.5" fill={color}
+                  fontFamily="monospace" fontWeight="600">
+                  {r.current >= 0 ? `+${r.current.toFixed(1)}` : r.current.toFixed(1)}%
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, XirrRangeChart, nameColor, nameColors });

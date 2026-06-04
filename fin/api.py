@@ -24,7 +24,9 @@ from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
 from fin.services.alert_scheduler import start_alert_scheduler, stop_alert_scheduler
 from fin.services.benchmark_scheduler import (
+    start_benchmark_backfill,
     start_benchmark_scheduler,
+    stop_benchmark_backfill,
     stop_benchmark_scheduler,
 )
 from fin.services.benchmark_service import warn_orphaned_bench_ids
@@ -36,16 +38,19 @@ logger = logging.getLogger(__name__)
 
 _ALERT_SCHEDULER_STOP = None
 _BENCHMARK_SCHEDULER_STOP = None
+_BENCHMARK_BACKFILL_STOP = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP
+    global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP, _BENCHMARK_BACKFILL_STOP
     init_db()
     logger.info("Database initialized")
     warn_orphaned_bench_ids()
     start_market_state_updater()
     start_price_updater()
+    _BENCHMARK_BACKFILL_STOP = start_benchmark_backfill()
+    logger.info("Benchmark backfill thread started")
     if getattr(sys, "frozen", False):
         _ALERT_SCHEDULER_STOP = start_alert_scheduler()
         logger.info("Alert scheduler started (frozen mode)")
@@ -56,6 +61,8 @@ async def lifespan(app: FastAPI):
         stop_alert_scheduler(_ALERT_SCHEDULER_STOP)
     if _BENCHMARK_SCHEDULER_STOP is not None:
         stop_benchmark_scheduler(_BENCHMARK_SCHEDULER_STOP)
+    if _BENCHMARK_BACKFILL_STOP is not None:
+        stop_benchmark_backfill(_BENCHMARK_BACKFILL_STOP)
     logger.info("Shutting down")
 
 

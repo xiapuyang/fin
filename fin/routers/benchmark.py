@@ -222,6 +222,16 @@ def compute_benchmark(
     return result
 
 
+@router.post("/backfill/{account_id}")
+def trigger_backfill(account_id: int, db: Session = Depends(get_db)):
+    """Trigger historical benchmark backfill for an account (runs synchronously)."""
+    _get_account_or_404(db, account_id)
+    from fin.services.benchmark_history_service import backfill_account
+
+    written = backfill_account(db, account_id)
+    return {"written": written}
+
+
 @router.put("/schemes/{account_id}")
 def update_schemes(
     account_id: int, payload: SchemesPayload, db: Session = Depends(get_db)

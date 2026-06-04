@@ -766,10 +766,8 @@
   "alert.email.text_lead": "Triggered {count} alert(s):",
   "alert.email.text_price": "price",
   "alert.email.text_change": "change",
-
   "benchmark.acct.toggle": "Compare with market",
   "benchmark.acct.toggleHint": "Shows a Market Comparison tab with annualized return vs benchmark indices",
-
   "benchmark.tab.title": "Market Comparison",
   "benchmark.loading": "Loading…",
   "benchmark.error": "Failed to load benchmark data",
@@ -816,5 +814,7 @@
   "symbol.BNDW": "Global Bond ETF",
   "symbol.VOO": "S&P 500 ETF",
   "symbol.BSV": "Short-Term Bond ETF",
-  "symbol.BTC": "Bitcoin"
+  "symbol.BTC": "Bitcoin",
+  "benchmark.history.tab.trend": "Trend",
+  "benchmark.history.tab.range": "Range"
 }
