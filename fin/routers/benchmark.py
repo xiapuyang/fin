@@ -396,15 +396,19 @@ def get_history(
     _get_account_or_404(db, account_id)
 
     if since is None:
-        # Default to the earliest data available for this account
+        # Skip the first 3 months after the first deposit: early XIRR is
+        # very noisy because a small portfolio with few deposits produces
+        # extreme swings from minor price moves.
         earliest = (
             db.query(func.min(BenchmarkResultModel.computed_date))
             .filter(BenchmarkResultModel.account_id == account_id)
             .scalar()
         )
-        since = earliest or str(
-            (datetime.now(timezone.utc) - timedelta(days=365)).date()
-        )
+        if earliest:
+            earliest_dt = datetime.strptime(earliest, "%Y-%m-%d").date()
+            since = str((earliest_dt + timedelta(days=91)).date())
+        else:
+            since = str((datetime.now(timezone.utc) - timedelta(days=365)).date())
 
     try:
         datetime.strptime(since, "%Y-%m-%d")
