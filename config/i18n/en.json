@@ -795,5 +795,16 @@
   "benchmark.scheme.validationError": "Allocations + Cash must sum to 100%",
   "benchmark.saveChanges": "Save Changes",
   "benchmark.history.title": "Historical Returns",
-  "benchmark.chart.title": "Annualized Return Comparison"
+  "benchmark.chart.title": "Annualized Return Comparison",
+  "symbol.SPY": "S&P 500 ETF",
+  "symbol.QQQ": "Nasdaq 100 ETF",
+  "symbol.HSI": "Hang Seng Index",
+  "symbol.HS_TECH": "Hang Seng Tech ETF",
+  "symbol.CSI300": "CSI 300 Index",
+  "symbol.SSE_COMP": "SSE Composite",
+  "symbol.VT": "Total World ETF",
+  "symbol.BNDW": "Global Bond ETF",
+  "symbol.VOO": "S&P 500 ETF",
+  "symbol.BSV": "Short-Term Bond ETF",
+  "symbol.BTC": "Bitcoin"
 }

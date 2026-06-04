@@ -1,4 +1,5 @@
 {
+  "_note": "benchmark_defaults[].id is immutable once stored in the database as bench_id. Never rename or remove a used id — add a new entry instead. name/description/allocations/cash_pct are safe to change.",
   "benchmark_defaults": [
     {
       "id": "sp500",
@@ -38,13 +39,13 @@
     {
       "id": "csi300",
       "name": "CSI 300",
-      "description": "510300.SS 100%",
-      "allocations": [{"symbol": "510300.SS", "pct": 100}],
+      "description": "000300.SS 100%",
+      "allocations": [{"symbol": "000300.SS", "pct": 100}],
       "cash_pct": 0
     },
     {
       "id": "shcomp",
-      "name": "Shanghai Comp.",
+      "name": "SSE Composite",
       "description": "000001.SS 100%",
       "allocations": [{"symbol": "000001.SS", "pct": 100}],
       "cash_pct": 0

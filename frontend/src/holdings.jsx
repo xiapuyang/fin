@@ -1865,22 +1865,24 @@ const useForm = (initial) => {
 
 // ── Benchmark Tab ────────────────────────────────────────────────────────────
 
-const _KNOWN_SYMBOLS = [
-  { value: "SPY",        label: "SPY — S&P 500" },
-  { value: "QQQ",        label: "QQQ — Nasdaq 100" },
-  { value: "^HSI",       label: "^HSI — Hang Seng" },
-  { value: "3033.HK",    label: "3033.HK — HS Tech" },
-  { value: "000300.SS",  label: "000300.SS — CSI 300" },
-  { value: "000001.SS",  label: "000001.SS — SSE" },
-  { value: "VT",         label: "VT — Total World" },
-  { value: "BNDW",       label: "BNDW — Global Bond" },
-  { value: "VOO",        label: "VOO — S&P 500" },
-  { value: "BSV",        label: "BSV — Short Bond" },
+const _knownSymbols = () => [
+  { value: "SPY",       label: `SPY — ${I18N.t("symbol.SPY")}` },
+  { value: "QQQ",       label: `QQQ — ${I18N.t("symbol.QQQ")}` },
+  { value: "^HSI",      label: `^HSI — ${I18N.t("symbol.HSI")}` },
+  { value: "3033.HK",   label: `3033.HK — ${I18N.t("symbol.HS_TECH")}` },
+  { value: "000300.SS", label: `000300.SS — ${I18N.t("symbol.CSI300")}` },
+  { value: "000001.SS", label: `000001.SS — ${I18N.t("symbol.SSE_COMP")}` },
+  { value: "VT",        label: `VT — ${I18N.t("symbol.VT")}` },
+  { value: "BNDW",      label: `BNDW — ${I18N.t("symbol.BNDW")}` },
+  { value: "VOO",       label: `VOO — ${I18N.t("symbol.VOO")}` },
+  { value: "BSV",       label: `BSV — ${I18N.t("symbol.BSV")}` },
+  { value: "BTC-USD",   label: `BTC-USD — ${I18N.t("symbol.BTC")}` },
 ];
 
 const _CASH_VALUE = "__CASH__";
 
 const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
+  const knownSymbols = _knownSymbols();
   const [name, setName] = React.useState(scheme?.name || "");
   const [rows, setRows] = React.useState(
     scheme?.allocations?.length
@@ -1928,7 +1930,7 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
         <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.alloc")}</label>
         <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 80px 28px", gap: "4px 6px", alignItems: "center" }}>
           {rows.map((r, i) => {
-            const knownOpt = _KNOWN_SYMBOLS.find(s => s.value === r.symbol);
+            const knownOpt = knownSymbols.find(s => s.value === r.symbol);
             const isCustomSym = !knownOpt;
             return (
               <React.Fragment key={i}>
@@ -1938,7 +1940,7 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
                       else updateRow(i, "symbol", e.target.value);
                     }}
                     style={{ width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
-                    {_KNOWN_SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    {knownSymbols.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     <option value="__custom__">Custom symbol…</option>
                   </select>
                   {(!knownOpt) && (
