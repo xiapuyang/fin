@@ -135,7 +135,11 @@ def simulate_scheme(
             for alloc in scheme.get("allocations", []):
                 sym = alloc["symbol"]
                 pct = alloc["pct"] / 100
-                price = nearest_price(price_cache.get(sym, []), dep.date)
+                sym_series = price_cache.get(sym, [])
+                price = nearest_price(sym_series, dep.date)
+                # If deposit predates instrument launch, use first available price
+                if price is None and sym_series and dep.date < sym_series[0]["date"]:
+                    price = sym_series[0]["close"]
                 if price and price > 0:
                     shares[sym] += investable * pct / price
                 else:
@@ -322,7 +326,9 @@ def compute(db: Session, account_id: int) -> dict:
 
     fx = _fetch_fx(db)
 
-    portfolio_xirr = _compute_portfolio_xirr(db, account, income, fx)
+    portfolio_xirr = _compute_portfolio_xirr(
+        db, account, income, fx, price_cache, earliest_date
+    )
 
     scheme_results = []
     total_excluded = 0
@@ -381,14 +387,24 @@ def _compute_portfolio_xirr(
     account: AccountModel,
     income: list,
     fx: dict[str, float],
+    price_cache: dict[str, list[dict]],
+    earliest_date: str,
 ) -> Optional[float]:
     """Compute XIRR for the actual portfolio using income flows + current holdings value.
+
+    Uses the shared price_cache (populated during scheme computation) so holding
+    prices come from the price_history table rather than fresh yfinance calls,
+    which handles non-US symbols more reliably.
 
     Args:
         db: SQLAlchemy session.
         account: Account model.
         income: Income records (deposit/withdrawal) sorted by date.
         fx: CNY-based FX rates.
+        price_cache: Mutable cache of {symbol: [{date, close}]} shared with scheme
+            computation. New symbols are fetched and added here in place.
+        earliest_date: Earliest income date — used as the since parameter when
+            fetching price history for new symbols.
 
     Returns:
         XIRR as percentage, or None if not computable.
@@ -417,7 +433,14 @@ def _compute_portfolio_xirr(
     for h in holdings:
         if h.shares <= 0:
             continue
-        price = _fetch_current_price(h.code)
+        if h.code not in price_cache:
+            try:
+                price_cache[h.code] = fetch_symbol(db, h.code, earliest_date)
+            except Exception as exc:
+                logger.warning("Price fetch failed for holding %s: %s", h.code, exc)
+                price_cache[h.code] = []
+        series = price_cache.get(h.code, [])
+        price = series[-1]["close"] if series else _fetch_current_price(h.code)
         if price is None:
             continue
         h_fx = fx.get(h.currency, 1.0)

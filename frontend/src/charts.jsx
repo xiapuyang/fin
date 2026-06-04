@@ -91,6 +91,7 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
   if (signed) {
     const maxAbs = Math.max(...data.map(d => Math.abs(d.value ?? 0))) || 1;
     const zeroY = padT + h / 2;
+    const sqSz = 6, sqGap = 4; // color square size and gap before label text
     return (
       <svg width={width} height={height} style={{ display: "block" }}>
         {showAxis && (
@@ -98,20 +99,26 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
         )}
         {data.map((d, i) => {
           const x = padL + i * (bw + gap) + gap / 2;
+          const cx = x + bw / 2;
           const v = d.value ?? 0;
           const bh = (Math.abs(v) / maxAbs) * (h / 2);
           const isNeg = v < 0;
           const barY = isNeg ? zeroY : zeroY - bh;
           const c = d.color || (isNeg ? "var(--down)" : color);
-          const labelY = isNeg ? zeroY + bh + 11 : barY - 3;
           const labelText = d.value == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+          // Value label: above bar for positive, below bar for negative — clamped so it never overlaps x-axis text
+          const rawValueY = isNeg ? zeroY + bh + 11 : barY - 3;
+          const valueY = Math.min(rawValueY, height - padB - 14);
+          // Estimated half-width of label text for color square placement
+          const estHalfW = d.label.length * 3 + sqSz / 2 + sqGap;
           return (
             <g key={i}>
               {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
-              <text x={x + bw / 2} y={labelY} fontSize="9.5" fill="var(--ink-3)" textAnchor="middle" className="mono">
+              <text x={cx} y={valueY} fontSize="9.5" fill={c} textAnchor="middle" className="mono">
                 {labelText}
               </text>
-              <text x={x + bw / 2} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="middle">{d.label}</text>
+              {d.color && <rect x={cx - estHalfW} y={height - padB + 5} width={sqSz} height={sqSz} fill={d.color} rx="1"/>}
+              <text x={cx - estHalfW + sqSz + sqGap} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="start">{d.label}</text>
             </g>
           );
         })}
@@ -250,6 +257,13 @@ const StackedBar = ({ data, width = 560, height = 18, gap = 2 }) => {
 
 const _LINE_COLORS = ["#e5484d", "#3b82f6", "#f59e0b", "#8b5cf6", "#06b6d4", "#10b981", "#f43f5e"];
 
+// Deterministic color from series name — consistent across chart types and rerenders
+const nameColor = (name) => {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return _LINE_COLORS[Math.abs(h) % _LINE_COLORS.length];
+};
+
 const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month" }) => {
   const padT = 14, padR = 16, padB = 30, padL = 44;
   const w = width - padL - padR;
@@ -266,7 +280,10 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const vPad = (maxV - minV) * 0.12 || 2;
   const yMin = minV - vPad, yMax = maxV + vPad;
 
-  const xOf = (date) => padL + (allDates.indexOf(date) / Math.max(allDates.length - 1, 1)) * w;
+  // When there is only one date, center the single point horizontally
+  const xOf = (date) => allDates.length === 1
+    ? padL + w / 2
+    : padL + (allDates.indexOf(date) / (allDates.length - 1)) * w;
   const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
 
   // y-axis ticks
@@ -275,7 +292,7 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const yTicks = [];
   for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
 
-  // x-axis ticks: ~5 evenly spaced
+  // x-axis ticks: ~5 evenly spaced; always include all dates when few
   const xStep = Math.max(1, Math.floor(allDates.length / 5));
   const xTicks = allDates.filter((_, i) => i % xStep === 0 || i === allDates.length - 1);
 
@@ -308,22 +325,32 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
           <text key={d} x={xOf(d)} y={padT + h + 16} textAnchor="middle" fontSize="9.5" fill="var(--ink-4)">{fmtX(d)}</text>
         ))}
         {/* series lines */}
-        {series.map((s, i) => {
-          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+        {series.map((s) => {
+          const color = nameColor(s.name);
           const pts = s.data.filter(d => d.xirr != null).map(d => `${xOf(d.date)},${yOf(d.xirr)}`).join(" ");
           return pts ? <polyline key={s.id} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/> : null;
         })}
         {/* terminal dots */}
-        {series.map((s, i) => {
-          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+        {series.map((s) => {
+          const color = nameColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           return last ? <circle key={s.id} cx={xOf(last.date)} cy={yOf(last.xirr)} r={3} fill={color}/> : null;
+        })}
+        {/* value labels next to terminal dots */}
+        {series.map((s) => {
+          const color = nameColor(s.name);
+          const last = s.data.filter(d => d.xirr != null).at(-1);
+          if (!last) return null;
+          const x = xOf(last.date);
+          const y = yOf(last.xirr);
+          const label = `${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%`;
+          return <text key={`lbl-${s.id}`} x={x + 6} y={y + 4} fontSize="9" fill={color} fontFamily="monospace">{label}</text>;
         })}
       </svg>
       {/* legend row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
-        {series.map((s, i) => {
-          const color = _LINE_COLORS[i % _LINE_COLORS.length];
+        {series.map((s) => {
+          const color = nameColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           const label = last ? ` ${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%` : "";
           return (
@@ -339,4 +366,4 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   );
 };
 
-Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart });
+Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, nameColor });
