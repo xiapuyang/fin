@@ -150,10 +150,9 @@ const computeAccountXIRR = (incomeItems, positions) => {
   const today = new Date().toISOString().slice(0, 10);
   const cfs = [];
   incomeItems.forEach(i => {
+    if (i.category !== "deposit" && i.category !== "withdrawal") return;
     const amt = i.amount * (FX[i.currency] || 1);
-    if (i.category === "deposit")    cfs.push({ date: i.date, amount: -amt });
-    else if (i.category === "withdrawal") cfs.push({ date: i.date, amount: amt });
-    else                             cfs.push({ date: i.date, amount: amt });
+    cfs.push({ date: i.date, amount: i.category === "deposit" ? -amt : amt });
   });
   const terminalValue = positions.reduce((s, p) => s + p.value, 0);
   if (terminalValue > 0) cfs.push({ date: today, amount: terminalValue });
@@ -1985,8 +1984,6 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const [crudLoading, setCrudLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [localEnabled, setLocalEnabled] = React.useState(null); // null = all defaults on
-  const [dirty, setDirty] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
   const [editingCustomId, setEditingCustomId] = React.useState(null);
   const [addingCustom, setAddingCustom] = React.useState(false);
   const today = new Date().toISOString().slice(0, 10);
@@ -2006,7 +2003,6 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         const stored = account.benchmark_schemes;
         const storedEnabled = stored ? (stored.enabled_defaults ?? null) : null;
         setLocalEnabled(storedEnabled);
-        setDirty(false);
 
         // Recompute if: no result today, OR any enabled default/custom scheme is missing
         const enabledIds = storedEnabled === null ? new Set(defs.map(d => d.id)) : new Set(storedEnabled);
@@ -2055,31 +2051,22 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     return d ? _defLabel(d) : fallback;
   };
 
-  const toggleDefault = (id) => {
+  const toggleDefault = async (id) => {
     const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
     const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
     setLocalEnabled(next);
-    setDirty(true);
-  };
-
-  const handleSaveChanges = async () => {
-    setSaving(true);
+    setComputing(true);
     try {
-      await apiUpdateBenchmarkSchemes(account.id, {
-        enabled_defaults: localEnabled === null ? defaults.map(d => d.id) : localEnabled,
-      });
-      setDirty(false);
-      setComputing(true);
+      await apiUpdateBenchmarkSchemes(account.id, { enabled_defaults: next });
       const computed = await apiComputeBenchmark(account.id);
       const h = await apiGetBenchmarkHistory(account.id);
       setResults(computed);
       setHistory(h);
-      setComputing(false);
       if (onAccountUpdated) onAccountUpdated();
     } catch (err) {
       setError(err.message);
     } finally {
-      setSaving(false);
+      setComputing(false);
     }
   };
 
@@ -2253,7 +2240,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                       <span style={{ ...xirrStyle, color: active && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
                         {active ? fmtPct(xirr) : "—"}
                       </span>
-                      <Toggle value={active} onChange={() => toggleDefault(d.id)} size="sm"/>
+                      <Toggle value={active} onChange={() => toggleDefault(d.id)} size="sm" disabled={computing || crudLoading}/>
                     </div>
                   );
                 })}
@@ -2303,23 +2290,6 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         );
       })()}
 
-      {/* Save changes — only for enabled_defaults toggle */}
-      {dirty && (
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button type="button" onClick={handleSaveChanges} disabled={saving}
-            style={{ fontSize: 13, padding: "7px 18px", border: "none", borderRadius: 6, background: "var(--ink)", color: "#fff", cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>
-            {saving ? I18N.t("benchmark.computing") : I18N.t("benchmark.saveChanges")}
-          </button>
-          <button type="button" onClick={() => {
-            const stored = account.benchmark_schemes;
-            setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
-            setDirty(false); setEditingCustomId(null); setAddingCustom(false);
-          }}
-            style={{ fontSize: 13, padding: "7px 14px", border: "1px solid var(--line)", borderRadius: 6, background: "none", color: "var(--ink-3)", cursor: "pointer" }}>
-            {I18N.t("benchmark.custom.cancel")}
-          </button>
-        </div>
-      )}
     </div>
   );
 };
