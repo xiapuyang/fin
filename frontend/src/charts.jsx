@@ -596,107 +596,121 @@ const _fmtMonthDate = (d) => {
 };
 
 const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width = 560 }) => {
+  const [hidden, setHidden] = React.useState(new Set());
+  const toggle = (id) => setHidden(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
   if (!series.length) return null;
 
-  // Compute min/max (with dates) per series from historical data
-  const rows = series.map(s => {
+  // Compute per-series stats for ALL rows (so hidden rows still appear in legend)
+  const allRows = series.map(s => {
     const pts = s.data.filter(d => d.xirr != null);
     if (!pts.length) return null;
     const minPt = pts.reduce((a, b) => b.xirr < a.xirr ? b : a);
     const maxPt = pts.reduce((a, b) => b.xirr > a.xirr ? b : a);
-    return {
-      id: s.id, name: s.name,
-      min: minPt.xirr, minDate: minPt.date,
-      max: maxPt.xirr, maxDate: maxPt.date,
-      current: currentMap[s.id] ?? null,
-    };
+    return { id: s.id, name: s.name, min: minPt.xirr, minDate: minPt.date, max: maxPt.xirr, maxDate: maxPt.date, current: currentMap[s.id] ?? null };
   }).filter(Boolean);
 
-  // Overall date range across all series
+  if (!allRows.length) return null;
+
   const allDates = series.flatMap(s => s.data.map(d => d.date)).filter(Boolean).sort();
   const rangeStart = allDates[0], rangeEnd = allDates[allDates.length - 1];
 
-  if (!rows.length) return null;
+  // x-axis range: IQR fence (Q3 + 1.5×IQR) to prevent one outlier stretching the axis
+  const visibleRows = allRows.filter(r => !hidden.has(r.id));
+  const axisVals = visibleRows.flatMap(r => [r.min, r.max, r.current].filter(v => v != null)).sort((a, b) => a - b);
+  if (!axisVals.length) return null;
+  const q1 = axisVals[Math.floor(axisVals.length * 0.25)];
+  const q3 = axisVals[Math.floor(axisVals.length * 0.75)];
+  const iqr = Math.max(q3 - q1, 1);
+  const rawMin = axisVals[0], rawMax = axisVals[axisVals.length - 1];
+  const fenceMax = q3 + 1.5 * iqr;
+  const xMin = rawMin - (rawMax - rawMin) * 0.04;
+  const xMax = Math.min(rawMax, fenceMax) + (rawMax - rawMin) * 0.04;
 
-  const allVals = rows.flatMap(r => [r.min, r.max, r.current].filter(v => v != null));
-  const globalMin = Math.min(...allVals);
-  const globalMax = Math.max(...allVals);
-  const vPad = (globalMax - globalMin) * 0.08 || 2;
-  const xMin = globalMin - vPad;
-  const xMax = globalMax + vPad;
-
-  const _colorMap = colorMap || nameColors(rows.map(r => r.name));
-  const rowH = 38, padL = 110, padR = 48, barH = 8;
+  const _colorMap = colorMap || nameColors(allRows.map(r => r.name));
+  const rowH = 38, padL = 116, padR = 52, barH = 8;
   const chartW = width - padL - padR;
-  const svgH = rows.length * rowH + 36;
+  // bottom: 20px for ticks + 16px for caption
+  const svgH = allRows.length * rowH + 36 + 16;
 
   const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
+  const clampX = v => Math.min(Math.max(xOf(v), padL), padL + chartW);
 
   // x-axis ticks
-  const range = xMax - xMin;
-  const step = range <= 8 ? 2 : range <= 20 ? 5 : range <= 60 ? 10 : 20;
+  const axisRange = xMax - xMin;
+  const step = axisRange <= 8 ? 2 : axisRange <= 20 ? 5 : axisRange <= 60 ? 10 : 20;
   const ticks = [];
-  for (let y = Math.ceil(xMin / step) * step; y <= xMax + 0.001; y += step) ticks.push(y);
+  for (let t = Math.ceil(xMin / step) * step; t <= xMax + 0.001; t += step) ticks.push(t);
+  const tickY = svgH - 24, captionY = svgH - 6;
+
+  const _pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
   return (
     <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }}>
       {/* grid lines */}
       {ticks.map(t => (
         <g key={t}>
-          <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={svgH - 20} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
-          <text x={xOf(t)} y={svgH - 6} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
-            {t >= 0 ? `+${t}%` : `${t}%`}
+          <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={tickY - 4} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
+          {/* 0% label shifted right so it doesn't crowd left-side min labels */}
+          <text x={t === 0 ? xOf(0) + 4 : xOf(t)} y={tickY + 10}
+            textAnchor={t === 0 ? "start" : "middle"} fontSize="9" fill="var(--ink-4)">
+            {t === 0 ? "0%" : _pct(t)}
           </text>
         </g>
       ))}
       {/* zero line */}
       {xMin < 0 && xMax > 0 && (
-        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={svgH - 20} stroke="var(--line-2)" strokeWidth="1.5"/>
+        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={tickY - 4} stroke="var(--line-2)" strokeWidth="1.5"/>
       )}
-      {rows.map((r, i) => {
+      {allRows.map((r, i) => {
+        const isHidden = hidden.has(r.id);
         const cy = i * rowH + rowH / 2;
         const color = (_colorMap[r.name] || nameColor(r.name));
-        const x1 = xOf(r.min), x2 = xOf(r.max);
-        const curX = r.current != null ? xOf(r.current) : null;
+        const x1 = clampX(r.min);
+        const rawX2 = xOf(r.max);
+        const clipped = rawX2 > padL + chartW;
+        const x2 = clipped ? padL + chartW : rawX2;
+        const curX = r.current != null ? clampX(r.current) : null;
         return (
-          <g key={r.id}>
-            {/* scheme label */}
-            <text x={padL - 6} y={cy + 4} textAnchor="end" fontSize="10.5" fill="var(--ink-2)"
-              style={{ fontWeight: 500 }}>{r.name}</text>
-            {/* range bar */}
-            <rect x={x1} y={cy - barH / 2} width={Math.max(x2 - x1, 2)} height={barH}
-              rx={barH / 2} fill={color} opacity="0.22"/>
-            {/* end caps */}
-            <line x1={x1} x2={x1} y1={cy - barH / 2 - 3} y2={cy + barH / 2 + 3}
-              stroke={color} strokeWidth="1.5" opacity="0.6"/>
-            <line x1={x2} x2={x2} y1={cy - barH / 2 - 3} y2={cy + barH / 2 + 3}
-              stroke={color} strokeWidth="1.5" opacity="0.6"/>
-            {/* min label + date */}
-            <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8"
-              fontFamily="monospace">{r.min >= 0 ? `+${r.min.toFixed(1)}` : r.min.toFixed(1)}%</text>
-            <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5"
-              fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
-            {/* max label + date */}
-            <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8"
-              fontFamily="monospace">{r.max >= 0 ? `+${r.max.toFixed(1)}` : r.max.toFixed(1)}%</text>
-            <text x={x2 + 3} y={cy + 9} textAnchor="start" fontSize="7.5" fill={color} opacity="0.5"
-              fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
-            {/* current XIRR dot */}
-            {curX != null && (
-              <>
+          <g key={r.id} style={{ cursor: "pointer" }} onClick={() => toggle(r.id)}>
+            {/* colored dot + label */}
+            <circle cx={padL - 8} cy={cy} r={3.5} fill={color} opacity={isHidden ? 0.3 : 0.9}/>
+            <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="10.5"
+              fill={isHidden ? "var(--ink-4)" : "var(--ink-2)"}
+              style={{ fontWeight: 500, textDecoration: isHidden ? "line-through" : "none" }}>
+              {r.name}
+            </text>
+            {!isHidden && (<>
+              {/* range bar */}
+              <rect x={x1} y={cy - barH / 2} width={Math.max(x2 - x1, 2)} height={barH}
+                rx={barH / 2} fill={color} opacity="0.22"/>
+              {/* end caps — right cap omitted when clipped (arrow instead) */}
+              <line x1={x1} x2={x1} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
+                stroke={color} strokeWidth="1.5" opacity="0.6"/>
+              {!clipped && <line x1={x2} x2={x2} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
+                stroke={color} strokeWidth="1.5" opacity="0.6"/>}
+              {/* min label + date */}
+              <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
+              <text x={x1 - 3} y={cy + 9} textAnchor="end" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+              {/* max label + date — at clip edge if clipped, with → prefix */}
+              <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="8.5" fill={color} opacity="0.8" fontFamily="monospace">
+                {clipped ? `→${_pct(r.max)}` : _pct(r.max)}
+              </text>
+              <text x={x2 + 3} y={cy + 9} textAnchor="start" fontSize="7.5" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
+              {/* current XIRR dot */}
+              {curX != null && (<>
                 <circle cx={curX} cy={cy} r={5} fill={color}/>
-                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="8.5" fill={color}
-                  fontFamily="monospace" fontWeight="600">
-                  {r.current >= 0 ? `+${r.current.toFixed(1)}` : r.current.toFixed(1)}%
+                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="8.5" fill={color} fontFamily="monospace" fontWeight="600">
+                  {_pct(r.current)}
                 </text>
-              </>
-            )}
+              </>)}
+            </>)}
           </g>
         );
       })}
-      {/* date range caption */}
+      {/* date range caption below ticks */}
       {rangeStart && rangeEnd && (
-        <text x={padL + chartW / 2} y={svgH - 4} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
+        <text x={padL + chartW / 2} y={captionY} textAnchor="middle" fontSize="9" fill="var(--ink-4)">
           {_fmtMonthDate(rangeStart)} – {_fmtMonthDate(rangeEnd)}
         </text>
       )}
