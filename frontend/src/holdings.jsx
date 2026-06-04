@@ -706,7 +706,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                   {!cash && p.txnCount > 0 && <span style={{ fontSize: 10, color: "var(--ink-4)", padding: "1px 6px", border: "1px solid var(--line)", borderRadius: 4 }}>{p.txnCount} {I18N.t("holdings.positions.txns")}</span>}
                 </div>
               </div>
-              <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? maskDigits(String(p.shares)) : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}><Private>{sym}{fmtNum(p.value / acctFx, 0)}</Private></span>
@@ -821,11 +821,11 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
                   <span className="mono" style={{color:"var(--ink-3)"}}>{t.date}</span>
                   <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? I18N.t("holdings.txns.buy") : I18N.t("holdings.txns.sell")}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
-                  <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? t.shares : "—"}</span>
+                  <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? maskDigits(String(t.shares)) : "—"}</span>
                   <span className="mono" style={{textAlign:"right"}}>{t.price > 0 ? fmtMoney(t.price, t.currency, assetTypeOf(t.code) === "mutualfund" ? 4 : 2) : "—"}</span>
-                  <span className="mono" style={{textAlign:"right",fontWeight:600}}>{amt > 0 ? fmtMoney(amt, t.currency, 0) : "—"}</span>
+                  <span className="mono" style={{textAlign:"right",fontWeight:600}}><Private>{amt > 0 ? fmtMoney(amt, t.currency, 0) : "—"}</Private></span>
                   <span className="mono" style={{textAlign:"right",color:t.realized>=0?"var(--up)":t.realized!=null?"var(--down)":"var(--ink-4)",fontWeight:600}}>
-                    {t.realized != null ? (t.realized >= 0 ? "+" : "−") + fmtMoney(Math.abs(t.realized), t.currency, 0) : "—"}
+                    <Private>{t.realized != null ? (t.realized >= 0 ? "+" : "−") + fmtMoney(Math.abs(t.realized), t.currency, 0) : "—"}</Private>
                   </span>
                   <span style={{color:"var(--ink-3)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:24}}>{t.note || ""}</span>
                   <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
@@ -925,10 +925,10 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
                     <Badge tone={i.category === "dividend" ? "down" : i.category === "option" ? "violet" : i.category === "withdrawal" ? "up" : "info"} size="sm">{catLabels[i.category] || i.category}</Badge>
                     <span>{i.source}</span>
                     <span className="mono" style={{textAlign:"right",fontWeight:600,color:"var(--up)"}}>
-                      {sign}{fmtMoney(i.amount, i.currency, 2)}
+                      <Private>{sign}{fmtMoney(i.amount, i.currency, 2)}</Private>
                     </span>
                     <span className="mono" style={{textAlign:"right",color:"var(--ink-3)"}}>
-                      {i.currency !== acctCcy ? `${sign}${sym}${fmtNum(acctAmt, 0)}` : "—"}
+                      <Private>{i.currency !== acctCcy ? `${sign}${sym}${fmtNum(acctAmt, 0)}` : "—"}</Private>
                     </span>
                     <span style={{color:"var(--ink-3)",fontSize:12}}>{i.note || "—"}</span>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
@@ -2155,7 +2155,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
       return data;
     }
     return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtUSD(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
-  }, [results, defaults, activeIds]);
+  }, [results, defaults, activeIds, PRIVACY.masked]);
 
   // Shared dedup color map — same colors in bar chart and line chart
   const sharedColorMap = React.useMemo(

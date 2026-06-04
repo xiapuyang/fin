@@ -628,10 +628,10 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const xMax = Math.min(rawMax, fenceMax) + (rawMax - rawMin) * 0.04;
 
   const _colorMap = colorMap || nameColors(allRows.map(r => r.name));
-  const rowH = 38, padL = 116, padR = 52, barH = 8;
+  const rowH = 38, padL = 132, padR = 52, barH = 8;
   const chartW = width - padL - padR;
-  // bottom: 20px for ticks + 16px for caption
-  const svgH = allRows.length * rowH + 36 + 16;
+  // bottom: 36px for ticks + 28px for caption gap
+  const svgH = allRows.length * rowH + 36 + 28;
 
   const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
   const clampX = v => Math.min(Math.max(xOf(v), padL), padL + chartW);
@@ -641,7 +641,7 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const step = axisRange <= 8 ? 2 : axisRange <= 20 ? 5 : axisRange <= 60 ? 10 : 20;
   const ticks = [];
   for (let t = Math.ceil(xMin / step) * step; t <= xMax + 0.001; t += step) ticks.push(t);
-  const tickY = svgH - 24, captionY = svgH - 6;
+  const tickY = svgH - 36, captionY = svgH - 10;
 
   const _pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
