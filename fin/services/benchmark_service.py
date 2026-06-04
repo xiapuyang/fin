@@ -122,12 +122,12 @@ def simulate_scheme(
 
     usd_rate = fx.get("USD", 7.2)  # CNY per USD
 
-    for dep in sorted(deposits, key=lambda d: d.date):
-        dep_fx = fx.get(dep.currency, 1.0)
-        amount_usd = dep.amount * dep_fx / usd_rate
+    for dep in sorted(deposits, key=lambda d: d["date"]):
+        dep_fx = fx.get(dep["currency"], 1.0)
+        amount_usd = dep["amount"] * dep_fx / usd_rate
 
-        is_deposit = dep.category == "deposit"
-        flows.append((dep.date, -amount_usd if is_deposit else amount_usd))
+        is_deposit = dep["category"] == "deposit"
+        flows.append((dep["date"], -amount_usd if is_deposit else amount_usd))
 
         if is_deposit:
             investable = amount_usd * (1 - scheme.get("cash_pct", 0) / 100)
@@ -136,9 +136,9 @@ def simulate_scheme(
                 sym = alloc["symbol"]
                 pct = alloc["pct"] / 100
                 sym_series = price_cache.get(sym, [])
-                price = nearest_price(sym_series, dep.date)
+                price = nearest_price(sym_series, dep["date"])
                 # If deposit predates instrument launch, use first available price
-                if price is None and sym_series and dep.date < sym_series[0]["date"]:
+                if price is None and sym_series and dep["date"] < sym_series[0]["date"]:
                     price = sym_series[0]["close"]
                 if price and price > 0:
                     shares[sym] += investable * pct / price
@@ -301,6 +301,19 @@ def compute(db: Session, account_id: int) -> dict:
 
     earliest_date = income[0].date
 
+    # Serialize ORM objects to plain dicts before any threaded or async access.
+    # SQLAlchemy ORM instances are not thread-safe; passing them into a
+    # ThreadPoolExecutor causes intermittent "Instance has been deleted" errors.
+    income_plain = [
+        {
+            "date": r.date,
+            "currency": r.currency,
+            "amount": r.amount,
+            "category": r.category,
+        }
+        for r in income
+    ]
+
     all_symbols: set[str] = set()
     for scheme in schemes:
         for alloc in scheme.get("allocations", []):
@@ -327,7 +340,7 @@ def compute(db: Session, account_id: int) -> dict:
     fx = _fetch_fx(db)
 
     portfolio_xirr = _compute_portfolio_xirr(
-        db, account, income, fx, price_cache, earliest_date
+        db, account, income_plain, fx, price_cache, earliest_date
     )
 
     scheme_results = []
@@ -336,7 +349,7 @@ def compute(db: Session, account_id: int) -> dict:
     with ThreadPoolExecutor(max_workers=max(1, len(schemes))) as executor:
         future_to_scheme = {
             executor.submit(
-                simulate_scheme, s, income, price_cache, current_prices, fx
+                simulate_scheme, s, income_plain, price_cache, current_prices, fx
             ): s
             for s in schemes
         }
@@ -413,12 +426,12 @@ def _compute_portfolio_xirr(
     flows: list[tuple[str, float]] = []
 
     for dep in income:
-        dep_fx = fx.get(dep.currency, 1.0)
-        amount_usd = dep.amount * dep_fx / usd_rate
-        if dep.category == "deposit":
-            flows.append((dep.date, -amount_usd))
+        dep_fx = fx.get(dep["currency"], 1.0)
+        amount_usd = dep["amount"] * dep_fx / usd_rate
+        if dep["category"] == "deposit":
+            flows.append((dep["date"], -amount_usd))
         else:
-            flows.append((dep.date, amount_usd))
+            flows.append((dep["date"], amount_usd))
 
     holdings = (
         db.query(HoldingModel)
