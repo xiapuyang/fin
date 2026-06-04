@@ -187,6 +187,21 @@ def _get_or_create_portfolio_snapshot(
     )
 
     if latest is not None:
+        # Only create a new snapshot once per month at most, even if composition changed.
+        # Daily backfill incrementally extends the latest snapshot's historical curve.
+        try:
+            latest_date_str = (
+                latest.name.split("Portfolio ", 1)[1]
+                if latest.name.startswith("Portfolio ")
+                else ""
+            )
+            latest_snap_dt = datetime.strptime(latest_date_str, "%Y-%m-%d").date()
+            snap_dt = datetime.strptime(snap_date, "%Y-%m-%d").date()
+            if (snap_dt - latest_snap_dt).days < 30:
+                return latest
+        except (ValueError, IndexError):
+            pass
+
         existing_allocs = json.dumps(
             sorted(json.loads(latest.allocations_json), key=lambda a: a["symbol"])
         )

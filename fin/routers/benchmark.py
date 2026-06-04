@@ -497,16 +497,26 @@ def get_history(
     for i, d in enumerate(_get_defaults()):
         order_map[d["id"]] = i
 
+    latest_snap_id = snap_id_list[-1] if snap_id_list else None
     snap_id_set = set(snap_id_list)
     series_list = []
     for bid, data in by_bench.items():
         if bid == _PORTFOLIO_BENCH_ID:
-            continue  # real-time only; not meaningful as historical trend
+            continue  # real-time only; trend chart uses snapshot curves instead
         if bid in snap_id_set and bid not in sampled_snap_ids:
             continue  # unsampled portfolio snapshot
         s: dict = {"id": bid, "name": bench_name(bid), "data": data}
         if bid in sampled_snap_ids:
+            snap_raw_name = custom_map.get(bid, "")
+            snap_date_str = (
+                snap_raw_name.split("Portfolio ", 1)[1]
+                if snap_raw_name.startswith("Portfolio ")
+                else ""
+            )
             s["is_portfolio_snap"] = True
+            s["snap_date"] = snap_date_str
+            if bid == latest_snap_id:
+                s["is_latest_portfolio_snap"] = True
         series_list.append(s)
 
     series = sorted(series_list, key=lambda s: order_map.get(s["id"], 999))

@@ -2168,11 +2168,10 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
   const isNonUSD = account.currency && account.currency !== "USD";
 
-  const _portfolioSnapLabel = (name) => {
-    const m = name.match(/Portfolio (\d{4})-(\d{2})-\d{2}/);
-    if (!m) return name;
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return `Portfolio ${months[+m[2]-1]}'${m[1].slice(2)}`;
+  const _portfolioSeriesLabel = (s) => {
+    if (s.is_latest_portfolio_snap) return I18N.t("benchmark.return.portfolio");
+    if (s.is_portfolio_snap && s.snap_date) return I18N.tf("benchmark.portfolio.snap", { date: s.snap_date });
+    return _schemeLabel(s.id, s.name);
   };
 
   // Delta series for the "diff" tab — XIRR relative to a reference scheme
@@ -2180,7 +2179,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     if (!history || !history.series.length) return { series: [], ref: null, options: [] };
     const allSeries = history.series
       .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
-      .map(s => ({ ...s, name: s.is_portfolio_snap ? _portfolioSnapLabel(s.name) : _schemeLabel(s.id, s.name) }));
+      .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
     const options = allSeries.map(s => ({ id: s.id, name: s.name }));
     const refId = allSeries.some(s => s.id === diffRefId) ? diffRefId
       : (allSeries.find(s => s.id === "sp500") || allSeries[0])?.id;
@@ -2228,7 +2227,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         <>
           {/* Bar chart — current snapshot */}
           <div style={{ marginBottom: 4, display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
               {I18N.t("benchmark.chart.title")}
             </span>
             {results?.computed_date && (
@@ -2245,9 +2244,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
           {history && history.series.length > 0 && (() => {
             const visibleSeries = history.series
               .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
-              .map(s => s.is_portfolio_snap
-                ? { ...s, name: _portfolioSnapLabel(s.name) }
-                : { ...s, name: _schemeLabel(s.id, s.name) });
+              .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
             // currentMap: name → current XIRR for range chart dots
             const currentMap = {};
             chartData.forEach(d => { if (d.value != null) currentMap[d.label] = d.value; });
@@ -2255,7 +2252,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
             return (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
                     {I18N.t("benchmark.history.title")}
                   </span>
                   {hasEnoughForRange && (
@@ -2358,8 +2355,8 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         const rowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" };
         const xirrStyle = { fontSize: 13, fontWeight: 600, fontFamily: "monospace", width: 58, textAlign: "right", flexShrink: 0 };
         const sectionHead = (label, hint) => (
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4, marginTop: 16 }}>
-            {label}{hint && <span style={{ fontWeight: 400, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 6, marginTop: 20 }}>
+            {label}{hint && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
           </div>
         );
         return (
@@ -2375,7 +2372,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                   return (
                     <div key={d.id} style={rowStyle}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[label] || nameColor(label), flexShrink: 0 }}/>
-                      <div style={{ minWidth: 0, maxWidth: 220, overflow: "hidden" }}>
+                      <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
                         <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
                         {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.description}</div>}
                       </div>
@@ -2399,7 +2396,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 <div key={cs.id}>
                   <div style={{ ...rowStyle, opacity: csEnabled ? 1 : 0.45 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[cs.name] || nameColor(cs.name), flexShrink: 0 }}/>
-                    <div style={{ minWidth: 0, maxWidth: 220, overflow: "hidden" }}>
+                    <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
                       <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cs.name}</div>
                       {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</div>}
                     </div>
