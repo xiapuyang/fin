@@ -2369,9 +2369,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                   return (
                     <div key={d.id} style={rowStyle}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[label] || nameColor(label), flexShrink: 0 }}/>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: "var(--ink)" }}>{label}</div>
-                        {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{d.description}</div>}
+                      <div style={{ minWidth: 0, maxWidth: 220, overflow: "hidden" }}>
+                        <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+                        {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.description}</div>}
                       </div>
                       <span style={{ ...xirrStyle, color: active && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
                         {active ? fmtPct(xirr) : "—"}
@@ -2393,9 +2393,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 <div key={cs.id}>
                   <div style={{ ...rowStyle, opacity: csEnabled ? 1 : 0.45 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[cs.name] || nameColor(cs.name), flexShrink: 0 }}/>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: "var(--ink)" }}>{cs.name}</div>
-                      {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{desc}</div>}
+                    <div style={{ minWidth: 0, maxWidth: 220, overflow: "hidden" }}>
+                      <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cs.name}</div>
+                      {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</div>}
                     </div>
                     <span style={{ ...xirrStyle, color: csEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
                       {csEnabled ? fmtPct(xirr) : "—"}
