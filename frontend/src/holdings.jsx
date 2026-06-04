@@ -2023,10 +2023,10 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     return () => { cancelled = true; };
   }, [account.id]);
 
-  // Active bench IDs for bar chart display
+  // Active bench IDs for bar chart + history display
   const activeIds = React.useMemo(() => {
     const ids = localEnabled === null ? new Set(defaults.map(d => d.id)) : new Set(localEnabled);
-    customSchemes.forEach(cs => ids.add(String(cs.id)));
+    customSchemes.forEach(cs => { if (cs.enabled !== 0) ids.add(String(cs.id)); });
     return ids;
   }, [localEnabled, defaults, customSchemes]);
 
@@ -2170,7 +2170,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
               </div>
               <div style={{ overflowX: "auto" }}>
                 <MultiLineChart
-                  series={history.series.map(s => s.id === "__portfolio__" ? { ...s, name: I18N.t("benchmark.return.portfolio") } : s)}
+                  series={history.series
+                    .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
+                    .map(s => s.id === "__portfolio__" ? { ...s, name: I18N.t("benchmark.return.portfolio") } : s)}
                   granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
               </div>
             </div>
