@@ -319,15 +319,13 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
 
   const _months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fmtX = (d) => {
-    // Single-point charts show the exact date instead of a compressed month label
+    const parts = d.split("-");
+    // Single-point: show exact date; handle both YYYY-MM-DD and YYYY-MM formats
     if (allDates.length === 1) {
-      const [y, mo, dy] = d.split("-");
-      return `${_months[+mo-1]} ${+dy}, ${y}`;
+      const mo = _months[+parts[1] - 1];
+      return parts[2] ? `${mo} ${+parts[2]}, ${parts[0]}` : `${mo} ${parts[0]}`;
     }
-    if (granularity === "month") {
-      const [y, m] = d.split("-");
-      return `${_months[+m-1]} '${y.slice(2)}`;
-    }
+    if (granularity === "month") return `${_months[+parts[1]-1]} '${parts[0].slice(2)}`;
     return d.slice(5);
   };
 
@@ -378,17 +376,14 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
           return <text key={`lbl-${s.id}`} x={x + 6} y={y + 4} fontSize="9" fill={color} fontFamily="monospace">{label}</text>;
         })}
       </svg>
-      {/* legend row */}
+      {/* legend row — names only; values shown on dots */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
         {series.map((s) => {
           const color = seriesColor(s.name);
-          const last = s.data.filter(d => d.xirr != null).at(-1);
-          const label = last ? ` ${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%` : "";
           return (
             <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-3)" }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }}/>
               <span>{s.name}</span>
-              <span style={{ fontFamily: "monospace", fontWeight: 600, color: last && last.xirr >= 0 ? "var(--up)" : "var(--down)" }}>{label}</span>
             </div>
           );
         })}
