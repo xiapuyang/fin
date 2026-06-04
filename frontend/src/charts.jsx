@@ -264,7 +264,28 @@ const nameColor = (name) => {
   return _LINE_COLORS[Math.abs(h) % _LINE_COLORS.length];
 };
 
-const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month" }) => {
+// Dedup-aware color map for a set of names. Each name gets its preferred hash
+// color if available; collisions get the next unused color in the palette.
+const nameColors = (names) => {
+  const used = new Set();
+  const result = {};
+  // First pass: claim preferred colors
+  for (const name of names) {
+    const c = nameColor(name);
+    if (!used.has(c)) { result[name] = c; used.add(c); }
+  }
+  // Second pass: resolve collisions with the next available color
+  for (const name of names) {
+    if (result[name]) continue;
+    for (const c of _LINE_COLORS) {
+      if (!used.has(c)) { result[name] = c; used.add(c); break; }
+    }
+    if (!result[name]) result[name] = nameColor(name); // palette exhausted
+  }
+  return result;
+};
+
+const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month", colorMap = null }) => {
   const padT = 14, padR = 16, padB = 30, padL = 44;
   const w = width - padL - padR;
   const h = height - padT - padB;
@@ -296,13 +317,23 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   const xStep = Math.max(1, Math.floor(allDates.length / 5));
   const xTicks = allDates.filter((_, i) => i % xStep === 0 || i === allDates.length - 1);
 
+  const _months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const fmtX = (d) => {
+    // Single-point charts show the exact date instead of a compressed month label
+    if (allDates.length === 1) {
+      const [y, mo, dy] = d.split("-");
+      return `${_months[+mo-1]} ${+dy}, ${y}`;
+    }
     if (granularity === "month") {
       const [y, m] = d.split("-");
-      return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m-1]} '${y.slice(2)}`;
+      return `${_months[+m-1]} '${y.slice(2)}`;
     }
     return d.slice(5);
   };
+
+  // Dedup-aware colors so no two series share a color within this chart
+  const _colorMap = colorMap || nameColors(series.map(s => s.name));
+  const seriesColor = (name) => _colorMap[name] || nameColor(name);
 
   return (
     <div>
@@ -326,19 +357,19 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
         ))}
         {/* series lines */}
         {series.map((s) => {
-          const color = nameColor(s.name);
+          const color = seriesColor(s.name);
           const pts = s.data.filter(d => d.xirr != null).map(d => `${xOf(d.date)},${yOf(d.xirr)}`).join(" ");
           return pts ? <polyline key={s.id} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/> : null;
         })}
         {/* terminal dots */}
         {series.map((s) => {
-          const color = nameColor(s.name);
+          const color = seriesColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           return last ? <circle key={s.id} cx={xOf(last.date)} cy={yOf(last.xirr)} r={3} fill={color}/> : null;
         })}
         {/* value labels next to terminal dots */}
         {series.map((s) => {
-          const color = nameColor(s.name);
+          const color = seriesColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           if (!last) return null;
           const x = xOf(last.date);
@@ -350,7 +381,7 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
       {/* legend row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
         {series.map((s) => {
-          const color = nameColor(s.name);
+          const color = seriesColor(s.name);
           const last = s.data.filter(d => d.xirr != null).at(-1);
           const label = last ? ` ${last.xirr >= 0 ? "+" : ""}${last.xirr.toFixed(1)}%` : "";
           return (
@@ -366,4 +397,4 @@ const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = 
   );
 };
 
-Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, nameColor });
+Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, nameColor, nameColors });

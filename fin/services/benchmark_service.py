@@ -446,14 +446,18 @@ def _compute_portfolio_xirr(
     for h in holdings:
         if h.shares <= 0:
             continue
-        if h.code not in price_cache:
-            try:
-                price_cache[h.code] = fetch_symbol(db, h.code, earliest_date)
-            except Exception as exc:
-                logger.warning("Price fetch failed for holding %s: %s", h.code, exc)
-                price_cache[h.code] = []
-        series = price_cache.get(h.code, [])
-        price = series[-1]["close"] if series else _fetch_current_price(h.code)
+        # CASH is a virtual position where shares == amount in the holding currency
+        if h.code == "CASH":
+            price = 1.0
+        else:
+            if h.code not in price_cache:
+                try:
+                    price_cache[h.code] = fetch_symbol(db, h.code, earliest_date)
+                except Exception as exc:
+                    logger.warning("Price fetch failed for holding %s: %s", h.code, exc)
+                    price_cache[h.code] = []
+            series = price_cache.get(h.code, [])
+            price = series[-1]["close"] if series else _fetch_current_price(h.code)
         if price is None:
             continue
         h_fx = fx.get(h.currency, 1.0)

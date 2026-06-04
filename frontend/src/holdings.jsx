@@ -261,13 +261,14 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     else setSelectedSnapshot(null);
   }, [acctName, snapshots.join(",")]);
 
-  // Reset tab to "positions" when switching accounts that don't have benchmark enabled
+  // Reset tab to "positions" when on benchmark tab but benchmark is not enabled
+  // (covers both account switching and disabling benchmark on the current account)
   React.useEffect(() => {
     const acct = accounts.find(a => a.id === selectedAccountId);
     if (tab === "benchmark" && acct && !acct.benchmark_enabled) {
       setTab("positions");
     }
-  }, [selectedAccountId]);
+  }, [selectedAccountId, selectedAccount?.benchmark_enabled]);
 
   // Holdings filtered to selected snapshot only (prevents double-counting)
   // null/empty snapshot_name treated as "Unnamed"
@@ -2048,6 +2049,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   };
 
   const _reloadAfterCRUD = async () => {
+    setComputing(true);
     const [customs, computed, h] = await Promise.all([
       apiGetCustomSchemes(account.id),
       apiComputeBenchmark(account.id),
@@ -2056,6 +2058,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     setCustomSchemes(customs);
     setResults(computed);
     setHistory(h);
+    setComputing(false);
   };
 
   const handleSaveCustom = async (schemeData) => {
@@ -2088,13 +2091,37 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     }
   };
 
+  const _fmtSchemeDesc = (allocations, cashPct) => {
+    const parts = (allocations || []).map(a => `${a.symbol} ${a.pct}%`);
+    if (cashPct > 0) parts.push(`Cash ${cashPct}%`);
+    return parts.join(' · ');
+  };
+
   const chartData = React.useMemo(() => {
-    const data = [{ label: I18N.t("benchmark.return.portfolio"), value: results?.portfolio_xirr ?? null }];
+    const portfolioLabel = I18N.t("benchmark.return.portfolio");
     if (results?.schemes) {
-      results.schemes.filter(s => activeIds.has(s.id)).forEach(s => data.push({ label: s.name, value: s.xirr }));
+      // Sort: defaults in config order first, then customs
+      const defaultOrder = new Map(defaults.map((d, i) => [d.id, i]));
+      const sorted = [...results.schemes].sort((a, b) => {
+        const aIdx = defaultOrder.has(a.id) ? defaultOrder.get(a.id) : 999;
+        const bIdx = defaultOrder.has(b.id) ? defaultOrder.get(b.id) : 999;
+        return aIdx - bIdx;
+      });
+      const visible = sorted.filter(s => activeIds.has(s.id));
+      const allLabels = [portfolioLabel, ...visible.map(s => s.name)];
+      const cmap = nameColors(allLabels);
+      const data = [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, color: cmap[portfolioLabel] }];
+      visible.forEach(s => data.push({ label: s.name, value: s.xirr, color: cmap[s.name] }));
+      return data;
     }
-    return data;
-  }, [results, activeIds]);
+    return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, color: nameColor(portfolioLabel) }];
+  }, [results, defaults, activeIds]);
+
+  // Shared dedup color map — same colors in bar chart and line chart
+  const sharedColorMap = React.useMemo(
+    () => nameColors(chartData.map(d => d.label)),
+    [chartData]
+  );
 
   const getXIRR = (id) => results?.schemes?.find(s => s.id === id)?.xirr ?? null;
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -2114,6 +2141,11 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
       {!computing && results && (
         <>
           {/* Bar chart — current snapshot */}
+          <div style={{ marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+              {I18N.t("benchmark.chart.title")}
+            </span>
+          </div>
           <div style={{ overflowX: "auto", marginBottom: 16 }}>
             <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
           </div>
@@ -2125,7 +2157,7 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
                 {I18N.t("benchmark.history.title")}
               </div>
               <div style={{ overflowX: "auto" }}>
-                <MultiLineChart series={history.series} granularity={history.granularity} width={560} height={180}/>
+                <MultiLineChart series={history.series} granularity={history.granularity} width={560} height={180} colorMap={sharedColorMap}/>
               </div>
             </div>
           )}
@@ -2148,61 +2180,86 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         <div style={{ color: "var(--ink-4)", fontSize: 13, padding: "16px 0" }}>{I18N.t("benchmark.noDeposits")}</div>
       )}
 
-      {/* Default schemes */}
-      {defaults.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
-            {I18N.t("benchmark.defaults.title")}
-            <span style={{ fontWeight: 400, marginLeft: 8, color: "var(--ink-4)" }}>{I18N.t("benchmark.defaults.hint")}</span>
+      {/* Scheme table — defaults + customs share the same row layout */}
+      {(defaults.length > 0 || customSchemes.length > 0 || true) && (() => {
+        const rowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" };
+        const xirrStyle = { fontSize: 13, fontWeight: 600, fontFamily: "monospace", width: 58, textAlign: "right", flexShrink: 0 };
+        const sectionHead = (label, hint) => (
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4, marginTop: 16 }}>
+            {label}{hint && <span style={{ fontWeight: 400, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
           </div>
-          {defaults.map(d => (
-            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-              <Toggle value={activeIds.has(d.id)} onChange={() => toggleDefault(d.id)} size="sm"/>
-              <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{d.name}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: activeIds.has(d.id) && getXIRR(d.id) != null ? (getXIRR(d.id) >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
-                {activeIds.has(d.id) ? fmtPct(getXIRR(d.id)) : "—"}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+        );
+        return (
+          <div style={{ marginBottom: 20 }}>
+            {/* Default schemes */}
+            {defaults.length > 0 && (
+              <>
+                {sectionHead(I18N.t("benchmark.defaults.title"), I18N.t("benchmark.defaults.hint"))}
+                {defaults.map(d => {
+                  const xirr = getXIRR(d.id);
+                  const active = activeIds.has(d.id);
+                  return (
+                    <div key={d.id} style={rowStyle}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[d.name] || nameColor(d.name), flexShrink: 0 }}/>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: "var(--ink)" }}>{d.name}</div>
+                        {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{d.description}</div>}
+                      </div>
+                      <span style={{ ...xirrStyle, color: active && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                        {active ? fmtPct(xirr) : "—"}
+                      </span>
+                      <Toggle value={active} onChange={() => toggleDefault(d.id)} size="sm"/>
+                    </div>
+                  );
+                })}
+              </>
+            )}
 
-      {/* Custom schemes */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
-          {I18N.t("benchmark.custom.title")}
-        </div>
-        {customSchemes.map(cs => (
-          <div key={cs.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-              <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{cs.name}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: "var(--ink-3)" }}>{fmtPct(getXIRR(String(cs.id)))}</span>
-              <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
-                disabled={crudLoading}
-                style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer" }}>
-                {I18N.t("benchmark.custom.edit")}
+            {/* Custom schemes */}
+            {sectionHead(I18N.t("benchmark.custom.title"))}
+            {customSchemes.map(cs => {
+              const xirr = getXIRR(String(cs.id));
+              const desc = _fmtSchemeDesc(cs.allocations, cs.cash_pct);
+              return (
+                <div key={cs.id}>
+                  <div style={rowStyle}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[cs.name] || nameColor(cs.name), flexShrink: 0 }}/>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: "var(--ink)" }}>{cs.name}</div>
+                      {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>{desc}</div>}
+                    </div>
+                    <span style={{ ...xirrStyle, color: xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                      {fmtPct(xirr)}
+                    </span>
+                    <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
+                      disabled={crudLoading}
+                      style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
+                      {I18N.t("benchmark.custom.edit")}
+                    </button>
+                    <button type="button" onClick={() => handleDeleteCustom(cs.id)}
+                      disabled={crudLoading}
+                      style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
+                      {I18N.t("benchmark.custom.delete")}
+                    </button>
+                  </div>
+                  {editingCustomId === cs.id && (
+                    <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>
+                  )}
+                </div>
+              );
+            })}
+            {addingCustom && (
+              <CustomSchemeEditor scheme={null} onSave={handleSaveCustom} onCancel={() => setAddingCustom(false)}/>
+            )}
+            {!addingCustom && (
+              <button type="button" onClick={() => { setAddingCustom(true); setEditingCustomId(null); }}
+                style={{ marginTop: 8, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 12px", cursor: "pointer" }}>
+                {I18N.t("benchmark.custom.add")}
               </button>
-              <button type="button" onClick={() => handleDeleteCustom(cs.id)}
-                disabled={crudLoading}
-                style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer" }}>
-                {I18N.t("benchmark.custom.delete")}
-              </button>
-            </div>
-            {editingCustomId === cs.id && (
-              <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>
             )}
           </div>
-        ))}
-        {addingCustom && (
-          <CustomSchemeEditor scheme={null} onSave={handleSaveCustom} onCancel={() => setAddingCustom(false)}/>
-        )}
-        {!addingCustom && (
-          <button type="button" onClick={() => { setAddingCustom(true); setEditingCustomId(null); }}
-            style={{ marginTop: 8, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 12px", cursor: "pointer" }}>
-            {I18N.t("benchmark.custom.add")}
-          </button>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Save changes — only for enabled_defaults toggle */}
       {dirty && (
