@@ -116,6 +116,16 @@ Naming conventions in the existing hierarchy (mixed — pick what matches the pa
 - **Product types**: `Checking`, `Savings`, `GIC`, `股票账户`, `信用卡分期消费` — used when the bank/broker offers distinct product lines.
 - **Generic**: `现金`, `零钱` — used for single-purpose wallets.
 
+### Benchmark defaults (`config/app.json`)
+
+`benchmark_defaults[].id` values are **immutable once the app has run** — they are stored verbatim as `bench_id` in the `benchmark_results` table. Renaming or removing a used ID orphans all historical rows for that scheme (a startup warning is logged when orphaned IDs are detected).
+
+Rules:
+- **Never rename or remove an existing `id`** — add a new entry with a new ID instead.
+- `name`, `description`, `allocations`, `cash_pct` are all safe to change.
+- IDs use `snake_case`. Scheme order in the array controls display order in the UI.
+- Symbols must be valid yfinance tickers (e.g. `SPY`, `3033.HK`, `510300.SS`, `BTC-USD`).
+
 ### Add a brokerage / wallet account (`accounts` table)
 
 Use the holdings router's `POST /api/accounts` endpoint (or `AccountSQLiteRepository` directly). Required: `name`. Common: `currency` (defaults to `CNY`), `note`, `balance_account_id` to link this broker into the balance hierarchy.

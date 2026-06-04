@@ -166,6 +166,43 @@ def simulate_scheme(
     return xirr(flows), excluded
 
 
+# ── ID-integrity check ───────────────────────────────────────────────────────
+
+
+def warn_orphaned_bench_ids() -> None:
+    """Warn at startup if stored bench_ids are no longer in config benchmark_defaults.
+
+    Default scheme IDs are stored verbatim in benchmark_results.bench_id.
+    Renaming or removing an ID in config/app.json orphans all historical rows
+    for that scheme.  This function detects that drift early.
+    """
+    from fin.database import SessionLocal
+    from sqlalchemy import text
+
+    config_ids = {d["id"] for d in _load_benchmark_defaults()}
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                "SELECT DISTINCT bench_id FROM benchmark_results WHERE bench_id != :p"
+            ),
+            {"p": _PORTFOLIO_BENCH_ID},
+        ).fetchall()
+    finally:
+        db.close()
+
+    # Custom scheme IDs are numeric strings — skip them
+    orphaned = [
+        r[0] for r in rows if not r[0].lstrip("-").isdigit() and r[0] not in config_ids
+    ]
+    if orphaned:
+        logger.warning(
+            "benchmark_results references IDs absent from config benchmark_defaults: %s"
+            " — historical rows are orphaned. Never rename a default scheme ID.",
+            orphaned,
+        )
+
+
 # ── Dedup helper ─────────────────────────────────────────────────────────────
 
 

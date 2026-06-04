@@ -20,6 +20,41 @@
       "description": "VOO 80% · BSV 10% · Cash 10%",
       "allocations": [{"symbol": "VOO", "pct": 80}, {"symbol": "BSV", "pct": 10}],
       "cash_pct": 10
+    },
+    {
+      "id": "nasdaq100",
+      "name": "Nasdaq 100",
+      "description": "QQQ 100%",
+      "allocations": [{"symbol": "QQQ", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "hs_tech",
+      "name": "Hang Seng Tech",
+      "description": "3033.HK 100%",
+      "allocations": [{"symbol": "3033.HK", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "csi300",
+      "name": "CSI 300",
+      "description": "510300.SS 100%",
+      "allocations": [{"symbol": "510300.SS", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "shcomp",
+      "name": "Shanghai Comp.",
+      "description": "000001.SS 100%",
+      "allocations": [{"symbol": "000001.SS", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "btc",
+      "name": "Bitcoin",
+      "description": "BTC-USD 100%",
+      "allocations": [{"symbol": "BTC-USD", "pct": 100}],
+      "cash_pct": 0
     }
   ],
   "i18n": {

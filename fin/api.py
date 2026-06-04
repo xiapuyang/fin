@@ -27,6 +27,7 @@ from fin.services.benchmark_scheduler import (
     start_benchmark_scheduler,
     stop_benchmark_scheduler,
 )
+from fin.services.benchmark_service import warn_orphaned_bench_ids
 from fin.services.market_state_updater import start_market_state_updater
 from fin.services.price_updater import start_price_updater
 
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
     global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP
     init_db()
     logger.info("Database initialized")
+    warn_orphaned_bench_ids()
     start_market_state_updater()
     start_price_updater()
     if getattr(sys, "frozen", False):
