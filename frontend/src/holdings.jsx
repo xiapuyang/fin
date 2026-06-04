@@ -2014,6 +2014,8 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         // Recompute if: no result today, OR any enabled default/custom scheme is missing
         const enabledIds = storedEnabled === null ? new Set(defs.map(d => d.id)) : new Set(storedEnabled);
         customs.forEach(cs => { if (cs.enabled !== 0) enabledIds.add(String(cs.id)); });
+        snaps.forEach(s => { if (s.enabled !== 0) enabledIds.add(String(s.id)); });
+        enabledIds.add("__portfolio__");
         const computedIds = new Set((res.schemes || []).map(s => s.id));
         const missingScheme = [...enabledIds].some(id => !computedIds.has(id));
 
@@ -2337,18 +2339,18 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
                         {ds.length > 0 ? (<>
                           <MultiLineChart series={ds} granularity={history.granularity} width={560} height={240} colorMap={diffColorMap}/>
                           {/* Stats table */}
-                          <div style={{ marginTop: 14, display: "inline-block", minWidth: 460 }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "180px 110px 140px 140px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                          <div style={{ marginTop: 14, display: "inline-block", minWidth: 500 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "220px 110px 140px 140px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
                               <span>{I18N.t("benchmark.diff.scheme")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.beat")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxOut")}</span>
                               <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxLag")}</span>
                             </div>
                             {_diffStats.map(st => (
-                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "180px 110px 140px 140px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "220px 110px 140px 140px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
                                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: diffColorMap[st.name] || nameColor(st.name), flexShrink: 0 }}/>
-                                  <span>{st.name}</span>
+                                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.name}</span>
                                 </div>
                                 <span className="mono" style={{ textAlign: "right", color: st.beatPct >= 50 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
                                   {st.beatPct.toFixed(0)}%
