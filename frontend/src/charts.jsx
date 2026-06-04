@@ -84,13 +84,53 @@ const _fmtBarK = (v) => {
 
 // CJK-aware visual width (each CJK char counts as 2)
 const _cjkW = (s) => [...(s||"")].reduce((n, c) => n + (c.charCodeAt(0) > 0x2E7F ? 2 : 1), 0);
-// Wrap string into lines of at most maxW visual units
-const _wrapLabel = (s, maxW = 10) => {
-  const lines = []; let line = "", w = 0;
-  for (const c of s) {
+
+// Wrap a single space-free token; never splits a run of [0-9%/.] mid-way
+const _wrapWord = (w, maxW) => {
+  const lines = []; let line = "", lineW = 0, numRunStart = -1;
+  for (const c of w) {
     const cw = c.charCodeAt(0) > 0x2E7F ? 2 : 1;
-    if (w + cw > maxW && line) { lines.push(line); line = c; w = cw; }
-    else { line += c; w += cw; }
+    const isNum = /[0-9%\/.]/.test(c);
+    if (!isNum) numRunStart = -1;
+    else if (numRunStart < 0) numRunStart = line.length;
+    if (lineW + cw > maxW && lineW > 0) {
+      if (numRunStart > 0) {
+        // back up to before the number run started
+        const carry = line.slice(numRunStart);
+        lines.push(line.slice(0, numRunStart));
+        line = carry + c; lineW = _cjkW(line); numRunStart = 0;
+      } else {
+        lines.push(line); line = c; lineW = cw; numRunStart = isNum ? 0 : -1;
+      }
+    } else { line += c; lineW += cw; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [w];
+};
+
+// Wrap string into lines of at most maxW visual units.
+// Breaks at spaces first; falls back to _wrapWord for tokens that still exceed maxW.
+const _wrapLabel = (s, maxW = 10) => {
+  const words = s.split(" ").filter(Boolean);
+  const lines = []; let line = "", lineW = 0;
+  for (const word of words) {
+    const ww = _cjkW(word);
+    if (lineW === 0) {
+      if (ww > maxW) {
+        const sub = _wrapWord(word, maxW);
+        for (let i = 0; i < sub.length - 1; i++) lines.push(sub[i]);
+        line = sub[sub.length - 1]; lineW = _cjkW(line);
+      } else { line = word; lineW = ww; }
+    } else if (lineW + 1 + ww <= maxW) {
+      line += " " + word; lineW += 1 + ww;
+    } else {
+      lines.push(line);
+      if (ww > maxW) {
+        const sub = _wrapWord(word, maxW);
+        for (let i = 0; i < sub.length - 1; i++) lines.push(sub[i]);
+        line = sub[sub.length - 1]; lineW = _cjkW(line);
+      } else { line = word; lineW = ww; }
+    }
   }
   if (line) lines.push(line);
   return lines.length ? lines : [""];
