@@ -207,14 +207,14 @@ def warn_orphaned_bench_ids() -> None:
 
 
 def has_valid_result_today(db: Session, account_id: int) -> bool:
-    """Return True if a non-NULL portfolio XIRR was already computed today.
+    """Return True if today's computation is complete and covers all active schemes.
 
-    NULL xirr means computation failed or data was missing — treat as invalid
-    so the next run retries.  An account with zero deposits will also get NULL,
-    but re-running it is harmless (fast and idempotent).
+    Returns False when:
+    - The portfolio XIRR row is missing or NULL (failed / no deposits)
+    - Any currently-active scheme lacks a result row for today (e.g. newly added)
     """
     today = str(datetime.now(timezone.utc).date())
-    row = (
+    portfolio_row = (
         db.query(BenchmarkResultModel)
         .filter(
             BenchmarkResultModel.account_id == account_id,
@@ -223,7 +223,25 @@ def has_valid_result_today(db: Session, account_id: int) -> bool:
         )
         .first()
     )
-    return row is not None and row.xirr is not None
+    if portfolio_row is None or portfolio_row.xirr is None:
+        return False
+
+    account = db.query(AccountModel).filter(AccountModel.id == account_id).first()
+    if account is None:
+        return False
+
+    active_ids = {s["id"] for s in _resolve_schemes(db, account)}
+    if not active_ids:
+        return True
+
+    computed_ids = {
+        row[0]
+        for row in db.query(BenchmarkResultModel.bench_id).filter(
+            BenchmarkResultModel.account_id == account_id,
+            BenchmarkResultModel.computed_date == today,
+        )
+    }
+    return active_ids.issubset(computed_ids)
 
 
 # ── Main service ──────────────────────────────────────────────────────────────

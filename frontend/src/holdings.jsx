@@ -566,7 +566,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               value={pricesReady ? maskDigits(`${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}`) : "—"}
               tone={!pricesReady ? "neutral" : acctUnrealized >= 0 ? "up" : "down"}
               pct={hpr}
-              sub={pricesReady ? `HPR ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
+              sub={pricesReady ? `${I18N.t("holdings.stat.hpr")} ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
             />
             <StatTile label={I18N.t("holdings.stat.realized")} value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(I18N.tf("holdings.stat.realized.detail", { realized: `${sym}${fmtNum(acctRealized, 0)}`, income: `${sym}${fmtNum(acctIncomeTotal, 0)}` }))}/>
             {!pricesReady
@@ -2004,10 +2004,17 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
         setDefaults(defs);
         setCustomSchemes(customs);
         const stored = account.benchmark_schemes;
-        setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
+        const storedEnabled = stored ? (stored.enabled_defaults ?? null) : null;
+        setLocalEnabled(storedEnabled);
         setDirty(false);
 
-        if (!res.computed_date || res.computed_date !== today) {
+        // Recompute if: no result today, OR any enabled default/custom scheme is missing
+        const enabledIds = storedEnabled === null ? new Set(defs.map(d => d.id)) : new Set(storedEnabled);
+        customs.forEach(cs => { if (cs.enabled !== 0) enabledIds.add(String(cs.id)); });
+        const computedIds = new Set((res.schemes || []).map(s => s.id));
+        const missingScheme = [...enabledIds].some(id => !computedIds.has(id));
+
+        if (!res.computed_date || res.computed_date !== today || missingScheme) {
           setComputing(true);
           const computed = await apiComputeBenchmark(account.id);
           if (!cancelled) { setResults(computed); setComputing(false); }

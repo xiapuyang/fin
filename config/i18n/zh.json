@@ -251,6 +251,7 @@
   "holdings.stat.mwrr.depositBased": "基于出入金记录和当前持仓市值",
   "holdings.stat.realized.detail": "已实现 {realized} · 收入 {income}",
   "holdings.stat.netDeposits": "净存入",
+  "holdings.stat.hpr": "持仓收益率",
   "holdings.col.position": "标的",
   "holdings.col.shares": "数量",
   "holdings.col.avgCost": "成本",

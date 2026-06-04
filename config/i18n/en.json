@@ -251,6 +251,7 @@
   "holdings.stat.mwrr.depositBased": "based on deposits & current market value",
   "holdings.stat.realized.detail": "Realized {realized} · Income {income}",
   "holdings.stat.netDeposits": "Net deposits",
+  "holdings.stat.hpr": "HPR",
   "holdings.col.position": "Position",
   "holdings.col.shares": "Shares",
   "holdings.col.avgCost": "Avg Cost",
