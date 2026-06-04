@@ -1907,6 +1907,11 @@ const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
 
   return (
     <div style={{ background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "14px 16px", marginTop: 10 }}>
+      {scheme && (
+        <div style={{ fontSize: 12, color: "var(--ink-3)", background: "var(--paper-3, var(--paper))", border: "1px solid var(--line-2)", borderRadius: 6, padding: "7px 10px", marginBottom: 12 }}>
+          ⚠ {I18N.t("benchmark.custom.editWarning")}
+        </div>
+      )}
       <div style={{ marginBottom: 10 }}>
         <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.name")}</label>
         <input value={name} onChange={e => setName(e.target.value)} autoComplete="off"

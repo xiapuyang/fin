@@ -82,25 +82,38 @@ const _fmtBarK = (v) => {
   return v.toFixed(2);
 };
 
+// CJK-aware visual width (each CJK char counts as 2)
+const _cjkW = (s) => [...(s||"")].reduce((n, c) => n + (c.charCodeAt(0) > 0x2E7F ? 2 : 1), 0);
+// Wrap string into lines of at most maxW visual units
+const _wrapLabel = (s, maxW = 10) => {
+  const lines = []; let line = "", w = 0;
+  for (const c of s) {
+    const cw = c.charCodeAt(0) > 0x2E7F ? 2 : 1;
+    if (w + cw > maxW && line) { lines.push(line); line = c; w = cw; }
+    else { line += c; w += cw; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+};
+
 const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true, signed = false }) => {
-  const padL = showAxis ? 44 : 4, padR = 8, padT = 20, padB = 22;
-  const w = width - padL - padR, h = height - padT - padB;
-  const bw = Math.min(w / data.length * 0.7, 48);
-  const gap = w / data.length - bw;
+  const padL = showAxis ? 44 : 4, padR = 8, padT = 20;
+  const sqSz = 8, sqGap = 4, lineH = 12;
 
   if (signed) {
+    // Pre-compute wrapped labels to size padB dynamically
+    const wrappedLabels = data.map(d => _wrapLabel(d.label));
+    const maxLines = Math.max(...wrappedLabels.map(ls => ls.length));
+    const padB = 18 + maxLines * lineH;
+    const svgH = height + (maxLines - 1) * lineH;
+    const w = width - padL - padR, h = svgH - padT - padB;
+    const bw = Math.min(w / data.length * 0.7, 48);
+    const gap = w / data.length - bw;
     const maxAbs = Math.max(...data.map(d => Math.abs(d.value ?? 0))) || 1;
     const zeroY = padT + h / 2;
-    const sqSz = 6, sqGap = 4;
-    // Max chars that fit under a bar — CJK chars count double
-    const charWidth = (s) => [...s].reduce((n, c) => n + (c.charCodeAt(0) > 0x2E7F ? 2 : 1), 0);
-    const truncLabel = (s, max = 10) => {
-      let w = 0; let out = "";
-      for (const c of s) { const cw = c.charCodeAt(0) > 0x2E7F ? 2 : 1; if (w + cw > max) { out += "…"; break; } w += cw; out += c; }
-      return out;
-    };
+
     return (
-      <svg width={width} height={height} style={{ display: "block" }}>
+      <svg width={width} height={svgH} style={{ display: "block" }}>
         {showAxis && (
           <line x1={padL} x2={padL + w} y1={zeroY} y2={zeroY} stroke="var(--line-2)" strokeWidth="1"/>
         )}
@@ -114,19 +127,23 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
           const c = d.color || (isNeg ? "var(--down)" : color);
           const labelText = d.value == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
           const rawValueY = isNeg ? zeroY + bh + 11 : barY - 3;
-          const valueY = Math.min(rawValueY, height - padB - 14);
-          const axisLabel = truncLabel(d.label);
-          const estHalfW = charWidth(axisLabel) * 3 + sqSz / 2 + sqGap;
+          const valueY = Math.min(rawValueY, zeroY - 3);
+          const lines = wrappedLabels[i];
+          const widestLine = Math.max(...lines.map(_cjkW));
+          const groupW = sqSz + sqGap + widestLine * 3.8;
+          const groupX = cx - groupW / 2;
+          const baseY = height - padB + lineH - 2;
           return (
             <g key={i}>
               {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
               <text x={cx} y={valueY} fontSize="9.5" fill={c} textAnchor="middle" className="mono">
                 {labelText}
               </text>
-              {d.color && <rect x={cx - estHalfW} y={height - padB + 5} width={sqSz} height={sqSz} fill={d.color} rx="1"/>}
-              <text x={cx - estHalfW + sqSz + sqGap} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="start">
-                <title>{d.label}</title>
-                {axisLabel}
+              {d.color && <rect x={groupX} y={baseY - sqSz + 1} width={sqSz} height={sqSz} fill={d.color} rx="1"/>}
+              <text fontSize="10" fill="var(--ink-4)" textAnchor="start">
+                {lines.map((l, li) => (
+                  <tspan key={li} x={groupX + sqSz + sqGap} dy={li === 0 ? baseY : lineH}>{l}</tspan>
+                ))}
               </text>
             </g>
           );
@@ -134,6 +151,11 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
       </svg>
     );
   }
+
+  const padB = 22;
+  const w = width - padL - padR, h = height - padT - padB;
+  const bw = Math.min(w / data.length * 0.7, 48);
+  const gap = w / data.length - bw;
 
   const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   return (

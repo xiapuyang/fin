@@ -786,11 +786,13 @@
   "benchmark.custom.delete": "Delete",
   "benchmark.custom.save": "Save",
   "benchmark.custom.cancel": "Cancel",
+  "benchmark.custom.editWarning": "Editing allocations will clear this scheme's history. Consider adding a new scheme instead.",
   "benchmark.scheme.name": "Name",
   "benchmark.scheme.cashPct": "Cash %",
   "benchmark.scheme.alloc": "Allocations",
   "benchmark.scheme.allocSum": "Sum: {n}%",
   "benchmark.scheme.validationError": "Allocations + Cash must sum to 100%",
   "benchmark.saveChanges": "Save Changes",
-  "benchmark.history.title": "Historical Returns"
+  "benchmark.history.title": "Historical Returns",
+  "benchmark.chart.title": "Annualized Return Comparison"
 }
