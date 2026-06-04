@@ -162,6 +162,45 @@ def _build_portfolio_scheme(
     }
 
 
+def _fix_stale_snapshot_allocations(db: Session, account_id: int) -> None:
+    """Rescale stale snapshot allocations so sum(alloc.pct) + cash_pct == 100%.
+
+    Snapshots created before the equity-fraction fix stored alloc.pct summing to
+    100% regardless of cash_pct, so total exceeded 100%. This function detects
+    and corrects those rows in-place.
+    """
+    snaps = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+        )
+        .all()
+    )
+    for snap in snaps:
+        allocs = json.loads(snap.allocations_json)
+        total = sum(a["pct"] for a in allocs) + snap.cash_pct
+        if total <= 100.01:
+            continue
+        # Rescale: equity portion should be 100 - cash_pct
+        expected_equity = 100.0 - snap.cash_pct
+        actual_equity = sum(a["pct"] for a in allocs)
+        if actual_equity <= 0:
+            continue
+        scale = expected_equity / actual_equity
+        fixed = [
+            {"symbol": a["symbol"], "pct": round(a["pct"] * scale, 4)} for a in allocs
+        ]
+        snap.allocations_json = json.dumps(fixed)
+        logger.info(
+            "Fixed stale allocation for snapshot %s (was %.4f%%, now %.4f%%)",
+            snap.name,
+            total,
+            sum(a["pct"] for a in fixed) + snap.cash_pct,
+        )
+    db.commit()
+
+
 def _get_or_create_portfolio_snapshot(
     db: Session,
     account_id: int,
@@ -236,6 +275,7 @@ def backfill_account(db: Session, account_id: int) -> int:
     Skips (bench_id, date) pairs that already have a row. Returns the number
     of new rows written.
     """
+    _fix_stale_snapshot_allocations(db, account_id)
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
     from fin.services.benchmark_service import (

@@ -2011,16 +2011,25 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         const storedEnabled = stored ? (stored.enabled_defaults ?? null) : null;
         setLocalEnabled(storedEnabled);
 
-        // Recompute if: no result today, OR any enabled default/custom scheme is missing
-        const enabledIds = storedEnabled === null ? new Set(defs.map(d => d.id)) : new Set(storedEnabled);
-        customs.forEach(cs => { if (cs.enabled !== 0) enabledIds.add(String(cs.id)); });
-        snaps.forEach(s => { if (s.enabled !== 0) enabledIds.add(String(s.id)); });
-        enabledIds.add("__portfolio__");
+        // Detect missing schemes
+        const enabledDefaultAndCustomIds = new Set(
+          storedEnabled === null ? defs.map(d => d.id) : storedEnabled
+        );
+        customs.forEach(cs => { if (cs.enabled !== 0) enabledDefaultAndCustomIds.add(String(cs.id)); });
         const computedIds = new Set((res.schemes || []).map(s => s.id));
-        const missingScheme = [...enabledIds].some(id => !computedIds.has(id));
+        const missingDefaultOrCustom = [...enabledDefaultAndCustomIds].some(id => !computedIds.has(id));
+        const missingPortfolio = !computedIds.has("__portfolio__");
+        const missingSnaps = snaps.some(s => s.enabled !== 0 && !computedIds.has(String(s.id)));
+        const staleDate = !res.computed_date || res.computed_date !== today;
 
-        if (!res.computed_date || res.computed_date !== today || missingScheme) {
+        const needsCompute = staleDate || missingDefaultOrCustom || missingPortfolio;
+        const needsBackfill = missingSnaps;
+
+        if (needsCompute || needsBackfill) {
           setComputing(true);
+          // Snapshots need backfill to fill missing historical dates (up to yesterday);
+          // __portfolio__ and everything else is handled by compute (today's live data).
+          if (needsBackfill) await apiTriggerBackfill(account.id);
           const computed = await apiComputeBenchmark(account.id);
           const h = await apiGetBenchmarkHistory(account.id);
           if (!cancelled) { setResults(computed); setHistory(h); setComputing(false); }
