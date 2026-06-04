@@ -25,11 +25,12 @@ def _run_once() -> None:
     """Compute benchmark results for all eligible accounts."""
     from fin.database import SessionLocal
     from fin.models.account import AccountModel
-    from fin.models.benchmark_result import BenchmarkResultModel
     from fin.models.user import MOCK_USER_ID
-    from fin.services.benchmark_service import compute as benchmark_compute
+    from fin.services.benchmark_service import (
+        compute as benchmark_compute,
+        has_valid_result_today,
+    )
 
-    today = str(datetime.now(timezone.utc).date())
     db = SessionLocal()
     try:
         accounts = (
@@ -44,18 +45,8 @@ def _run_once() -> None:
             "Benchmark scheduler: checking %d enabled account(s)", len(accounts)
         )
         for account in accounts:
-            already_done = (
-                db.query(BenchmarkResultModel)
-                .filter(
-                    BenchmarkResultModel.account_id == account.id,
-                    BenchmarkResultModel.computed_date == today,
-                )
-                .first()
-            )
-            if already_done:
-                logger.debug(
-                    "Benchmark already computed today for account %s", account.id
-                )
+            if has_valid_result_today(db, account.id):
+                logger.debug("Benchmark already valid today for account %s", account.id)
                 continue
             try:
                 benchmark_compute(db, account.id)

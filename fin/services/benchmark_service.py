@@ -166,6 +166,29 @@ def simulate_scheme(
     return xirr(flows), excluded
 
 
+# ── Dedup helper ─────────────────────────────────────────────────────────────
+
+
+def has_valid_result_today(db: Session, account_id: int) -> bool:
+    """Return True if a non-NULL portfolio XIRR was already computed today.
+
+    NULL xirr means computation failed or data was missing — treat as invalid
+    so the next run retries.  An account with zero deposits will also get NULL,
+    but re-running it is harmless (fast and idempotent).
+    """
+    today = str(datetime.now(timezone.utc).date())
+    row = (
+        db.query(BenchmarkResultModel)
+        .filter(
+            BenchmarkResultModel.account_id == account_id,
+            BenchmarkResultModel.computed_date == today,
+            BenchmarkResultModel.bench_id == _PORTFOLIO_BENCH_ID,
+        )
+        .first()
+    )
+    return row is not None and row.xirr is not None
+
+
 # ── Main service ──────────────────────────────────────────────────────────────
 
 

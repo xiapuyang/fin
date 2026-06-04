@@ -184,10 +184,24 @@ def get_results(account_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/compute/{account_id}", response_model=BenchmarkResultResponse)
-def compute_benchmark(account_id: int, db: Session = Depends(get_db)):
-    """Trigger benchmark computation (always recomputes)."""
+def compute_benchmark(
+    account_id: int,
+    force: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Compute benchmark results for an account.
+
+    Skips computation if a valid result already exists today (portfolio xirr is
+    non-NULL).  Pass ?force=true to override the dedup check.
+    """
     _get_account_or_404(db, account_id)
-    from fin.services.benchmark_service import compute as benchmark_compute
+    from fin.services.benchmark_service import (
+        compute as benchmark_compute,
+        has_valid_result_today,
+    )
+
+    if not force and has_valid_result_today(db, account_id):
+        return _build_results_response(db, account_id)
 
     try:
         result = benchmark_compute(db, account_id)
