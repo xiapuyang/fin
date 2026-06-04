@@ -764,5 +764,32 @@
   "alert.email.text_footer": "以上提醒已自动禁用。",
   "alert.email.text_lead": "触发 {count} 个提醒:",
   "alert.email.text_price": "价格",
-  "alert.email.text_change": "涨跌"
+  "alert.email.text_change": "涨跌",
+
+  "benchmark.acct.toggle": "对比大盘",
+  "benchmark.acct.toggleHint": "在持仓页面显示大盘对比标签，展示年化收益率与基准指数的比较",
+
+  "benchmark.tab.title": "大盘对比",
+  "benchmark.loading": "加载中…",
+  "benchmark.error": "加载大盘对比数据失败",
+  "benchmark.computing": "正在计算收益率…",
+  "benchmark.noDeposits": "该账户暂无入金记录",
+  "benchmark.excludedDeposits": "{n} 笔入金被排除（当日无价格数据）",
+  "benchmark.disclaimer": "非美元账户：基准收益率以今日汇率折算为美元计算，可能存在 1–2% 年化误差。",
+  "benchmark.return.portfolio": "我的持仓",
+  "benchmark.return.effectiveStart": "基于 {date} 起的入金记录",
+  "benchmark.defaults.title": "默认基准方案",
+  "benchmark.defaults.hint": "可开启/关闭，不可编辑或删除",
+  "benchmark.custom.title": "自定义方案",
+  "benchmark.custom.add": "+ 添加自定义",
+  "benchmark.custom.edit": "编辑",
+  "benchmark.custom.delete": "删除",
+  "benchmark.custom.save": "保存",
+  "benchmark.custom.cancel": "取消",
+  "benchmark.scheme.name": "方案名称",
+  "benchmark.scheme.cashPct": "现金仓位 %",
+  "benchmark.scheme.alloc": "配置比例",
+  "benchmark.scheme.allocSum": "合计：{n}%",
+  "benchmark.scheme.validationError": "配置比例与现金仓位之和必须为 100%",
+  "benchmark.saveChanges": "保存更改"
 }

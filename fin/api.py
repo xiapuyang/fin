@@ -15,6 +15,7 @@ from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
 from fin.routers.alerts import router as alerts_router
 from fin.routers.balance import router as balance_router
+from fin.routers.benchmark import router as benchmark_router
 from fin.routers.categories import router as categories_router
 from fin.routers.holdings import router as holdings_router
 from fin.routers.ledger import router as ledger_router
@@ -22,6 +23,10 @@ from fin.routers.meta import router as meta_router
 from fin.routers.settings import router as settings_router
 from fin.routers.watchlist import router as watchlist_router
 from fin.services.alert_scheduler import start_alert_scheduler, stop_alert_scheduler
+from fin.services.benchmark_scheduler import (
+    start_benchmark_scheduler,
+    stop_benchmark_scheduler,
+)
 from fin.services.market_state_updater import start_market_state_updater
 from fin.services.price_updater import start_price_updater
 
@@ -29,11 +34,12 @@ setup_logging("fin-api")
 logger = logging.getLogger(__name__)
 
 _ALERT_SCHEDULER_STOP = None
+_BENCHMARK_SCHEDULER_STOP = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _ALERT_SCHEDULER_STOP
+    global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP
     init_db()
     logger.info("Database initialized")
     start_market_state_updater()
@@ -41,9 +47,13 @@ async def lifespan(app: FastAPI):
     if getattr(sys, "frozen", False):
         _ALERT_SCHEDULER_STOP = start_alert_scheduler()
         logger.info("Alert scheduler started (frozen mode)")
+        _BENCHMARK_SCHEDULER_STOP = start_benchmark_scheduler()
+        logger.info("Benchmark scheduler started (frozen mode)")
     yield
     if _ALERT_SCHEDULER_STOP is not None:
         stop_alert_scheduler(_ALERT_SCHEDULER_STOP)
+    if _BENCHMARK_SCHEDULER_STOP is not None:
+        stop_benchmark_scheduler(_BENCHMARK_SCHEDULER_STOP)
     logger.info("Shutting down")
 
 
@@ -79,6 +89,7 @@ async def no_cache(request: Request, call_next):
 
 app.include_router(alerts_router)
 app.include_router(balance_router)
+app.include_router(benchmark_router)
 app.include_router(categories_router)
 app.include_router(holdings_router)
 app.include_router(ledger_router)

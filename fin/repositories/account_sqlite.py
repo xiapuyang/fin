@@ -38,6 +38,7 @@ class AccountSQLiteRepository:
             currency=data.currency or "CNY",
             note=data.note,
             cutoff_date=data.cutoff_date,
+            benchmark_enabled="1" if data.benchmark_enabled else "0",
         )
         self._db.add(account)
         self._db.commit()
@@ -68,6 +69,10 @@ class AccountSQLiteRepository:
                 continue
             if field == "symbol_markets":
                 setattr(account, field, json.dumps(val) if val is not None else None)
+            elif field == "benchmark_enabled":
+                account.benchmark_enabled = "1" if val else "0"
+            elif field == "benchmark_schemes":
+                account.benchmark_schemes = json.dumps(val) if val is not None else None
             else:
                 setattr(account, field, val)
         account.update_time = datetime.now(timezone.utc)

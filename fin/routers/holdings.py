@@ -63,6 +63,12 @@ def _account_response(a: AccountModel) -> AccountResponse:
             sm = json.loads(a.symbol_markets)
         except json.JSONDecodeError:
             sm = None
+    bs = None
+    if a.benchmark_schemes:
+        try:
+            bs = json.loads(a.benchmark_schemes)
+        except json.JSONDecodeError:
+            bs = None
     return AccountResponse(
         id=a.id,
         name=a.name,
@@ -72,6 +78,8 @@ def _account_response(a: AccountModel) -> AccountResponse:
         balance_account_id=a.balance_account_id,
         balance_sub_account_id=a.balance_sub_account_id,
         symbol_markets=sm,
+        benchmark_enabled=a.benchmark_enabled == "1",
+        benchmark_schemes=bs,
         create_time=a.create_time.strftime(TS_FMT),
         update_time=a.update_time.strftime(TS_FMT),
     )

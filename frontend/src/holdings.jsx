@@ -261,6 +261,14 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     else setSelectedSnapshot(null);
   }, [acctName, snapshots.join(",")]);
 
+  // Reset tab to "positions" when switching accounts that don't have benchmark enabled
+  React.useEffect(() => {
+    const acct = accounts.find(a => a.id === selectedAccountId);
+    if (tab === "benchmark" && acct && !acct.benchmark_enabled) {
+      setTab("positions");
+    }
+  }, [selectedAccountId]);
+
   // Holdings filtered to selected snapshot only (prevents double-counting)
   // null/empty snapshot_name treated as "Unnamed"
   const snapshotHoldings = selectedSnapshot
@@ -578,6 +586,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           { id: "cashflows",    label: I18N.t("holdings.cashflows.title"),   count: acctIncome.filter(i => ["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.filter(i => !["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "dividends",    label: I18N.t("holdings.calendar.title"),    count: acctIncome.filter(i => i.category === "dividend").length || null },
+          ...(selectedAccount?.benchmark_enabled ? [{ id: "benchmark", label: I18N.t("benchmark.tab.title") }] : []),
         ]}/>
       </div>
 
@@ -612,6 +621,13 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           defaultAccount={acctName}
         />; })()}
       {tab === "dividends"    && <DividendCalendar incomeItems={acctIncome} positions={acctPositions} acctCcy={acctCcy} acctFx={acctFx}/>}
+      {tab === "benchmark" && selectedAccount?.benchmark_enabled && (
+        <BenchmarkTab
+          account={selectedAccount}
+          acctXIRR={acctXIRR}
+          onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
+        />
+      )}
 
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => {
@@ -1847,12 +1863,331 @@ const useForm = (initial) => {
   return [form, set, setForm];
 };
 
+// ── Benchmark Tab ────────────────────────────────────────────────────────────
+
+const _KNOWN_SYMBOLS = [
+  { value: "SPY",        label: "SPY — S&P 500" },
+  { value: "QQQ",        label: "QQQ — Nasdaq 100" },
+  { value: "^HSI",       label: "^HSI — Hang Seng" },
+  { value: "3033.HK",    label: "3033.HK — HS Tech" },
+  { value: "000300.SS",  label: "000300.SS — CSI 300" },
+  { value: "000001.SS",  label: "000001.SS — SSE" },
+  { value: "VT",         label: "VT — Total World" },
+  { value: "BNDW",       label: "BNDW — Global Bond" },
+  { value: "VOO",        label: "VOO — S&P 500" },
+  { value: "BSV",        label: "BSV — Short Bond" },
+];
+
+const _CASH_VALUE = "__CASH__";
+
+const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
+  const [name, setName] = React.useState(scheme?.name || "");
+  const [rows, setRows] = React.useState(
+    scheme?.allocations?.length
+      ? scheme.allocations.map(a => ({ type: "symbol", symbol: a.symbol, pct: String(a.pct) }))
+      : [{ type: "symbol", symbol: "SPY", pct: "100" }]
+  );
+  const [cashPct, setCashPct] = React.useState(String(scheme?.cash_pct ?? 0));
+  const [customSymbol, setCustomSymbol] = React.useState({});
+
+  const allocSum = rows.reduce((s, r) => s + (parseFloat(r.pct) || 0), 0) + (parseFloat(cashPct) || 0);
+  const isValid = name.trim() && Math.abs(allocSum - 100) < 0.01 && rows.length > 0;
+
+  const updateRow = (i, field, val) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [field]: val } : r));
+  const removeRow = (i) => setRows(rs => rs.filter((_, j) => j !== i));
+  const addRow = () => setRows(rs => [...rs, { type: "symbol", symbol: "SPY", pct: "0" }]);
+
+  const handleSave = () => {
+    const allocations = rows.map(r => ({
+      symbol: r.type === _CASH_VALUE ? _CASH_VALUE : (customSymbol[rows.indexOf(r)] || r.symbol),
+      pct: parseFloat(r.pct) || 0,
+    })).filter(a => a.symbol !== _CASH_VALUE);
+    onSave({ id: scheme?.id, name: name.trim(), allocations, cash_pct: parseFloat(cashPct) || 0 });
+  };
+
+  return (
+    <div style={{ background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "14px 16px", marginTop: 10 }}>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.name")}</label>
+        <input value={name} onChange={e => setName(e.target.value)} autoComplete="off"
+          style={{ display: "block", marginTop: 4, width: "100%", fontSize: 13, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", boxSizing: "border-box" }}/>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.alloc")}</label>
+        <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 80px 28px", gap: "4px 6px", alignItems: "center" }}>
+          {rows.map((r, i) => {
+            const knownOpt = _KNOWN_SYMBOLS.find(s => s.value === r.symbol);
+            const isCustomSym = !knownOpt;
+            return (
+              <React.Fragment key={i}>
+                <div>
+                  <select value={knownOpt ? r.symbol : "__custom__"} onChange={e => {
+                      if (e.target.value === "__custom__") updateRow(i, "symbol", "");
+                      else updateRow(i, "symbol", e.target.value);
+                    }}
+                    style={{ width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
+                    {_KNOWN_SYMBOLS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <option value="__custom__">Custom symbol…</option>
+                  </select>
+                  {(!knownOpt) && (
+                    <input value={r.symbol} onChange={e => updateRow(i, "symbol", e.target.value.toUpperCase())} autoComplete="off"
+                      placeholder="e.g. ARKK" style={{ marginTop: 4, width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", boxSizing: "border-box" }}/>
+                  )}
+                </div>
+                <input value={r.pct} onChange={e => updateRow(i, "pct", e.target.value)} autoComplete="off"
+                  type="number" min="0" max="100" step="1"
+                  style={{ fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", textAlign: "right" }}/>
+                <button type="button" onClick={() => removeRow(i)} disabled={rows.length <= 1}
+                  style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: rows.length <= 1 ? "default" : "pointer", fontSize: 15, padding: 0, opacity: rows.length <= 1 ? 0.3 : 1 }}>✕</button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+        <button type="button" onClick={addRow} style={{ marginTop: 6, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "3px 10px", cursor: "pointer" }}>+ Add</button>
+      </div>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.cashPct")}</label>
+        <input value={cashPct} onChange={e => setCashPct(e.target.value)} autoComplete="off"
+          type="number" min="0" max="100" step="1"
+          style={{ width: 70, fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", textAlign: "right" }}/>
+        <span style={{ fontSize: 12, color: Math.abs(allocSum - 100) < 0.01 ? "var(--accent)" : "var(--up)", fontWeight: 600 }}>
+          {I18N.t("benchmark.scheme.allocSum").replace("{n}", allocSum.toFixed(1))}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" onClick={onCancel} style={{ fontSize: 12, padding: "5px 14px", border: "1px solid var(--line)", borderRadius: 6, background: "none", color: "var(--ink-3)", cursor: "pointer" }}>{I18N.t("benchmark.custom.cancel")}</button>
+        <button type="button" onClick={handleSave} disabled={!isValid} style={{ fontSize: 12, padding: "5px 14px", border: "none", borderRadius: 6, background: isValid ? "var(--ink)" : "var(--line)", color: isValid ? "#fff" : "var(--ink-4)", cursor: isValid ? "pointer" : "default" }}>{I18N.t("benchmark.custom.save")}</button>
+      </div>
+    </div>
+  );
+};
+
+const BenchmarkTab = ({ account, acctXIRR, onAccountUpdated }) => {
+  const [defaults, setDefaults] = React.useState([]);
+  const [results, setResults] = React.useState(null);
+  const [computing, setComputing] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [localEnabled, setLocalEnabled] = React.useState(null); // null = all defaults on
+  const [localCustoms, setLocalCustoms] = React.useState([]);
+  const [dirty, setDirty] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [editingCustomId, setEditingCustomId] = React.useState(null);
+  const [addingCustom, setAddingCustom] = React.useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const [defs, res] = await Promise.all([
+          apiGetBenchmarkDefaults(),
+          apiGetBenchmarkResults(account.id),
+        ]);
+        if (cancelled) return;
+        setDefaults(defs);
+        const stored = account.benchmark_schemes;
+        setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
+        setLocalCustoms(stored ? (stored.custom_schemes || []) : []);
+        setDirty(false);
+
+        if (!res.computed_date || res.computed_date !== today) {
+          setComputing(true);
+          const computed = await apiComputeBenchmark(account.id);
+          if (!cancelled) { setResults(computed); setComputing(false); }
+        } else {
+          setResults(res);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      }
+    };
+    init();
+    return () => { cancelled = true; };
+  }, [account.id]);
+
+  const activeDefaultIds = React.useMemo(() => {
+    if (localEnabled === null) return new Set(defaults.map(d => d.id));
+    return new Set(localEnabled);
+  }, [localEnabled, defaults]);
+
+  const toggleDefault = (id) => {
+    const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
+    const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
+    setLocalEnabled(next);
+    setDirty(true);
+  };
+
+  const handleSaveChanges = async () => {
+    setSaving(true);
+    try {
+      await apiUpdateBenchmarkSchemes(account.id, {
+        enabled_defaults: localEnabled === null ? defaults.map(d => d.id) : localEnabled,
+        custom_schemes: localCustoms,
+      });
+      setDirty(false);
+      setComputing(true);
+      const computed = await apiComputeBenchmark(account.id);
+      setResults(computed);
+      setComputing(false);
+      if (onAccountUpdated) onAccountUpdated();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveCustom = (scheme) => {
+    if (editingCustomId !== null) {
+      setLocalCustoms(cs => cs.map(c => c.id === editingCustomId ? scheme : c));
+    } else {
+      setLocalCustoms(cs => [...cs, { ...scheme, id: scheme.id || Math.random().toString(36).slice(2, 8) }]);
+    }
+    setEditingCustomId(null);
+    setAddingCustom(false);
+    setDirty(true);
+  };
+
+  const handleDeleteCustom = (id) => {
+    setLocalCustoms(cs => cs.filter(c => c.id !== id));
+    setDirty(true);
+  };
+
+  // Build bar chart data from results
+  const chartData = React.useMemo(() => {
+    const data = [{ label: I18N.t("benchmark.return.portfolio"), value: acctXIRR ?? null }];
+    if (results?.schemes) {
+      results.schemes.forEach(s => {
+        if (activeDefaultIds.has(s.id) || localCustoms.find(c => c.id === s.id)) {
+          data.push({ label: s.name, value: s.xirr });
+        }
+      });
+    }
+    return data;
+  }, [results, acctXIRR, activeDefaultIds, localCustoms]);
+
+  const getXIRR = (id) => results?.schemes?.find(s => s.id === id)?.xirr ?? null;
+  const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  const isNonUSD = account.currency && account.currency !== "USD";
+
+  if (error) return <Empty text={I18N.t("benchmark.error")}/>;
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
+      {computing && (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "var(--ink-3)", fontSize: 13 }}>
+          <div style={{ fontSize: 22, marginBottom: 8 }}>⏳</div>
+          {I18N.t("benchmark.computing")}
+        </div>
+      )}
+
+      {!computing && results && (
+        <>
+          {/* Bar chart */}
+          <div style={{ overflowX: "auto", marginBottom: 20 }}>
+            <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
+          </div>
+
+          {/* Warnings */}
+          {results.excluded_deposits > 0 && (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10, background: "var(--paper-2)", borderRadius: 6, padding: "6px 10px" }}>
+              ⚠ {I18N.t("benchmark.excludedDeposits").replace("{n}", results.excluded_deposits)}
+            </div>
+          )}
+          {isNonUSD && (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 14, background: "var(--paper-2)", borderRadius: 6, padding: "6px 10px" }}>
+              ℹ {I18N.t("benchmark.disclaimer")}
+            </div>
+          )}
+        </>
+      )}
+
+      {!computing && !results && (
+        <div style={{ color: "var(--ink-4)", fontSize: 13, padding: "16px 0" }}>{I18N.t("benchmark.noDeposits")}</div>
+      )}
+
+      {/* Default schemes */}
+      {defaults.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+            {I18N.t("benchmark.defaults.title")}
+            <span style={{ fontWeight: 400, marginLeft: 8, color: "var(--ink-4)" }}>{I18N.t("benchmark.defaults.hint")}</span>
+          </div>
+          {defaults.map(d => (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
+              <Toggle value={activeDefaultIds.has(d.id)} onChange={() => toggleDefault(d.id)} size="sm"/>
+              <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{d.name}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: activeDefaultIds.has(d.id) && getXIRR(d.id) != null ? (getXIRR(d.id) >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                {activeDefaultIds.has(d.id) ? fmtPct(getXIRR(d.id)) : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Custom schemes */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+          {I18N.t("benchmark.custom.title")}
+        </div>
+        {localCustoms.map(cs => (
+          <div key={cs.id}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
+              <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{cs.name}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: "var(--ink-3)" }}>{fmtPct(getXIRR(cs.id))}</span>
+              <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
+                style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer" }}>
+                {I18N.t("benchmark.custom.edit")}
+              </button>
+              <button type="button" onClick={() => handleDeleteCustom(cs.id)}
+                style={{ fontSize: 12, color: "var(--up)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer" }}>
+                {I18N.t("benchmark.custom.delete")}
+              </button>
+            </div>
+            {editingCustomId === cs.id && (
+              <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>
+            )}
+          </div>
+        ))}
+        {addingCustom && (
+          <CustomSchemeEditor scheme={null} onSave={handleSaveCustom} onCancel={() => setAddingCustom(false)}/>
+        )}
+        {!addingCustom && (
+          <button type="button" onClick={() => { setAddingCustom(true); setEditingCustomId(null); }}
+            style={{ marginTop: 8, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 12px", cursor: "pointer" }}>
+            {I18N.t("benchmark.custom.add")}
+          </button>
+        )}
+      </div>
+
+      {/* Save changes */}
+      {dirty && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button type="button" onClick={handleSaveChanges} disabled={saving}
+            style={{ fontSize: 13, padding: "7px 18px", border: "none", borderRadius: 6, background: "var(--ink)", color: "#fff", cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? I18N.t("benchmark.computing") : I18N.t("benchmark.saveChanges")}
+          </button>
+          <button type="button" onClick={() => {
+            const stored = account.benchmark_schemes;
+            setLocalEnabled(stored ? (stored.enabled_defaults ?? null) : null);
+            setLocalCustoms(stored ? (stored.custom_schemes || []) : []);
+            setDirty(false); setEditingCustomId(null); setAddingCustom(false);
+          }}
+            style={{ fontSize: 13, padding: "7px 14px", border: "1px solid var(--line)", borderRadius: 6, background: "none", color: "var(--ink-3)", cursor: "pointer" }}>
+            {I18N.t("benchmark.custom.cancel")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const _ADV_KEY = "fin_acct_adv";
 const _getAdv = () => localStorage.getItem(_ADV_KEY) === "1";
 const _setAdv = (v) => localStorage.setItem(_ADV_KEY, v ? "1" : "0");
 
 const AccountModal = ({ onClose, onSaved }) => {
-  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "" });
+  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "", benchmark_enabled: false });
   const [advOpen, setAdvOpen] = React.useState(_getAdv);
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
@@ -1865,6 +2200,7 @@ const AccountModal = ({ onClose, onSaved }) => {
         name: form.name.trim(), currency: form.currency,
         note: form.note || null,
         cutoff_date: form.cutoff_date.trim() || null,
+        benchmark_enabled: form.benchmark_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -1890,8 +2226,15 @@ const AccountModal = ({ onClose, onSaved }) => {
                 {I18N.t("holdings.acct.new.cutoff")}
               </div>
               <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)} style={{ marginBottom: 6 }}/>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 4, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 14, lineHeight: 1.5 }}>
                 {I18N.t("holdings.acct.cutoff.hint")}
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.benchmark_enabled} onChange={v => set("benchmark_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("benchmark.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
+                </div>
               </div>
             </div>
           )}
@@ -1914,10 +2257,11 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     cutoff_date: account.cutoff_date || "",
     balance_account_id: account.balance_account_id ? String(account.balance_account_id) : "",
     balance_sub_account_id: account.balance_sub_account_id ? String(account.balance_sub_account_id) : "",
+    benchmark_enabled: !!account.benchmark_enabled,
   });
   const [advOpen, setAdvOpen] = React.useState(() => {
     const stored = localStorage.getItem(_ADV_KEY);
-    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length;
+    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length || !!account.benchmark_enabled;
   });
   // symbol_markets edited as [{code, market}] rows for convenience
   const [smRows, setSmRows] = React.useState(() =>
@@ -1951,6 +2295,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
         balance_account_id: form.balance_account_id ? Number(form.balance_account_id) : null,
         balance_sub_account_id: form.balance_sub_account_id ? Number(form.balance_sub_account_id) : null,
         symbol_markets: Object.keys(sm).length ? sm : null,
+        benchmark_enabled: form.benchmark_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -2024,6 +2369,13 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
                 style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
                 {I18N.t("holdings.acct.edit.addMapping")}
               </button>
+              <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.benchmark_enabled} onChange={v => set("benchmark_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("benchmark.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
+                </div>
+              </div>
             </div>
           )}
         </div>

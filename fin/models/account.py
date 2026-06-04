@@ -18,6 +18,10 @@ class AccountModel(Base):
     balance_account_id = Column(Integer, nullable=True)
     balance_sub_account_id = Column(Integer, nullable=True)
     symbol_markets = Column(String, nullable=True)  # JSON: {"013308": "HK"}
+    benchmark_enabled = Column(String, nullable=True, default="0")
+    benchmark_schemes = Column(
+        String, nullable=True
+    )  # JSON: {enabled_defaults, custom_schemes}
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

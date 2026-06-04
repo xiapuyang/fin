@@ -764,5 +764,32 @@
   "alert.email.text_footer": "These alerts have been auto-disabled.",
   "alert.email.text_lead": "Triggered {count} alert(s):",
   "alert.email.text_price": "price",
-  "alert.email.text_change": "change"
+  "alert.email.text_change": "change",
+
+  "benchmark.acct.toggle": "Compare with market",
+  "benchmark.acct.toggleHint": "Shows a Market Comparison tab with annualized return vs benchmark indices",
+
+  "benchmark.tab.title": "Market Comparison",
+  "benchmark.loading": "Loading…",
+  "benchmark.error": "Failed to load benchmark data",
+  "benchmark.computing": "Computing returns…",
+  "benchmark.noDeposits": "No deposit records found for this account",
+  "benchmark.excludedDeposits": "{n} deposit(s) excluded (no price data on that date)",
+  "benchmark.disclaimer": "Non-USD account: benchmark returns calculated in USD at today's FX rate. May differ by 1–2% annualized.",
+  "benchmark.return.portfolio": "My Portfolio",
+  "benchmark.return.effectiveStart": "Based on deposits since {date}",
+  "benchmark.defaults.title": "Default Benchmarks",
+  "benchmark.defaults.hint": "Toggle on/off — cannot be edited or deleted",
+  "benchmark.custom.title": "Custom Benchmarks",
+  "benchmark.custom.add": "+ Add Custom",
+  "benchmark.custom.edit": "Edit",
+  "benchmark.custom.delete": "Delete",
+  "benchmark.custom.save": "Save",
+  "benchmark.custom.cancel": "Cancel",
+  "benchmark.scheme.name": "Name",
+  "benchmark.scheme.cashPct": "Cash %",
+  "benchmark.scheme.alloc": "Allocations",
+  "benchmark.scheme.allocSum": "Sum: {n}%",
+  "benchmark.scheme.validationError": "Allocations + Cash must sum to 100%",
+  "benchmark.saveChanges": "Save Changes"
 }

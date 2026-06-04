@@ -82,12 +82,44 @@ const _fmtBarK = (v) => {
   return v.toFixed(2);
 };
 
-const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true }) => {
+const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true, signed = false }) => {
   const padL = showAxis ? 44 : 4, padR = 8, padT = 20, padB = 22;
   const w = width - padL - padR, h = height - padT - padB;
-  const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   const bw = Math.min(w / data.length * 0.7, 48);
   const gap = w / data.length - bw;
+
+  if (signed) {
+    const maxAbs = Math.max(...data.map(d => Math.abs(d.value ?? 0))) || 1;
+    const zeroY = padT + h / 2;
+    return (
+      <svg width={width} height={height} style={{ display: "block" }}>
+        {showAxis && (
+          <line x1={padL} x2={padL + w} y1={zeroY} y2={zeroY} stroke="var(--line-2)" strokeWidth="1"/>
+        )}
+        {data.map((d, i) => {
+          const x = padL + i * (bw + gap) + gap / 2;
+          const v = d.value ?? 0;
+          const bh = (Math.abs(v) / maxAbs) * (h / 2);
+          const isNeg = v < 0;
+          const barY = isNeg ? zeroY : zeroY - bh;
+          const c = d.color || (isNeg ? "var(--down)" : color);
+          const labelY = isNeg ? zeroY + bh + 11 : barY - 3;
+          const labelText = d.value == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+          return (
+            <g key={i}>
+              {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
+              <text x={x + bw / 2} y={labelY} fontSize="9.5" fill="var(--ink-3)" textAnchor="middle" className="mono">
+                {labelText}
+              </text>
+              <text x={x + bw / 2} y={height - 6} fontSize="10" fill="var(--ink-4)" textAnchor="middle">{d.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+
+  const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       {showAxis && [0, .25, .5, .75, 1].map((p, i) => (

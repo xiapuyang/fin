@@ -93,6 +93,12 @@ async function apiCreateAccount(data)     { return _apiFetch("/api/accounts", _J
 async function apiUpdateAccount(id, data) { return _apiFetch(`/api/accounts/${id}`, _PUT(data)); }
 async function apiDeleteAccount(id)       { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
 
+// ── Benchmark API helpers ────────────────────────────────────────────────────
+async function apiGetBenchmarkDefaults()                  { return _apiFetch("/api/benchmark/defaults"); }
+async function apiGetBenchmarkResults(accountId)          { return _apiFetch(`/api/benchmark/results/${accountId}`); }
+async function apiComputeBenchmark(accountId)             { return _apiFetch(`/api/benchmark/compute/${accountId}`, { method: "POST" }); }
+async function apiUpdateBenchmarkSchemes(accountId, data) { return _apiFetch(`/api/benchmark/schemes/${accountId}`, _PUT(data)); }
+
 // Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).
 const BS_CAT_COLORS = {
   "现金":      "#1F8A4C",

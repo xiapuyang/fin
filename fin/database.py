@@ -102,6 +102,8 @@ _KNOWN_TABLES = {
     "balance_accounts",
     "balance_snapshots",
     "balance_items",
+    "price_history",
+    "benchmark_results",
 }
 
 
@@ -152,6 +154,16 @@ def _migrate_columns(db: "Session") -> None:
             "alert_fires",
             "value",
             "ALTER TABLE alert_fires ADD COLUMN value FLOAT",
+        ),
+        (
+            "accounts",
+            "benchmark_enabled",
+            "ALTER TABLE accounts ADD COLUMN benchmark_enabled TEXT DEFAULT '0'",
+        ),
+        (
+            "accounts",
+            "benchmark_schemes",
+            "ALTER TABLE accounts ADD COLUMN benchmark_schemes TEXT",
         ),
     ]
     _KNOWN_TABLES.add("watchlist")
@@ -341,6 +353,16 @@ def _migrate_indexes(db: "Session") -> None:
             "ix_ledger_user_date",
             "CREATE INDEX IF NOT EXISTS ix_ledger_user_date ON ledger(user_id, date)",
         ),
+        (
+            "uq_price_history_sym_date",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_history_sym_date "
+            "ON price_history(symbol, date)",
+        ),
+        (
+            "uq_benchmark_results_acct_date",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_results_acct_date "
+            "ON benchmark_results(account_id, computed_date)",
+        ),
     ]
     existing = {
         row[1]
@@ -458,6 +480,8 @@ def init_db() -> None:
     import fin.models.balance_snapshot  # noqa: F401
     import fin.models.balance_item  # noqa: F401
     import fin.models.dividend_history  # noqa: F401
+    import fin.models.price_history  # noqa: F401
+    import fin.models.benchmark_result  # noqa: F401
 
     db: Session = SessionLocal()
     try:
