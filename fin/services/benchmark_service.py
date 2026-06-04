@@ -572,6 +572,12 @@ def _compute_portfolio_xirr(
     cutoff = account.cutoff_date or ""
     # share delta: code -> float (positive = net bought since snapshot)
     delta: dict[str, float] = defaultdict(float)
+    # CASH delta is in CASH's native currency (same units as h.shares for CASH holding)
+    cash_currency = (best["CASH"].currency if "CASH" in best else "USD") or "USD"
+    cash_fx = fx.get(cash_currency, 1.0)
+    # Only adjust CASH for transactions that occurred after the CASH snapshot date.
+    # The CASH snapshot already reflects all flows up to that point.
+    cash_snap_date = (best["CASH"].snapshot_name if "CASH" in best else "") or ""
     for t in transactions:
         if cutoff and t.date < cutoff:
             continue
@@ -582,6 +588,13 @@ def _compute_portfolio_xirr(
             delta[t.code] += t.shares
         else:
             delta[t.code] -= t.shares
+        # Deduct/credit CASH for post-snapshot stock trades (CASH snapshot is fixed)
+        if t.code != "CASH" and "CASH" in best and t.date > cash_snap_date:
+            cost_in_cash = t.shares * t.price * fx.get(t.currency, 1.0) / cash_fx
+            if t.side == "buy":
+                delta["CASH"] -= cost_in_cash
+            else:
+                delta["CASH"] += cost_in_cash
 
     terminal_usd = 0.0
     for code, h in best.items():
