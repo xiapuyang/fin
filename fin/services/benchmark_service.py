@@ -298,6 +298,7 @@ def _resolve_schemes(db: Session, account: AccountModel) -> list[dict]:
         .filter(
             BenchmarkCustomSchemeModel.account_id == account.id,
             BenchmarkCustomSchemeModel.enabled != 0,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 0,
         )
         .order_by(BenchmarkCustomSchemeModel.id)
         .all()

@@ -2168,13 +2168,19 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
   const isNonUSD = account.currency && account.currency !== "USD";
 
+  const _portfolioSnapLabel = (name) => {
+    const m = name.match(/Portfolio (\d{4})-(\d{2})-\d{2}/);
+    if (!m) return name;
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `Portfolio ${months[+m[2]-1]}'${m[1].slice(2)}`;
+  };
+
   // Delta series for the "diff" tab — XIRR relative to a reference scheme
   const _diffData = React.useMemo(() => {
     if (!history || !history.series.length) return { series: [], ref: null, options: [] };
-    const portfolioLabel = I18N.t("benchmark.return.portfolio");
     const allSeries = history.series
-      .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
-      .map(s => ({ ...s, name: s.id === "__portfolio__" ? portfolioLabel : _schemeLabel(s.id, s.name) }));
+      .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
+      .map(s => ({ ...s, name: s.is_portfolio_snap ? _portfolioSnapLabel(s.name) : _schemeLabel(s.id, s.name) }));
     const options = allSeries.map(s => ({ id: s.id, name: s.name }));
     const refId = allSeries.some(s => s.id === diffRefId) ? diffRefId
       : (allSeries.find(s => s.id === "sp500") || allSeries[0])?.id;
@@ -2238,9 +2244,9 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
           {/* History charts — Trend line + XIRR Range */}
           {history && history.series.length > 0 && (() => {
             const visibleSeries = history.series
-              .filter(s => s.id === "__portfolio__" || activeIds.has(s.id))
-              .map(s => s.id === "__portfolio__"
-                ? { ...s, name: I18N.t("benchmark.return.portfolio") }
+              .filter(s => s.is_portfolio_snap || activeIds.has(s.id))
+              .map(s => s.is_portfolio_snap
+                ? { ...s, name: _portfolioSnapLabel(s.name) }
                 : { ...s, name: _schemeLabel(s.id, s.name) });
             // currentMap: name → current XIRR for range chart dots
             const currentMap = {};

@@ -171,6 +171,11 @@ def _migrate_columns(db: "Session") -> None:
             "enabled",
             "ALTER TABLE benchmark_custom_schemes ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
         ),
+        (
+            "benchmark_custom_schemes",
+            "is_portfolio_snapshot",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN is_portfolio_snapshot INTEGER NOT NULL DEFAULT 0",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:

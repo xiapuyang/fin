@@ -16,6 +16,7 @@ class BenchmarkCustomSchemeModel(Base):
     )  # JSON: [{"symbol": str, "pct": float}]
     cash_pct = Column(Float, nullable=False, default=0.0)
     enabled = Column(Integer, nullable=False, default=1)
+    is_portfolio_snapshot = Column(Integer, nullable=False, default=0)
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

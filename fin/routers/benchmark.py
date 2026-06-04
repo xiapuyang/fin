@@ -256,13 +256,35 @@ def update_schemes(
 # ── Custom scheme CRUD ────────────────────────────────────────────────────────
 
 
+def _sample_portfolio_snaps(snap_ids: list[str], max_total: int = 6) -> set[str]:
+    """Return a sampled subset of portfolio snapshot bench_ids.
+
+    Always includes the latest (last element). Returns at most max_total IDs.
+    snap_ids must be sorted oldest-first by integer ID.
+    """
+    if not snap_ids:
+        return set()
+    if len(snap_ids) <= max_total:
+        return set(snap_ids)
+    latest = snap_ids[-1]
+    older = snap_ids[:-1]
+    n_older = max_total - 1
+    step = max(1, len(older) // n_older)
+    sampled = {older[i] for i in range(0, len(older), step)}
+    sampled.add(latest)
+    return sampled
+
+
 @router.get("/custom-schemes/{account_id}")
 def list_custom_schemes(account_id: int, db: Session = Depends(get_db)):
-    """List all custom schemes for an account."""
+    """List all custom schemes for an account (excludes portfolio snapshots)."""
     _get_account_or_404(db, account_id)
     rows = (
         db.query(BenchmarkCustomSchemeModel)
-        .filter(BenchmarkCustomSchemeModel.account_id == account_id)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 0,
+        )
         .order_by(BenchmarkCustomSchemeModel.id)
         .all()
     )
@@ -462,22 +484,32 @@ def get_history(
     )
     custom_map = {str(cs.id): cs.name for cs in customs}
 
+    # Portfolio snapshots: sampled for display; __portfolio__ excluded from trend
+    snap_schemes = [cs for cs in customs if cs.is_portfolio_snapshot]
+    snap_schemes.sort(key=lambda cs: cs.id)
+    snap_id_list = [str(cs.id) for cs in snap_schemes]
+    sampled_snap_ids = _sample_portfolio_snaps(snap_id_list)
+
     def bench_name(bid: str) -> str:
-        if bid == _PORTFOLIO_BENCH_ID:
-            return "Portfolio"
         return defaults_map.get(bid) or custom_map.get(bid) or bid
 
-    order_map: dict[str, int] = {_PORTFOLIO_BENCH_ID: -1}
+    order_map: dict[str, int] = {}
     for i, d in enumerate(_get_defaults()):
         order_map[d["id"]] = i
 
-    series = sorted(
-        [
-            {"id": bid, "name": bench_name(bid), "data": data}
-            for bid, data in by_bench.items()
-        ],
-        key=lambda s: order_map.get(s["id"], 999),
-    )
+    snap_id_set = set(snap_id_list)
+    series_list = []
+    for bid, data in by_bench.items():
+        if bid == _PORTFOLIO_BENCH_ID:
+            continue  # real-time only; not meaningful as historical trend
+        if bid in snap_id_set and bid not in sampled_snap_ids:
+            continue  # unsampled portfolio snapshot
+        s: dict = {"id": bid, "name": bench_name(bid), "data": data}
+        if bid in sampled_snap_ids:
+            s["is_portfolio_snap"] = True
+        series_list.append(s)
+
+    series = sorted(series_list, key=lambda s: order_map.get(s["id"], 999))
 
     return {"granularity": granularity, "series": series}
 

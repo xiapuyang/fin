@@ -6,6 +6,7 @@ XIRR on every trading day from the earliest deposit to yesterday. Skips dates
 that already have a result row so re-runs are idempotent.
 """
 
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from fin.models.account import AccountModel
+from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
 from fin.models.benchmark_result import BenchmarkResultModel
 from fin.models.holding import HoldingModel
 from fin.models.income import IncomeModel
@@ -157,6 +159,57 @@ def _build_portfolio_scheme(
     }
 
 
+def _get_or_create_portfolio_snapshot(
+    db: Session,
+    account_id: int,
+    portfolio_scheme: dict,
+    snap_date: str,
+) -> BenchmarkCustomSchemeModel:
+    """Get or create a portfolio composition snapshot for *snap_date*.
+
+    Compares allocations + cash_pct against the most recent snapshot. If
+    unchanged, returns the existing record so backfill reuses its bench_id
+    without creating duplicate rows.
+    """
+    new_allocs = json.dumps(
+        sorted(portfolio_scheme["allocations"], key=lambda a: a["symbol"])
+    )
+    new_cash = round(portfolio_scheme.get("cash_pct", 0.0), 4)
+
+    latest = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+        )
+        .order_by(BenchmarkCustomSchemeModel.id.desc())
+        .first()
+    )
+
+    if latest is not None:
+        existing_allocs = json.dumps(
+            sorted(json.loads(latest.allocations_json), key=lambda a: a["symbol"])
+        )
+        if existing_allocs == new_allocs and abs(latest.cash_pct - new_cash) < 0.01:
+            return latest
+
+    row = BenchmarkCustomSchemeModel(
+        account_id=account_id,
+        name=f"Portfolio {snap_date}",
+        allocations_json=new_allocs,
+        cash_pct=new_cash,
+        enabled=1,
+        is_portfolio_snapshot=1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    logger.info(
+        "Portfolio snapshot created for account %s on %s", account_id, snap_date
+    )
+    return row
+
+
 def backfill_account(db: Session, account_id: int) -> int:
     """Compute and store missing historical benchmark results for *account_id*.
 
@@ -222,7 +275,7 @@ def backfill_account(db: Session, account_id: int) -> int:
             logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
             price_cache[sym] = []
 
-    # Add portfolio pseudo-scheme; fetch prices for any new symbols
+    # Build a composition snapshot from current holdings and add it to backfill
     portfolio_scheme = _build_portfolio_scheme(db, account, fx, price_cache)
     all_schemes = list(schemes)
     if portfolio_scheme:
@@ -234,7 +287,10 @@ def backfill_account(db: Session, account_id: int) -> int:
                 except Exception as exc:
                     logger.warning("Backfill price fetch failed for %s: %s", sym, exc)
                     price_cache[sym] = []
-        all_schemes.append(portfolio_scheme)
+        snap = _get_or_create_portfolio_snapshot(
+            db, account_id, portfolio_scheme, yesterday
+        )
+        all_schemes.append({**portfolio_scheme, "id": str(snap.id)})
 
     # Load existing (bench_id, date) pairs to skip
     existing = {
