@@ -2119,6 +2119,13 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
     return parts.join(' · ');
   };
 
+  const _fmtUSD = (v) => {
+    if (v == null) return null;
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
+    return `$${Math.round(v)}`;
+  };
+
   const chartData = React.useMemo(() => {
     const portfolioLabel = I18N.t("benchmark.return.portfolio");
     if (results?.schemes) {
@@ -2156,12 +2163,6 @@ const BenchmarkTab = ({ account, onAccountUpdated }) => {
   const getXIRR = (id) => results?.schemes?.find(s => s.id === id)?.xirr ?? null;
   const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
   const isNonUSD = account.currency && account.currency !== "USD";
-  const _fmtUSD = (v) => {
-    if (v == null) return null;
-    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-    if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
-    return `$${Math.round(v)}`;
-  };
 
   if (error) return <Empty text={I18N.t("benchmark.error")}/>;
 

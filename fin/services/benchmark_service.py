@@ -421,15 +421,17 @@ def compute(db: Session, account_id: int) -> dict:
             logger.warning("Price fetch failed for %s: %s", sym, exc)
             price_cache[sym] = []
 
+    # Always fetch live price for terminal value — price_history is only used
+    # for historical deposit-date prices in the XIRR simulation.
     current_prices: dict[str, float] = {}
     for sym in all_symbols:
-        series = price_cache.get(sym, [])
-        if series:
-            current_prices[sym] = series[-1]["close"]
+        live = _fetch_current_price(sym)
+        if live:
+            current_prices[sym] = live
         else:
-            price = _fetch_current_price(sym)
-            if price:
-                current_prices[sym] = price
+            series = price_cache.get(sym, [])
+            if series:
+                current_prices[sym] = series[-1]["close"]
 
     fx = _fetch_fx(db)
 
@@ -597,7 +599,8 @@ def _compute_portfolio_xirr(
                     logger.warning("Price fetch failed for holding %s: %s", code, exc)
                     price_cache[code] = []
             series = price_cache.get(code, [])
-            price = series[-1]["close"] if series else _fetch_current_price(code)
+            live = _fetch_current_price(code)
+            price = live if live else (series[-1]["close"] if series else None)
         if price is None:
             continue
         h_fx = fx.get(h.currency, 1.0)
