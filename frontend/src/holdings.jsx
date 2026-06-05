@@ -1422,17 +1422,10 @@ const RB_DEFAULT_CONFIG = {
 
 // ── Rebalance edit modal ────────────────────────────────────────────────────────
 
-const RebalanceEditModal = ({ config, birthDate = "", presets = RB_PRESETS, onSave, onClose }) => {
+const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
   const [draft, setDraft] = React.useState(JSON.parse(JSON.stringify(config)));
   const [codesTexts, setCodesTexts] = React.useState(config.buckets.map(b => (b.codes || []).join(", ")));
 
-  const applyPreset = (p) => {
-    const newBuckets = p.id === "age_rule"
-      ? computeAgeRuleBuckets(computeAge(birthDate))
-      : JSON.parse(JSON.stringify(p.buckets));
-    setDraft(d => ({ ...d, presetId: p.id, buckets: newBuckets }));
-    setCodesTexts(newBuckets.map(b => (b.codes || []).join(", ")));
-  };
   const updateBucket = (i, key, val) => setDraft(d => ({
     ...d, buckets: d.buckets.map((b, j) => j === i ? { ...b, [key]: val } : b),
   }));
@@ -1452,41 +1445,6 @@ const RebalanceEditModal = ({ config, birthDate = "", presets = RB_PRESETS, onSa
   return (
     <Modal open={true} onClose={onClose} title={I18N.t("holdings.rebalance.editTarget")} width={500}>
       <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.preset")}</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-          {presets.map(p => (
-            <button key={p.id} onClick={() => applyPreset(p)} style={{
-              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
-              borderColor: draft.presetId === p.id ? "var(--accent)" : "var(--line-2)",
-              background:  draft.presetId === p.id ? "var(--accent-soft)" : "transparent",
-              color:       draft.presetId === p.id ? "var(--accent)" : "var(--ink-3)",
-            }}>{p.label}</button>
-          ))}
-        </div>
-
-        {(() => {
-          const pr = presets.find(p => p.id === draft.presetId);
-          return pr && pr.id !== "personal" && (
-            <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 18, borderLeft: "3px solid var(--accent)" }}>
-              <div style={{ fontSize: 12, color: "var(--ink-2)", fontStyle: "italic" }}>"{pr.quote}"</div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4 }}>— {pr.author}</div>
-            </div>
-          );
-        })()}
-
-        {draft.presetId === "age_rule" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("app.settings.birthDate")}</span>
-            {birthDate ? (
-              <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>
-                {birthDate} · {computeAge(birthDate)} · Eq {Math.max(0, 100 - computeAge(birthDate))}% / {I18N.t("base.market.bonds")} {Math.min(100, computeAge(birthDate))}%
-              </span>
-            ) : (
-              <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("holdings.rebalance.noBirthDate")} · {I18N.t("holdings.rebalance.noBirthDate.hint")}</span>
-            )}
-          </div>
-        )}
-
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.buckets")}</div>
         {draft.buckets.map((b, i) => (
           <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
@@ -1625,7 +1583,9 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     if (acctConfigType === "global") return globalConfig;
     if (acctConfigType === "preset") {
       const sp = systemPresets.find(p => p.id === acctPresetId) || systemPresets[0];
-      const buckets = JSON.parse(JSON.stringify(sp?.buckets || []));
+      const buckets = acctPresetId === "age_rule"
+        ? computeAgeRuleBuckets(computeAge(birthDate))
+        : JSON.parse(JSON.stringify(sp?.buckets || []));
       const codesOverride = accountConfig?.codes_override || {};
       Object.entries(codesOverride).forEach(([i, codes]) => { if (buckets[i]) buckets[i].codes = codes; });
       return { presetId: acctPresetId, buckets, trigger: acctTrigger };
@@ -1772,16 +1732,32 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     <Card padding={20}>
       {/* Per-account: config type selector */}
       {accountId && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 4 }}>{I18N.t("holdings.rb.acct.configType.label")}</span>
-          {[["global","holdings.rb.acct.configType.global"],["preset","holdings.rb.acct.configType.preset"],["personal","holdings.rb.acct.configType.personal"]].map(([t, key]) => (
-            <button key={t} onClick={() => switchAcctConfigType(t)} style={{
-              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
-              borderColor: acctConfigType === t ? "var(--accent)" : "var(--line-2)",
-              background:  acctConfigType === t ? "var(--accent-soft)" : "transparent",
-              color:       acctConfigType === t ? "var(--accent)" : "var(--ink-3)",
-            }}>{I18N.t(key)}</button>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+          {[
+            ["global",   "holdings.rb.acct.configType.global",   "holdings.rb.acct.configType.globalDesc"],
+            ["preset",   "holdings.rb.acct.configType.preset",   "holdings.rb.acct.configType.presetDesc"],
+            ["personal", "holdings.rb.acct.configType.personal", "holdings.rb.acct.configType.personalDesc"],
+          ].map(([t, labelKey, descKey]) => {
+            const active = acctConfigType === t;
+            return (
+              <button key={t} onClick={() => switchAcctConfigType(t)} style={{
+                padding: "10px 12px", borderRadius: 8, border: "1.5px solid", textAlign: "left", cursor: "pointer",
+                borderColor: active ? "var(--accent)" : "var(--line-2)",
+                background:  active ? "var(--accent-soft)" : "var(--bg-deep)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{
+                    width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
+                    border: `2px solid ${active ? "var(--accent)" : "var(--ink-4)"}`,
+                    background: active ? "var(--accent)" : "transparent",
+                    display: "inline-block",
+                  }}/>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: active ? "var(--accent)" : "var(--ink-2)" }}>{I18N.t(labelKey)}</span>
+                </div>
+                <div style={{ fontSize: 10.5, color: active ? "var(--accent-muted, var(--ink-3))" : "var(--ink-4)", lineHeight: 1.4, paddingLeft: 18 }}>{I18N.t(descKey)}</div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -1930,10 +1906,11 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.triggers")}</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14, opacity: isReadOnly ? 0.5 : 1 }}>
             {RB_TRIGGER_MODES.map(m => (
-              <button key={m.id} onClick={() => setTrigger("mode", m.id)} style={{
-                padding: "8px 10px", borderRadius: 8, border: "1px solid", textAlign: "left", cursor: "pointer",
+              <button key={m.id} onClick={() => !isReadOnly && setTrigger("mode", m.id)} style={{
+                padding: "8px 10px", borderRadius: 8, border: "1px solid", textAlign: "left",
+                cursor: isReadOnly ? "default" : "pointer",
                 borderColor: mode === m.id ? "var(--accent)" : "var(--line-2)",
                 background:  mode === m.id ? "var(--accent-soft)" : "var(--bg-deep)",
               }}>
@@ -1943,18 +1920,18 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
             ))}
           </div>
 
-          <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, opacity: isReadOnly ? 0.5 : 1 }}>
             {(mode === "calendar" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.freq")}</span>
-                <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }}/>
+                <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }} disabled={isReadOnly}/>
               </div>
             )}
             {(mode === "absolute" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.absThreshold")}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Input value={String(absDriftPp)} onChange={v => setTrigger("absDriftPp", parseFloat(v) || 5)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
+                  <Input value={String(absDriftPp)} onChange={v => setTrigger("absDriftPp", parseFloat(v) || 5)} inputMode="decimal" style={{ width: 56, textAlign: "right" }} readOnly={isReadOnly}/>
                   <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>pp</span>
                 </div>
               </div>
@@ -1963,7 +1940,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.relThreshold")}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Input value={String(relDriftPct)} onChange={v => setTrigger("relDriftPct", parseFloat(v) || 20)} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
+                  <Input value={String(relDriftPct)} onChange={v => setTrigger("relDriftPct", parseFloat(v) || 20)} inputMode="decimal" style={{ width: 56, textAlign: "right" }} readOnly={isReadOnly}/>
                   <span style={{ fontSize: 12, color: "var(--ink-4)", width: 18 }}>%</span>
                 </div>
               </div>
@@ -2000,7 +1977,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
       </div>
 
       {editOpen && (
-        <RebalanceEditModal config={config} birthDate={birthDate} presets={systemPresets} onSave={next => {
+        <RebalanceEditModal config={config} birthDate={birthDate} onSave={next => {
           saveConfig({ buckets: next.buckets });
           setEditOpen(false);
         }} onClose={() => setEditOpen(false)}/>

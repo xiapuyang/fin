@@ -260,7 +260,7 @@ const DateInput = ({ value, onChange, style = {}, ...rest }) => {
   );
 };
 
-const Select = ({ value, onChange, options, style = {} }) => {
+const Select = ({ value, onChange, options, style = {}, disabled = false }) => {
   return (
     <div style={{
       display: "inline-flex", alignItems: "center",
@@ -268,9 +268,9 @@ const Select = ({ value, onChange, options, style = {} }) => {
       borderRadius: 8, height: 34, padding: "0 8px 0 12px", gap: 4, position: "relative",
       ...style,
     }}>
-      <select value={value} onChange={e => onChange(e.target.value)} style={{
+      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} style={{
         appearance: "none", border: "none", background: "transparent", paddingRight: 18,
-        fontSize: 13, color: "var(--ink)", height: "100%", cursor: "pointer", flex: 1, width: "100%",
+        fontSize: 13, color: "var(--ink)", height: "100%", cursor: disabled ? "default" : "pointer", flex: 1, width: "100%",
       }}>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
