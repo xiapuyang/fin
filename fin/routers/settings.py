@@ -96,14 +96,19 @@ def get_rebalance_defaults():
 
 @router.get("/rebalance")
 def get_rebalance():
-    """Return the stored rebalance configuration."""
-    return settings_store.load().get("rebalance") or {}
+    """Return the stored rebalance configuration.
+
+    Reads rebalance_v3 first (v3 format); falls back to rebalance (v1/v2 legacy)
+    so the frontend migration can detect the old format and write v3.
+    """
+    s = settings_store.load()
+    return s.get("rebalance_v3") or s.get("rebalance") or {}
 
 
 @router.put("/rebalance")
 def put_rebalance(data: Any = Body(...)):
-    """Persist rebalance configuration and return it."""
-    settings_store.save({"rebalance": data})
+    """Persist rebalance configuration to rebalance_v3; legacy rebalance key is untouched."""
+    settings_store.save({"rebalance_v3": data})
     return data
 
 

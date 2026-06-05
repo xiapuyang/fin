@@ -135,6 +135,7 @@
     "timezone": "",
     "display_name": "",
     "rebalance": null,
+    "rebalance_v3": null,
     "birth_date": "",
     "fire_monthly_exp": null,
     "fire_cagr": null,
