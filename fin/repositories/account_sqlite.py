@@ -42,6 +42,7 @@ class AccountSQLiteRepository:
             note=data.note,
             cutoff_date=data.cutoff_date,
             benchmark_enabled="1" if data.benchmark_enabled else "0",
+            rebalance_enabled="1" if data.rebalance_enabled else "0",
         )
         self._db.add(account)
         self._db.commit()
@@ -77,6 +78,10 @@ class AccountSQLiteRepository:
                 account.benchmark_enabled = "1" if val else "0"
             elif field == "benchmark_schemes":
                 account.benchmark_schemes = json.dumps(val) if val is not None else None
+            elif field == "rebalance_enabled":
+                account.rebalance_enabled = "1" if val else "0"
+            elif field == "rebalance_config":
+                account.rebalance_config = json.dumps(val) if val is not None else None
             else:
                 setattr(account, field, val)
         account.update_time = datetime.now(timezone.utc)

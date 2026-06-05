@@ -22,6 +22,8 @@ class AccountModel(Base):
     benchmark_schemes = Column(
         String, nullable=True
     )  # JSON: {enabled_defaults, custom_schemes}
+    rebalance_enabled = Column(String, nullable=True, default="0")
+    rebalance_config = Column(String, nullable=True)  # JSON: {type, ...}
     create_time = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )

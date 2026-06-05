@@ -186,6 +186,16 @@ def _migrate_columns(db: "Session") -> None:
             "user_id",
             "ALTER TABLE benchmark_results ADD COLUMN user_id BIGINT",
         ),
+        (
+            "accounts",
+            "rebalance_enabled",
+            "ALTER TABLE accounts ADD COLUMN rebalance_enabled TEXT DEFAULT '0'",
+        ),
+        (
+            "accounts",
+            "rebalance_config",
+            "ALTER TABLE accounts ADD COLUMN rebalance_config TEXT",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:

@@ -11,6 +11,7 @@ class AccountCreate(BaseModel):
     note: Optional[str] = None
     cutoff_date: Optional[str] = None
     benchmark_enabled: bool = False
+    rebalance_enabled: bool = False
 
     @field_validator("name")
     @classmethod
@@ -33,6 +34,8 @@ class AccountUpdate(BaseModel):
     symbol_markets: Optional[dict[str, str]] = None
     benchmark_enabled: Optional[bool] = None
     benchmark_schemes: Optional[dict] = None
+    rebalance_enabled: Optional[bool] = None
+    rebalance_config: Optional[dict] = None
 
     @field_validator("cutoff_date")
     @classmethod
@@ -51,5 +54,7 @@ class AccountResponse(BaseModel):
     symbol_markets: Optional[dict]
     benchmark_enabled: bool
     benchmark_schemes: Optional[dict]
+    rebalance_enabled: bool
+    rebalance_config: Optional[dict]
     create_time: str
     update_time: str

@@ -68,6 +68,12 @@ def _account_response(a: AccountModel) -> AccountResponse:
             bs = json.loads(a.benchmark_schemes)
         except json.JSONDecodeError:
             bs = None
+    rc = None
+    if a.rebalance_config:
+        try:
+            rc = json.loads(a.rebalance_config)
+        except json.JSONDecodeError:
+            rc = None
     return AccountResponse(
         id=a.id,
         name=a.name,
@@ -79,6 +85,8 @@ def _account_response(a: AccountModel) -> AccountResponse:
         symbol_markets=sm,
         benchmark_enabled=a.benchmark_enabled == "1",
         benchmark_schemes=bs,
+        rebalance_enabled=a.rebalance_enabled == "1",
+        rebalance_config=rc,
         create_time=a.create_time.strftime(TS_FMT),
         update_time=a.update_time.strftime(TS_FMT),
     )
