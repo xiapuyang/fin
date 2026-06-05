@@ -32,31 +32,34 @@ def _exclusive_lock():
     Yields if the lock is acquired. Raises RuntimeError if already held
     by another process (cron job or scheduler instance).
     """
-    lock_file = open(ALERT_LOCK_PATH, "w")
+    lock_file = open(ALERT_LOCK_PATH, "a")
     try:
+        import fcntl
+
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except ImportError:
+        import msvcrt
+
         try:
-            import fcntl
-
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except ImportError:
-            import msvcrt
-
             msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError:
             lock_file.close()
             raise RuntimeError("lock held")
+    except OSError:
+        lock_file.close()
+        raise RuntimeError("lock held")
+    try:
+        yield
+    finally:
         try:
-            yield
-        finally:
-            try:
-                import fcntl
+            import fcntl
 
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
-            except ImportError:
-                pass
-            lock_file.close()
-    except RuntimeError:
-        raise
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+        except ImportError:
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        lock_file.close()
 
 
 def check_condition(
@@ -116,21 +119,54 @@ def run_check(force: bool = False) -> None:
         force: Skip market-state REGULAR check (useful for testing).
     """
     try:
-        lock_ctx = _exclusive_lock()
-        lock_ctx.__enter__()
+        with _exclusive_lock():
+            _run_check_inner(force=force)
     except RuntimeError:
         logger.info(
             "Alert check already running (lock held by another process), skipping"
         )
-        return
 
-    try:
-        _run_check_inner(force=force)
-    finally:
+
+def _fetch_prices(
+    quote_service: QuoteService, symbols: list[str], force: bool
+) -> dict[str, tuple[float | None, float | None]]:
+    """Fetch current price and change_pct for each symbol.
+
+    Returns a dict mapping symbol to (price, change_pct). Entries are
+    (None, None) on fetch failure or when market state is not REGULAR.
+    """
+    price_data: dict[str, tuple[float | None, float | None]] = {}
+    for symbol in symbols:
         try:
-            lock_ctx.__exit__(None, None, None)
+            quote = quote_service.get_quote(symbol)
+            if (
+                not quote
+                or quote.get("price") is None
+                or quote.get("change_pct") is None
+            ):
+                logger.warning("Missing price data for %s", symbol)
+                price_data[symbol] = (None, None)
+                continue
+            market_state = quote.get("market_state")
+            if not force and market_state is not None and market_state != "REGULAR":
+                logger.info(
+                    "Market not REGULAR for %s (state=%s), skipping",
+                    symbol,
+                    market_state,
+                )
+                price_data[symbol] = (None, None)
+                continue
+            price_data[symbol] = (quote["price"], quote["change_pct"])
+            logger.info(
+                "%s: price=%.4g change=%.2f%%",
+                symbol,
+                quote["price"],
+                quote["change_pct"],
+            )
         except Exception:
-            pass
+            logger.exception("Failed to fetch %s", symbol)
+            price_data[symbol] = (None, None)
+    return price_data
 
 
 def _run_check_inner(force: bool = False) -> None:
@@ -175,37 +211,7 @@ def _run_check_inner(force: bool = False) -> None:
         logger.info("Fetching data for %d symbols: %s", len(symbols), symbols)
 
         quote_service = QuoteService(db, build_default_providers())
-        price_data: dict[str, tuple[float, float]] = {}
-        for symbol in symbols:
-            try:
-                quote = quote_service.get_quote(symbol)
-                if (
-                    not quote
-                    or quote.get("price") is None
-                    or quote.get("change_pct") is None
-                ):
-                    logger.warning("Missing price data for %s", symbol)
-                    price_data[symbol] = (None, None)
-                    continue
-                market_state = quote.get("market_state")
-                if not force and market_state is not None and market_state != "REGULAR":
-                    logger.info(
-                        "Market not REGULAR for %s (state=%s), skipping",
-                        symbol,
-                        market_state,
-                    )
-                    price_data[symbol] = (None, None)
-                    continue
-                price_data[symbol] = (quote["price"], quote["change_pct"])
-                logger.info(
-                    "%s: price=%.4g change=%.2f%%",
-                    symbol,
-                    quote["price"],
-                    quote["change_pct"],
-                )
-            except Exception:
-                logger.exception("Failed to fetch %s", symbol)
-                price_data[symbol] = (None, None)
+        price_data = _fetch_prices(quote_service, symbols, force)
 
         fired: list[tuple] = []
         for alert in alerts:

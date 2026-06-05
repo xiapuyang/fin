@@ -84,9 +84,9 @@ class AccountSQLiteRepository:
         new_name = account.name
         if new_name != old_name:
             for model in (HoldingModel, TransactionModel, IncomeModel):
-                self._db.query(model).filter(model.account == old_name).update(
-                    {"account": new_name}, synchronize_session=False
-                )
+                self._db.query(model).filter(
+                    model.account == old_name, model.user_id == user_id
+                ).update({"account": new_name}, synchronize_session=False)
         self._db.commit()
         self._db.refresh(account)
         return account
@@ -98,8 +98,8 @@ class AccountSQLiteRepository:
         if account:
             name = account.name
             for model in (HoldingModel, TransactionModel, IncomeModel):
-                self._db.query(model).filter(model.account == name).delete(
-                    synchronize_session=False
-                )
+                self._db.query(model).filter(
+                    model.account == name, model.user_id == user_id
+                ).delete(synchronize_session=False)
             self._db.delete(account)
             self._db.commit()

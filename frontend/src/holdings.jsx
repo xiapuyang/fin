@@ -374,14 +374,19 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const confirmDeleteAccount = async () => {
     if (!deleteAccountTarget) return;
     const { id } = deleteAccountTarget;
-    await apiDeleteAccount(id);
-    const next = accounts.filter(a => a.id !== id);
-    setAccounts(next);
-    setHoldings(prev => prev.filter(h => h.account !== deleteAccountTarget.name));
-    setTransactions(prev => prev.filter(t => t.account !== deleteAccountTarget.name));
-    setIncome(prev => prev.filter(i => i.account !== deleteAccountTarget.name));
-    if (selectedAccountId === id) setSelectedAccountId(next[0]?.id || null);
-    setDeleteAccountTarget(null);
+    try {
+      await apiDeleteAccount(id);
+      const next = accounts.filter(a => a.id !== id);
+      setAccounts(next);
+      setHoldings(prev => prev.filter(h => h.account !== deleteAccountTarget.name));
+      setTransactions(prev => prev.filter(t => t.account !== deleteAccountTarget.name));
+      setIncome(prev => prev.filter(i => i.account !== deleteAccountTarget.name));
+      if (selectedAccountId === id) setSelectedAccountId(next[0]?.id || null);
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+    } finally {
+      setDeleteAccountTarget(null);
+    }
   };
 
   if (loading) return (

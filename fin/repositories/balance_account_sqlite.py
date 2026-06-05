@@ -157,9 +157,11 @@ class BalanceAccountSQLiteRepository:
         # Nullify refs in broker/wallet accounts table
         self._db.query(AccountModel).filter(
             AccountModel.balance_account_id == account_id,
-        ).update({"balance_account_id": None, "balance_sub_account_id": None})
+            AccountModel.user_id == user_id,
+        ).update({"balance_account_id": None})
         self._db.query(AccountModel).filter(
             AccountModel.balance_sub_account_id == account_id,
+            AccountModel.user_id == user_id,
         ).update({"balance_sub_account_id": None})
         self._db.delete(row)
         self._db.commit()

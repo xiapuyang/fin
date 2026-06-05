@@ -860,5 +860,5 @@
   "balance.snap.delete.body": "将永久删除该快照及其中全部 {count} 条数据。",
   "balance.snap.delete.typeHint": "输入快照日期以确认",
   "balance.acct.delete.title": "删除资产负债账户",
-  "balance.acct.delete.body": "该账户的 balance_items 引用将被解除关联，指向此账户的券商/钱包账户关联也将被清除。"
+  "balance.acct.delete.body": "该账户的资产负债明细引用将被解除关联，指向此账户的券商/钱包账户关联也将被清除。"
 }
