@@ -70,6 +70,22 @@ xattr -d com.apple.quarantine /Applications/Fin.app
 - **资产负债 Balance** — 账户层级（父/子）、多币种快照对比、复制上一期快照、自动 FX 换算到统一净值
 - **退休计划 FIRE** — 蒙特卡洛模拟 + 确定性 CAGR 反推 + 通胀调整
 
+## 邮件提醒
+
+价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
+
+1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
+2. 在应用**设置**中填写 API Key、Inbox 地址和**通知邮箱**，打开通知开关
+
+## Claude Code Skills
+
+批量数据操作可使用 [`skills/`](skills/README.md) 中内置的两个 Claude Code skill：
+
+- **fin-import** — 从 CSV 导出或粘贴文本批量导入交易记录、持仓、收入、账本条目、资产负债项目、提醒和自选股。通过 LLM 处理真实银行/券商的脏数据。
+- **fin-accounts** — 从描述或内置模板批量创建资产负债账户（父账户 + 子账户）。
+
+安装说明见 [`skills/README.md`](skills/README.md)。
+
 ---
 
 ## 开发
@@ -103,13 +119,6 @@ uv run python serve.py     # http://localhost:8888
 ./stop.sh     # 停止
 ./restart.sh  # 重启
 ```
-
-### 邮件提醒（可选）
-
-价格提醒触发时可以发邮件。不配置也能正常使用，提醒照常记录到 DB，只是不发邮件。
-
-1. 在 [agentmail.to](https://agentmail.to) 注册，获取 API Key 和 Inbox ID
-2. 在应用**设置**中填写 API Key、Inbox 地址和**通知邮箱**，打开通知开关
 
 ## 技术栈
 

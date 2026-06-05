@@ -48,13 +48,6 @@ xattr -d com.apple.quarantine /Applications/Fin.app
 
 1. Download the `.exe` installer, run it, launch Fin from the Start menu.
 
-### Email alerts (optional)
-
-Price alerts can send email when triggered. Without configuration alerts still record to the DB — email is optional.
-
-1. Sign up at [agentmail.to](https://agentmail.to), get an API Key and Inbox ID.
-2. In the app **Settings**, enter the API Key, Inbox address, and **notification email**, then enable notifications.
-
 ---
 
 ## Why fin
@@ -76,6 +69,13 @@ Price alerts can send email when triggered. Without configuration alerts still r
 - **Ledger** — Income and expense tracking, category-based monthly summaries
 - **Balance Sheet** — Account hierarchy (parent / child), multi-currency snapshots, copy-from-prior-period, automatic FX to unified net worth
 - **FIRE Calculator** — Monte Carlo simulation + deterministic CAGR + inflation adjustment
+
+## Email alerts
+
+Price alerts can send email when triggered. Without configuration alerts still record to the DB — email is optional.
+
+1. Sign up at [agentmail.to](https://agentmail.to), get an API Key and Inbox ID.
+2. In the app **Settings**, enter the API Key, Inbox address, and **notification email**, then enable notifications.
 
 ## Claude Code Skills
 
@@ -118,13 +118,6 @@ Script mode (background, logs to `~/.fin/logs/fin.log`):
 ./run.sh      # start, wait for port bind, open browser
 ./stop.sh     # stop
 ./restart.sh  # restart
-```
-
-### Price alert cron (server mode)
-
-```bash
-# crontab -e
-*/20 * * * * cd /path/to/fin && /path/to/uv run python check_alerts.py
 ```
 
 ## Stack
