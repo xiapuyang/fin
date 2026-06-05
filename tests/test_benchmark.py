@@ -1869,9 +1869,8 @@ def test_backfill_scheme_dates_skips_existing():
 # ── backfill_all exception path ───────────────────────────────────────────────
 
 
-def test_backfill_all_handles_exception(caplog):
+def test_backfill_all_handles_exception():
     """backfill_all should continue to next account when one raises."""
-    import logging
     from fin.models.account import AccountModel
     from fin.models.user import MOCK_USER_ID
     from fin.services.benchmark_history_service import backfill_all
@@ -1885,16 +1884,15 @@ def test_backfill_all_handles_exception(caplog):
     )
     db.commit()
 
-    with caplog.at_level(
-        logging.ERROR, logger="fin.services.benchmark_history_service"
-    ):
+    with patch("fin.services.benchmark_history_service.logger") as mock_log:
         with patch(
             "fin.services.benchmark_history_service.backfill_account",
             side_effect=RuntimeError("fail"),
         ):
             backfill_all(db)  # should not raise
 
-    assert any("Backfill failed" in r.message for r in caplog.records)
+    mock_log.exception.assert_called_once()
+    assert "Backfill failed" in mock_log.exception.call_args[0][0]
     db.close()
     engine.dispose()
 
