@@ -1555,22 +1555,32 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d) return;
-        if (d.presets) {
-          // migrate "current" key → "personal"
-          const presets = d.presets;
+        if (Array.isArray(d.configs)) {
+          // v3 format
+          const map = {};
+          d.configs.forEach(c => { map[c.id] = c; });
+          setActiveId(d.active_id || "personal");
+          setPerPreset(map);
+        } else if (d.presets) {
+          // v2 format — migrate to v3 and save back
+          const presets = { ...d.presets };
           if (presets["current"] && !presets["personal"]) {
             presets["personal"] = presets["current"];
             delete presets["current"];
           }
           const activeId = d.activeId === "current" ? "personal" : (d.activeId || "personal");
+          const configs = Object.entries(presets).map(([id, data]) => ({ id, ...data }));
+          fetch("/api/rebalance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active_id: activeId, configs }) }).catch(() => {});
           setActiveId(activeId);
           setPerPreset(presets);
         } else if (d.presetId) {
-          // migrate v1 flat format
+          // v1 flat format — migrate to v3 and save back
           const id = d.presetId;
           const buckets = rehydrateBuckets(d.buckets, id, d.birthDate);
+          const data = { buckets, trigger: d.trigger, birthDate: d.birthDate || "" };
+          fetch("/api/rebalance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active_id: id, configs: [{ id, ...data }] }) }).catch(() => {});
           setActiveId(id);
-          setPerPreset({ [id]: { buckets, trigger: d.trigger, birthDate: d.birthDate || "" } });
+          setPerPreset({ [id]: data });
         }
       })
       .catch(() => {});
@@ -1590,9 +1600,10 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const persist = (id, data, newMap) => {
     const next = newMap || { ...perPreset, [id]: data };
     setPerPreset(next);
+    const configs = Object.entries(next).map(([cid, cdata]) => ({ id: cid, ...cdata }));
     fetch("/api/rebalance", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activeId: id, presets: next }),
+      body: JSON.stringify({ active_id: id, configs }),
     }).catch(() => {});
   };
 
