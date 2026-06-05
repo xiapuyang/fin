@@ -53,22 +53,29 @@ def xirr(flows: list[tuple[str, float]]) -> Optional[float]:
     if max(years) < 1e-9:
         return None
 
-    r = 0.1
-    for _ in range(200):
-        f_val = 0.0
-        df_val = 0.0
-        for i, amt in enumerate(amounts):
-            pv = (1 + r) ** years[i]
-            f_val += amt / pv
-            df_val -= years[i] * amt / (pv * (1 + r))
-        if abs(f_val) < 1e-6:
-            break
-        if abs(df_val) < 1e-12:
-            break
-        r = r - f_val / df_val
-        if not (-1 < r < 100):
-            return None
-    return r * 100 if -1 < r < 100 else None
+    def _npv(r: float) -> float:
+        return sum(amt / (1 + r) ** yr for amt, yr in zip(amounts, years))
+
+    def _dnpv(r: float) -> float:
+        return -sum(
+            yr * amt / ((1 + r) ** yr * (1 + r)) for amt, yr in zip(amounts, years)
+        )
+
+    for r0 in (0.1, -0.5, 0.5, -0.1, 2.0):
+        r = r0
+        for _ in range(200):
+            f_val = _npv(r)
+            if abs(f_val) < 1e-6:
+                return r * 100 if -1 < r < 100 else None
+            df_val = _dnpv(r)
+            if abs(df_val) < 1e-12:
+                break
+            r = r - f_val / df_val
+            if not (-1 < r < 100):
+                break
+        else:
+            return r * 100 if -1 < r < 100 else None
+    return None
 
 
 # ── Price helpers ─────────────────────────────────────────────────────────────

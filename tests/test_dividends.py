@@ -2,8 +2,7 @@
 
 Covers:
   - _annual_rate_from_history() pure function
-  - _yf_parse_info() pure function
-  - _yf_fetch_history() with mocked pandas Series
+  - YFinanceProvider.fetch_dividends() info + history parsing (mocked yf.Ticker)
   - GET /api/dividends endpoint (cache logic, yfinance failure, filtering)
 """
 
@@ -20,11 +19,8 @@ from sqlalchemy.pool import StaticPool
 from fin.api import app
 from fin.database import Base, get_db
 from fin.models.dividend_history import DividendHistoryModel
-from fin.routers.holdings import (
-    _annual_rate_from_history,
-    _yf_fetch_history,
-    _yf_parse_info,
-)
+from fin.routers.holdings import _annual_rate_from_history
+from fin.services.providers.yfinance_provider import YFinanceProvider
 
 # ── Shared test data ───────────────────────────────────────────────────────────
 
@@ -95,10 +91,13 @@ def div_env():
     engine.dispose()
 
 
+_STUB_INFO = {"quoteType": "EQUITY"}  # minimal truthy info; no dividend fields
+
+
 def _mock_ticker(info=None, dividends=None):
     """Build a yf.Ticker mock with .info and .dividends configured."""
     mock = MagicMock()
-    mock.info = info or {}
+    mock.info = info if info is not None else _STUB_INFO
     mock.dividends = dividends if dividends is not None else pd.Series([], dtype=float)
     return mock
 
@@ -137,82 +136,107 @@ def test_annual_rate_boundary_inclusive():
     ) == pytest.approx(2.5)
 
 
-# ── _yf_parse_info ─────────────────────────────────────────────────────────────
+# ── YFinanceProvider.fetch_dividends — info parsing ───────────────────────────
+# These replace the old _yf_parse_info unit tests now that the logic is inlined
+# into YFinanceProvider.fetch_dividends().
 
 
-def test_parse_info_all_fields():
-    ex_date, pay_date, rate = _yf_parse_info(_AAPL_INFO)
-    assert ex_date == "2024-03-13"
-    assert pay_date == "2024-03-20"
-    assert rate == pytest.approx(0.96)
+def test_fetch_dividends_parses_all_info_fields():
+    t = _mock_ticker(info=_AAPL_INFO)
+    result = _fetch_dividends(t, "2024-01-01")
+    assert result["ex_date"] == "2024-03-13"
+    assert result["pay_date"] == "2024-03-20"
+    assert result["annual_rate"] == pytest.approx(0.96)
 
 
-def test_parse_info_missing_fields_return_none():
-    ex_date, pay_date, rate = _yf_parse_info({})
-    assert ex_date is None
-    assert pay_date is None
-    assert rate is None
+def test_fetch_dividends_missing_info_fields_are_none():
+    # Truthy but empty of dividend fields → all None, not early-exit {}
+    t = _mock_ticker(info=_STUB_INFO)
+    result = _fetch_dividends(t, "2024-01-01")
+    assert result["ex_date"] is None
+    assert result["pay_date"] is None
+    assert result["annual_rate"] is None
 
 
-def test_parse_info_zero_timestamp_is_none():
+def test_fetch_dividends_zero_timestamp_is_none():
     # ex_ts=0 is falsy and must not produce "1970-01-01"
-    ex_date, _, _ = _yf_parse_info({"exDividendDate": 0})
-    assert ex_date is None
+    t = _mock_ticker(info={**_STUB_INFO, "exDividendDate": 0})
+    result = _fetch_dividends(t, "2024-01-01")
+    assert result["ex_date"] is None
 
 
-def test_parse_info_missing_dividend_rate():
-    _, _, rate = _yf_parse_info({"exDividendDate": 1710288000})
-    assert rate is None
+def test_fetch_dividends_missing_dividend_rate_is_none():
+    t = _mock_ticker(info={**_STUB_INFO, "exDividendDate": 1710288000})
+    result = _fetch_dividends(t, "2024-01-01")
+    assert result["annual_rate"] is None
 
 
-# ── _yf_fetch_history ──────────────────────────────────────────────────────────
+# ── YFinanceProvider.fetch_dividends — history parsing ────────────────────────
 
 
-def _ticker_with(dates, amounts, tz=None):
+def _ticker_with_history(dates, amounts, tz=None, info=None):
+    """Build a ticker mock whose .dividends has a custom-indexed pandas Series."""
     idx = pd.DatetimeIndex(dates)
     if tz:
         idx = idx.tz_localize(tz)
-    mock = MagicMock()
-    mock.dividends = pd.Series(amounts, index=idx)
-    return mock
+    return _mock_ticker(
+        info=info if info is not None else _STUB_INFO,
+        dividends=pd.Series(amounts, index=idx),
+    )
 
 
-def test_fetch_history_empty_series():
-    mock = MagicMock()
-    mock.dividends = pd.Series([], dtype=float)
-    assert _yf_fetch_history(mock, datetime(2020, 1, 1)) == []
+def _fetch_dividends(ticker, since: str) -> dict:
+    """Call YFinanceProvider.fetch_dividends with a pre-built mock ticker."""
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
+        return YFinanceProvider().fetch_dividends("AAPL", since)
 
 
-def test_fetch_history_tz_naive_index():
-    t = _ticker_with(["2023-06-15", "2023-09-15"], [0.25, 0.25])
-    result = _yf_fetch_history(t, datetime(2023, 1, 1))
-    assert result == [
+def test_fetch_dividends_empty_series():
+    t = _mock_ticker()
+    result = _fetch_dividends(t, "2020-01-01")
+    assert result["history"] == []
+
+
+def test_fetch_dividends_tz_naive_index():
+    t = _ticker_with_history(["2023-06-15", "2023-09-15"], [0.25, 0.25])
+    result = _fetch_dividends(t, "2023-01-01")
+    assert result["history"] == [
         {"date": "2023-06-15", "amount": 0.25},
         {"date": "2023-09-15", "amount": 0.25},
     ]
 
 
-def test_fetch_history_tz_aware_index():
-    t = _ticker_with(["2023-06-15", "2023-09-15"], [0.30, 0.30], tz="UTC")
-    result = _yf_fetch_history(t, datetime(2023, 1, 1))
-    assert len(result) == 2
-    assert result[0]["date"] == "2023-06-15"
-    assert result[0]["amount"] == pytest.approx(0.30)
-    assert result[1]["amount"] == pytest.approx(0.30)
+def test_fetch_dividends_tz_aware_index():
+    t = _ticker_with_history(["2023-06-15", "2023-09-15"], [0.30, 0.30], tz="UTC")
+    result = _fetch_dividends(t, "2023-01-01")
+    assert len(result["history"]) == 2
+    assert result["history"][0]["date"] == "2023-06-15"
+    assert result["history"][0]["amount"] == pytest.approx(0.30)
 
 
-def test_fetch_history_since_filter():
-    t = _ticker_with(["2022-01-15", "2023-01-15", "2024-01-15"], [0.25, 0.25, 0.25])
-    result = _yf_fetch_history(t, datetime(2023, 1, 1))
-    assert len(result) == 2
-    assert result[0]["date"] == "2023-01-15"
+def test_fetch_dividends_since_filter():
+    t = _ticker_with_history(
+        ["2022-01-15", "2023-01-15", "2024-01-15"], [0.25, 0.25, 0.25]
+    )
+    result = _fetch_dividends(t, "2023-01-01")
+    assert len(result["history"]) == 2
+    assert result["history"][0]["date"] == "2023-01-15"
 
 
-def test_fetch_history_timezone_aware_since_no_error():
-    """since with tzinfo must not raise TypeError against naive pandas Timestamps."""
-    t = _ticker_with(["2024-01-15"], [0.25])
-    result = _yf_fetch_history(t, datetime(2024, 1, 1, tzinfo=timezone.utc))
-    assert len(result) == 1
+def test_fetch_dividends_returns_ex_and_pay_dates():
+    t = _mock_ticker(
+        info={
+            "exDividendDate": 1710288000,  # 2024-03-13 UTC
+            "dividendDate": 1710892800,  # 2024-03-20 UTC
+            "dividendRate": 0.96,
+        }
+    )
+    result = _fetch_dividends(t, "2024-01-01")
+    assert result["ex_date"] == "2024-03-13"
+    assert result["pay_date"] == "2024-03-20"
+    assert result["annual_rate"] == pytest.approx(0.96)
 
 
 # ── GET /api/dividends ─────────────────────────────────────────────────────────
@@ -231,7 +255,9 @@ def test_dividends_cash_only(div_env):
 def test_dividends_cash_filtered_from_mixed(div_env):
     client, _ = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         data = client.get("/api/dividends?symbols=AAPL,CASH").json()
     assert "AAPL" in data
     assert "CASH" not in data
@@ -240,7 +266,9 @@ def test_dividends_cash_filtered_from_mixed(div_env):
 def test_dividends_new_symbol_fetches_and_caches(div_env):
     client, db = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         data = client.get("/api/dividends?symbols=AAPL").json()
 
     assert data["AAPL"]["ex_date"] == "2024-03-13"
@@ -257,10 +285,12 @@ def test_dividends_new_symbol_fetches_and_caches(div_env):
 def test_dividends_fresh_cache_skips_yfinance(div_env):
     client, _ = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         client.get("/api/dividends?symbols=AAPL")
 
-    with patch("fin.routers.holdings.yf.Ticker") as mock_cls:
+    with patch("fin.services.providers.yfinance_provider.yf.Ticker") as mock_cls:
         data = client.get("/api/dividends?symbols=AAPL").json()
 
     mock_cls.assert_not_called()
@@ -270,7 +300,9 @@ def test_dividends_fresh_cache_skips_yfinance(div_env):
 def test_dividends_failure_returns_stale_data(div_env):
     client, db = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         client.get("/api/dividends?symbols=AAPL")
 
     # Expire the cached row so the next request tries yfinance
@@ -280,7 +312,8 @@ def test_dividends_failure_returns_stale_data(div_env):
     db.commit()
 
     with patch(
-        "fin.routers.holdings.yf.Ticker", side_effect=RuntimeError("network error")
+        "fin.services.providers.yfinance_provider.yf.Ticker",
+        side_effect=RuntimeError("network error"),
     ):
         data = client.get("/api/dividends?symbols=AAPL").json()
 
@@ -293,7 +326,9 @@ def test_dividends_failure_does_not_update_fetched_at(div_env):
     """A yfinance failure must not advance fetched_at, so the symbol retries next request."""
     client, db = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         client.get("/api/dividends?symbols=AAPL")
 
     db.expire_all()
@@ -303,7 +338,8 @@ def test_dividends_failure_does_not_update_fetched_at(div_env):
     db.commit()
 
     with patch(
-        "fin.routers.holdings.yf.Ticker", side_effect=RuntimeError("network error")
+        "fin.services.providers.yfinance_provider.yf.Ticker",
+        side_effect=RuntimeError("network error"),
     ):
         client.get("/api/dividends?symbols=AAPL")
 
@@ -316,7 +352,8 @@ def test_dividends_new_symbol_failure_creates_no_row(div_env):
     """A failed first fetch for a new symbol must not create a poisoned shell row."""
     client, db = div_env
     with patch(
-        "fin.routers.holdings.yf.Ticker", side_effect=RuntimeError("network error")
+        "fin.services.providers.yfinance_provider.yf.Ticker",
+        side_effect=RuntimeError("network error"),
     ):
         data = client.get("/api/dividends?symbols=NEWCO").json()
 
@@ -337,7 +374,9 @@ def test_dividends_etf_no_dividend_rate_falls_back_to_history(div_env):
         info={"quoteType": "ETF", "longName": "Vanguard Total World Bond ETF"},
         dividends=dividends,
     )
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         data = client.get("/api/dividends?symbols=BNDW").json()
 
     assert "BNDW" in data
@@ -348,7 +387,9 @@ def test_dividends_incremental_history_append(div_env):
     """Second fetch for a stale row appends new entries without duplicating old ones."""
     client, db = div_env
     ticker = _mock_ticker(info=_AAPL_INFO, dividends=_AAPL_DIVIDENDS)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker", return_value=ticker
+    ):
         first = client.get("/api/dividends?symbols=AAPL").json()
     assert len(first["AAPL"]["history"]) == 4
 
@@ -364,7 +405,10 @@ def test_dividends_incremental_history_append(div_env):
         index=pd.DatetimeIndex([*_AAPL_HISTORY_DATES, _AAPL_NEW_DATE]),
     )
     updated_ticker = _mock_ticker(info=_AAPL_INFO, dividends=updated)
-    with patch("fin.routers.holdings.yf.Ticker", return_value=updated_ticker):
+    with patch(
+        "fin.services.providers.yfinance_provider.yf.Ticker",
+        return_value=updated_ticker,
+    ):
         second = client.get("/api/dividends?symbols=AAPL").json()
 
     # Should have 4 original + 1 new = 5, no duplicates

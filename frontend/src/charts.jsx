@@ -174,7 +174,7 @@ const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showA
           const widestLine = Math.max(...lines.map(_cjkW));
           const groupW = sqSz + sqGap + widestLine * 3.8;
           const groupX = cx - groupW / 2;
-          const baseY = height - padB + lineH - 2;
+          const baseY = svgH - padB + lineH - 2;
           return (
             <g key={i}>
               {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}

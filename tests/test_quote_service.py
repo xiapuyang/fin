@@ -66,6 +66,88 @@ def test_normalize_symbol_uppercases():
     assert normalize_symbol("aapl") == "AAPL"
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Already-suffixed A-share / HK — pass through unchanged
+        ("002594.SZ", "002594.SZ"),
+        ("0700.HK", "0700.HK"),
+        # Shenzhen ETFs: bare 6-digit codes in the 150-169 prefix range → .SZ
+        ("159501", "159501.SZ"),
+        ("159892", "159892.SZ"),
+        # Shanghai ETFs: 500-588 prefix → .SS
+        ("510310", "510310.SS"),
+        ("513260", "513260.SS"),
+        ("513870", "513870.SS"),
+        # OTC CN mutual fund: 013xxx doesn't match any exchange range → stays bare
+        ("013308", "013308"),
+        # US equities and ETFs — uppercase only, no suffix added
+        ("AAPL", "AAPL"),
+        ("BNDW", "BNDW"),
+        ("BRK-B", "BRK-B"),
+        ("BSV", "BSV"),
+        ("COIN", "COIN"),
+        ("GOOG", "GOOG"),
+        ("META", "META"),
+        ("MSFT", "MSFT"),
+        ("NVDA", "NVDA"),
+        ("PDD", "PDD"),
+        ("QQQ", "QQQ"),
+        ("TSM", "TSM"),
+        ("VT", "VT"),
+        ("VTV", "VTV"),
+        # Crypto
+        ("BTC-USD", "BTC-USD"),
+        # Canadian (TSX / NEO) — suffix already present, pass through
+        ("TEC.TO", "TEC.TO"),
+        ("VEQT.TO", "VEQT.TO"),
+        ("VFV.TO", "VFV.TO"),
+        ("VGAB.NE", "VGAB.NE"),
+        ("ZNQ.TO", "ZNQ.TO"),
+    ],
+)
+def test_normalize_symbol_holdings(raw, expected):
+    """normalize_symbol round-trips correctly for every symbol in the live portfolio."""
+    assert normalize_symbol(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "symbol,is_cn_fund",
+    [
+        # OTC CN fund → ChinaFundProvider (supports bare 6-digit code)
+        ("013308", True),
+        # Exchange-listed (after normalization) → YFinanceProvider
+        ("159501", False),  # normalizes to 159501.SZ
+        ("510310", False),  # normalizes to 510310.SS
+        ("0700.HK", False),
+        ("AAPL", False),
+        ("TEC.TO", False),
+        ("BTC-USD", False),
+    ],
+)
+def test_quote_service_routes_to_correct_provider(db, symbol, is_cn_fund):
+    """QuoteService routes each holding symbol to the expected provider type."""
+    live_data = {"price": 99.9, "prev_close": 98.0, "currency": "USD"}
+    cn_provider = _mock_provider(
+        supports=is_cn_fund, live_data=live_data if is_cn_fund else {}
+    )
+    yf_provider = _mock_provider(
+        supports=not is_cn_fund, live_data=live_data if not is_cn_fund else {}
+    )
+
+    result = QuoteService(db, [cn_provider, yf_provider]).get_quote(symbol)
+
+    if is_cn_fund:
+        cn_provider.fetch_live.assert_called_once()
+        yf_provider.fetch_live.assert_not_called()
+    else:
+        yf_provider.fetch_live.assert_called_once()
+        cn_provider.fetch_live.assert_not_called()
+
+    assert result is not None
+    assert result["price"] == pytest.approx(99.9)
+
+
 # ── QuoteService.get_quote ────────────────────────────────────────────────────
 
 
