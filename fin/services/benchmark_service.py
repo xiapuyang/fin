@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 from collections import defaultdict
@@ -24,10 +23,6 @@ logger = logging.getLogger(__name__)
 _NEAREST_PRICE_WINDOW_DAYS = 10  # covers Chinese New Year holiday gap
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
 _PORTFOLIO_BENCH_ID = "__portfolio__"
-
-# In-process cache: account_id → (config_fingerprint, computed_at_utc).
-# Resets on server restart (acceptable — triggers one extra compute).
-_compute_cache: dict[int, tuple[str, datetime]] = {}
 
 
 # ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
@@ -217,38 +212,13 @@ def warn_orphaned_bench_ids() -> None:
 # ── Dedup helper ─────────────────────────────────────────────────────────────
 
 
-def _config_fingerprint(schemes: list[dict]) -> str:
-    """Return an MD5 hash of the active scheme configuration.
-
-    Stable across re-orders: schemes and their allocations are sorted before hashing.
-    """
-    canonical = sorted(
-        [
-            {
-                "id": s["id"],
-                "cash_pct": round(s.get("cash_pct", 0.0), 4),
-                "allocations": sorted(
-                    [
-                        {"symbol": a["symbol"], "pct": round(a["pct"], 4)}
-                        for a in s.get("allocations", [])
-                    ],
-                    key=lambda a: a["symbol"],
-                ),
-            }
-            for s in schemes
-        ],
-        key=lambda s: s["id"],
-    )
-    return hashlib.md5(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
-
-
 def has_recent_result(db: Session, account_id: int) -> bool:
-    """Return True if a valid result was computed recently with the current config.
+    """Return True if a valid result was computed within the configured interval.
 
-    Uses the in-process _compute_cache so any config change (different enabled
-    schemes or allocation weights) immediately invalidates the cache, even within
-    the interval window. interval is read from benchmark_recompute_interval_minutes
-    in config/app.json (default 10 minutes).
+    Reads benchmark_recompute_interval_minutes from config/app.json (default 10).
+    Returns False when:
+    - No portfolio row with a non-NULL xirr exists within the interval
+    - Any currently-active scheme is missing a result within the interval
     """
     try:
         cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
@@ -256,29 +226,40 @@ def has_recent_result(db: Session, account_id: int) -> bool:
     except Exception:
         interval = 10
 
-    account = (
-        db.query(AccountModel)
-        .filter(AccountModel.id == account_id, AccountModel.user_id == MOCK_USER_ID)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=interval)
+    today = str(datetime.now(timezone.utc).date())
+
+    portfolio_row = (
+        db.query(BenchmarkResultModel)
+        .filter(
+            BenchmarkResultModel.account_id == account_id,
+            BenchmarkResultModel.computed_date == today,
+            BenchmarkResultModel.bench_id == _PORTFOLIO_BENCH_ID,
+            BenchmarkResultModel.xirr.isnot(None),
+            BenchmarkResultModel.computed_at >= cutoff,
+        )
         .first()
     )
+    if portfolio_row is None:
+        return False
+
+    account = db.query(AccountModel).filter(AccountModel.id == account_id).first()
     if account is None:
         return False
 
-    schemes = _resolve_schemes(db, account)
-    if not schemes:
-        return False
+    active_ids = {s["id"] for s in _resolve_schemes(db, account)}
+    if not active_ids:
+        return True
 
-    current_fp = _config_fingerprint(schemes)
-    cached = _compute_cache.get(account_id)
-    if cached is None:
-        return False
-
-    cached_fp, cached_ts = cached
-    if cached_fp != current_fp:
-        return False
-
-    elapsed = (datetime.now(timezone.utc) - cached_ts).total_seconds()
-    return elapsed < interval * 60
+    computed_ids = {
+        row[0]
+        for row in db.query(BenchmarkResultModel.bench_id).filter(
+            BenchmarkResultModel.account_id == account_id,
+            BenchmarkResultModel.computed_date == today,
+            BenchmarkResultModel.computed_at >= cutoff,
+        )
+    }
+    return active_ids.issubset(computed_ids)
 
 
 # ── Main service ──────────────────────────────────────────────────────────────
@@ -615,8 +596,6 @@ def compute(db: Session, account_id: int) -> dict:
         )
         db.execute(stmt)
     db.commit()
-
-    _compute_cache[account_id] = (_config_fingerprint(schemes), now_utc)
 
     return {
         "portfolio_xirr": portfolio_xirr,
