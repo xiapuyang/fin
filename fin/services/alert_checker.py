@@ -1,16 +1,18 @@
 """Alert checking service: fetch prices and fire triggered alerts.
 
 This module exists so the core logic can be called from both the background
-scheduler (when running as a packaged app) and the standalone check_alerts.py
-cron script.
+scheduler (running inside serve.py) and the standalone check_alerts.py cron
+script. A file lock at ALERT_LOCK_PATH ensures at most one instance runs at
+a time, so both can coexist without duplicating work or double-firing alerts.
 """
 
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime
 
-from fin.config import LAST_CHECK_PATH
+from fin.config import ALERT_LOCK_PATH, LAST_CHECK_PATH
 from fin.database import SessionLocal, init_db
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
@@ -21,6 +23,40 @@ from fin import settings as settings_store
 logger = logging.getLogger(__name__)
 
 VALID_CONDITIONS = {"price_gte", "price_lte", "change_gte", "change_lte"}
+
+
+@contextmanager
+def _exclusive_lock():
+    """Cross-platform exclusive file lock.
+
+    Yields if the lock is acquired. Raises RuntimeError if already held
+    by another process (cron job or scheduler instance).
+    """
+    lock_file = open(ALERT_LOCK_PATH, "w")
+    try:
+        try:
+            import fcntl
+
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            lock_file.close()
+            raise RuntimeError("lock held")
+        try:
+            yield
+        finally:
+            try:
+                import fcntl
+
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+            except ImportError:
+                pass
+            lock_file.close()
+    except RuntimeError:
+        raise
 
 
 def check_condition(
@@ -66,6 +102,10 @@ def _send_email(
 def run_check(force: bool = False) -> None:
     """Fetch enabled alerts, evaluate conditions, fire matches, send email.
 
+    Acquires an exclusive file lock before running so cron jobs and the
+    in-process scheduler cannot execute concurrently. The second caller
+    logs a skip message and returns immediately.
+
     Safe to call repeatedly — creates and closes its own DB session.
     Exceptions are caught per-symbol so one failure doesn't abort the run.
 
@@ -75,6 +115,26 @@ def run_check(force: bool = False) -> None:
     Args:
         force: Skip market-state REGULAR check (useful for testing).
     """
+    try:
+        lock_ctx = _exclusive_lock()
+        lock_ctx.__enter__()
+    except RuntimeError:
+        logger.info(
+            "Alert check already running (lock held by another process), skipping"
+        )
+        return
+
+    try:
+        _run_check_inner(force=force)
+    finally:
+        try:
+            lock_ctx.__exit__(None, None, None)
+        except Exception:
+            pass
+
+
+def _run_check_inner(force: bool = False) -> None:
+    """Core alert check logic — called only when the exclusive lock is held."""
     if not os.environ.get("AGENTMAIL_API_KEY") or not os.environ.get(
         "FIN_AGENTMAIL_INBOX"
     ):

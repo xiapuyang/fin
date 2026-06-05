@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -51,11 +52,12 @@ async def lifespan(app: FastAPI):
     start_price_updater()
     _BENCHMARK_BACKFILL_STOP = start_benchmark_backfill()
     logger.info("Benchmark backfill thread started")
-    if getattr(sys, "frozen", False):
+    is_dev = bool(os.environ.get("FIN_DEV"))
+    if getattr(sys, "frozen", False) or not is_dev:
         _ALERT_SCHEDULER_STOP = start_alert_scheduler()
-        logger.info("Alert scheduler started (frozen mode)")
+        logger.info("Alert scheduler started")
         _BENCHMARK_SCHEDULER_STOP = start_benchmark_scheduler()
-        logger.info("Benchmark scheduler started (frozen mode)")
+        logger.info("Benchmark scheduler started")
     yield
     if _ALERT_SCHEDULER_STOP is not None:
         stop_alert_scheduler(_ALERT_SCHEDULER_STOP)
