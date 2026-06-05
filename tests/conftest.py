@@ -30,6 +30,7 @@ def client():
     app.dependency_overrides[get_db] = override_get_db
     with (
         patch("fin.api.init_db"),
+        patch("fin.api.warn_orphaned_bench_ids"),
         patch("fin.api.start_price_updater"),
         patch("fin.api.start_benchmark_backfill", return_value=lambda: None),
         patch("fin.api.stop_benchmark_backfill"),

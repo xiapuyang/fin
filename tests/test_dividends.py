@@ -83,9 +83,10 @@ def div_env():
     app.dependency_overrides[get_db] = override_get_db
     db = Session()
     with patch("fin.api.init_db"):
-        with patch("fin.api.start_price_updater"):
-            with TestClient(app) as c:
-                yield c, db
+        with patch("fin.api.warn_orphaned_bench_ids"):
+            with patch("fin.api.start_price_updater"):
+                with TestClient(app) as c:
+                    yield c, db
     db.close()
     app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
