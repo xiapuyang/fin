@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -223,14 +223,27 @@ def compute_benchmark(
     return result
 
 
-@router.post("/backfill/{account_id}")
-def trigger_backfill(account_id: int, db: Session = Depends(get_db)):
-    """Trigger historical benchmark backfill for an account (runs synchronously)."""
+@router.post("/backfill/{account_id}", status_code=202)
+def trigger_backfill(
+    account_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Trigger historical benchmark backfill in the background (returns immediately)."""
     _get_account_or_404(db, account_id)
-    from fin.services.benchmark_history_service import backfill_account
 
-    written = backfill_account(db, account_id)
-    return {"written": written}
+    def _run() -> None:
+        from fin.database import SessionLocal
+        from fin.services.benchmark_history_service import backfill_account
+
+        _db = SessionLocal()
+        try:
+            backfill_account(_db, account_id)
+        finally:
+            _db.close()
+
+    background_tasks.add_task(_run)
+    return {"status": "started"}
 
 
 @router.put("/schemes/{account_id}")

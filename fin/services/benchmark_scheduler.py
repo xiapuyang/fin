@@ -112,13 +112,13 @@ def _backfill_loop(stop_event: threading.Event) -> None:
     except Exception:
         logger.exception("Benchmark backfill: startup run failed")
 
-    # Then nightly at 06:00 UTC
-    while not stop_event.wait(timeout=_seconds_until_next_6am_utc()):
+    # Then every hour at HH:00 UTC
+    while not stop_event.wait(timeout=_seconds_until_next_hour()):
         try:
-            logger.info("Benchmark backfill: nightly run")
+            logger.info("Benchmark backfill: hourly run")
             _run_backfill_once()
         except Exception:
-            logger.exception("Benchmark backfill: nightly run failed")
+            logger.exception("Benchmark backfill: hourly run failed")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

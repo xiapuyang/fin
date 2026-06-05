@@ -2025,11 +2025,11 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         const needsCompute = staleDate || missingDefaultOrCustom || missingPortfolio;
         const needsBackfill = missingSnaps;
 
-        if (needsCompute || needsBackfill) {
+        // Backfill runs in the background — fire-and-forget, don't block rendering.
+        if (needsBackfill) apiTriggerBackfill(account.id);
+
+        if (needsCompute) {
           setComputing(true);
-          // Snapshots need backfill to fill missing historical dates (up to yesterday);
-          // __portfolio__ and everything else is handled by compute (today's live data).
-          if (needsBackfill) await apiTriggerBackfill(account.id);
           const computed = await apiComputeBenchmark(account.id);
           const h = await apiGetBenchmarkHistory(account.id);
           if (!cancelled) { setResults(computed); setHistory(h); setComputing(false); }
@@ -2110,6 +2110,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         await apiUpdateCustomScheme(account.id, editingCustomId, schemeData);
       } else {
         await apiCreateCustomScheme(account.id, schemeData);
+        apiTriggerBackfill(account.id); // fire-and-forget: fill history for new scheme
       }
       setEditingCustomId(null);
       setAddingCustom(false);
