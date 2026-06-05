@@ -135,6 +135,11 @@ async def i18n_manager():
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, RuntimeError) and "Content-Length" in str(exc):
+        # Transport-layer error: headers were already committed and the body
+        # stream was cut short. There is nothing useful to send back — the
+        # connection is broken. Re-raise so uvicorn closes it cleanly.
+        raise exc
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 

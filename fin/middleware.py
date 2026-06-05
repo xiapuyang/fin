@@ -9,7 +9,7 @@ from starlette.responses import Response
 
 access_logger = get_access_logger()
 
-_SKIP_PREFIXES = ("/api/health", "/favicon")
+_SKIP_PREFIXES = ("/api/health", "/favicon", "/vendor/", "/src/", "/config/i18n/")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
