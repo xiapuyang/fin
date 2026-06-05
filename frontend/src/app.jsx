@@ -1,5 +1,7 @@
 /* Main app — sidebar nav + module router */
 
+const STATE_LABEL = new Proxy({}, { get: (_, k) => I18N.t(`base.state.${k.toLowerCase()}`) });
+
 // Fallback used only when the backend's /api/market-states is stale or unavailable.
 // Backend (exchange_calendars) is authoritative — it handles holidays correctly.
 const MARKET_HOURS = (now = new Date()) => {

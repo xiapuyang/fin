@@ -1791,7 +1791,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
             }}>{p.label}</button>
           ))}
         </div>
-        {(!accountId || acctConfigType === "personal") && (
+        {((!accountId && activeId === "personal") || (accountId && acctConfigType === "personal")) && (
           <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
         )}
       </div>
