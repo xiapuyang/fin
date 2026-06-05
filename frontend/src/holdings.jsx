@@ -426,12 +426,13 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
         title={I18N.t("holdings.title")}
         subtitle={I18N.t("holdings.subtitle")}
         right={
-          <div style={{ display: "flex", border: "1px solid var(--line-2)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", background: "var(--bg-deep)", borderRadius: 8, padding: 3, gap: 2 }}>
             {[["portfolio",I18N.t("holdings.tab.portfolio")],["rebalance",I18N.t("holdings.tab.rebalance")]].map(([id, label]) => (
               <button key={id} onClick={() => setViewMode(id)} style={{
-                padding: "6px 16px", fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none",
-                background: viewMode === id ? "var(--ink)" : "transparent",
-                color:      viewMode === id ? "var(--paper)" : "var(--ink-3)",
+                padding: "5px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer", borderRadius: 6, border: "none",
+                background: viewMode === id ? "var(--paper)" : "transparent",
+                color:      viewMode === id ? "var(--ink)" : "var(--ink-3)",
+                boxShadow:  viewMode === id ? "0 1px 3px rgba(0,0,0,.12)" : "none",
               }}>{label}</button>
             ))}
           </div>
@@ -1277,6 +1278,20 @@ const ASSET_CATEGORIES = [
   { id: "reit",           get label() { return I18N.t("holdings.rb.cat.reit"); } },
 ];
 
+const CATEGORY_COLORS = {
+  equity_us:      "#1F4FE0",
+  equity_hk:      "#B8447B",
+  equity_cn:      "#C8460F",
+  index_fund_us:  "#4A7FF0",
+  index_fund_hk:  "#D060A0",
+  index_fund_cn:  "#E07040",
+  etf_global:     "#00A8B0",
+  bond_us:        "#5C8AE6",
+  bond_global:    "#7EA0D0",
+  crypto:         "#8B5CF6",
+  reit:           "#B07848",
+};
+
 // Maps each category ID to a predicate that tests whether a position belongs to it.
 // etf_global excludes US/HK/CN to prevent double-counting with index_fund_* categories.
 // bond_global excludes US to prevent double-counting with bond_us.
@@ -1314,8 +1329,11 @@ const _RB_LABEL_KEYS = {
   "Commodities": "holdings.rb.commodities", "大宗": "holdings.rb.commodities", "大宗 Commodities": "holdings.rb.commodities",
 };
 const _rbLabel = (b) => {
+  if (b.categories?.length > 0)
+    return b.categories.map(c => ASSET_CATEGORIES.find(a => a.id === c)?.label || c).join(" + ");
   if (_RB_LABEL_KEYS[b.label]) return I18N.t(_RB_LABEL_KEYS[b.label]);
-  return b.label;
+  if (b.label_i18n) return I18N.t(b.label_i18n);
+  return b.label || "";
 };
 
 const computeAgeRuleBuckets = (age) => [
@@ -1422,37 +1440,66 @@ const RB_DEFAULT_CONFIG = {
 
 // ── Rebalance edit modal ────────────────────────────────────────────────────────
 
-const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
+const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, onSave, onClose }) => {
   const [draft, setDraft] = React.useState(JSON.parse(JSON.stringify(config)));
   const [codesTexts, setCodesTexts] = React.useState(config.buckets.map(b => (b.codes || []).join(", ")));
+  const [addCatId, setAddCatId] = React.useState(() => {
+    const used = new Set(config.buckets.flatMap(b => b.categories || []));
+    return ASSET_CATEGORIES.find(c => !used.has(c.id))?.id || null;
+  });
+  const [addPct, setAddPct] = React.useState("0");
+
+  const usedCatIds = new Set(draft.buckets.flatMap(b => b.categories || []));
+  const availableCats = ASSET_CATEGORIES.filter(c => !usedCatIds.has(c.id));
 
   const updateBucket = (i, key, val) => setDraft(d => ({
     ...d, buckets: d.buckets.map((b, j) => j === i ? { ...b, [key]: val } : b),
   }));
-  const handleSave = (d) => {
-    const finalDraft = {
-      ...d,
-      buckets: d.buckets.map((b, i) => ({
-        ...b,
-        codes: codesTexts[i].split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
-      })),
-    };
-    onSave(finalDraft);
+  const removeBucket = (i) => {
+    setDraft(d => ({ ...d, buckets: d.buckets.filter((_, j) => j !== i) }));
+    setCodesTexts(t => t.filter((_, j) => j !== i));
+  };
+  const addBucket = () => {
+    if (!addCatId) return;
+    const pct = parseFloat(addPct) || 0;
+    const newBucket = { categories: [addCatId], pct, codes: [], color: CATEGORY_COLORS[addCatId] || "#888", isCash: false };
+    setDraft(d => ({ ...d, buckets: [...d.buckets, newBucket] }));
+    setCodesTexts(t => [...t, ""]);
+    const nextAvail = availableCats.find(c => c.id !== addCatId);
+    setAddCatId(nextAvail?.id || null);
+    setAddPct("0");
+  };
+
+  const handleSave = () => {
+    const finalBuckets = draft.buckets.map((b, i) => ({
+      ...b,
+      codes: codesTexts[i].split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
+    }));
+    onSave({ ...draft, buckets: finalBuckets });
   };
   const sumPct = draft.buckets.reduce((s, b) => s + (parseFloat(b.pct) || 0), 0);
   const valid = Math.abs(sumPct - 100) < 0.5;
 
   return (
-    <Modal open={true} onClose={onClose} title={I18N.t("holdings.rebalance.editTarget")} width={500}>
+    <Modal open={true} onClose={onClose} title={I18N.t("holdings.rebalance.editTarget")} width={520}>
       <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.buckets")}</div>
+
         {draft.buckets.map((b, i) => (
-          <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 64px 20px", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 64px 20px auto", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{ width: 10, height: 10, background: b.color, borderRadius: 2, display: "block" }}/>
               <span style={{ fontSize: 13, fontWeight: 500 }}>{_rbLabel(b)}</span>
-              <Input value={String(b.pct)} onChange={v => updateBucket(i, "pct", parseFloat(v) || 0)} inputMode="decimal" style={{ textAlign: "right" }}/>
+              <Input value={String(b.pct)} onChange={v => !pctReadOnly && updateBucket(i, "pct", parseFloat(v) || 0)}
+                inputMode="decimal" readOnly={pctReadOnly} style={{ textAlign: "right" }}/>
               <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
+              {!pctReadOnly && (
+                <button onClick={() => removeBucket(i)} style={{
+                  width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--line-2)",
+                  background: "transparent", cursor: "pointer", fontSize: 13, color: "var(--ink-4)",
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0,
+                }}>×</button>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 18 }}>
               <span style={{ fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, width: 52 }}>{I18N.t("holdings.rebalance.codeOverride")}</span>
@@ -1466,13 +1513,33 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
             </div>
           </div>
         ))}
-        <div style={{ textAlign: "right", fontSize: 12, color: valid ? "var(--down)" : "var(--up)", marginBottom: 16 }}>
+
+        {draft.buckets.length === 0 && (
+          <div style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic", marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
+            — {I18N.t("holdings.rebalance.addCat")}
+          </div>
+        )}
+
+        <div style={{ textAlign: "right", fontSize: 12, color: valid ? "var(--down)" : "var(--up)", marginBottom: 14 }}>
           {I18N.t("holdings.rebalance.total")} {sumPct.toFixed(1)}% {valid ? "✓" : `· ${I18N.t("holdings.rebalance.mustEqual100")}`}
         </div>
 
+        {!pctReadOnly && availableCats.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "10px 12px", background: "var(--bg-deep)", borderRadius: 8 }}>
+            <select value={addCatId || ""} onChange={e => setAddCatId(e.target.value)} autoComplete="off"
+              style={{ flex: 1, fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "5px 8px", background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
+              <option value="" disabled>{I18N.t("holdings.rebalance.selectCat")}</option>
+              {availableCats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <Input value={addPct} onChange={setAddPct} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
+            <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
+            <Button variant="secondary" onClick={addBucket} disabled={!addCatId}>{I18N.t("holdings.rebalance.addCat")}</Button>
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
-          <Button variant="primary" onClick={() => handleSave(draft)} disabled={!valid}>{I18N.t("base.btn.save")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={!valid}>{I18N.t("base.btn.save")}</Button>
         </div>
       </div>
     </Modal>
@@ -1649,7 +1716,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
       const newBuckets = newId === "age_rule"
         ? computeAgeRuleBuckets(computeAge(birthDate))
         : newId === "personal"
-        ? JSON.parse(JSON.stringify(globalConfig.buckets))
+        ? []
         : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === newId)?.buckets || []));
       const newData = existing || { buckets: newBuckets, trigger: globalConfig.trigger };
       persist(newId, newData, { ...perPreset, [newId]: newData });
@@ -1719,8 +1786,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const switchAcctConfigType = (newType) => {
     setAcctConfigType(newType);
     if (newType === "personal" && !acctPersonalData) {
-      // seed personal from the currently resolved config
-      const seed = { buckets: JSON.parse(JSON.stringify(config.buckets)), trigger: config.trigger };
+      const seed = { buckets: [], trigger: config.trigger };
       setAcctPersonalData(seed);
       onAccountConfigChange && onAccountConfigChange({ type: "personal", ...seed });
     } else {
@@ -1791,7 +1857,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
             }}>{p.label}</button>
           ))}
         </div>
-        {((!accountId && activeId === "personal") || (accountId && acctConfigType === "personal")) && (
+        {!isReadOnly && (
           <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
         )}
       </div>
@@ -1976,12 +2042,15 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
         </div>
       </div>
 
-      {editOpen && (
-        <RebalanceEditModal config={config} birthDate={birthDate} onSave={next => {
-          saveConfig({ buckets: next.buckets });
-          setEditOpen(false);
-        }} onClose={() => setEditOpen(false)}/>
-      )}
+      {editOpen && (() => {
+        const pctReadOnly = !accountId ? activeId !== "personal" : acctConfigType !== "personal";
+        return (
+          <RebalanceEditModal config={config} birthDate={birthDate} pctReadOnly={pctReadOnly} onSave={next => {
+            saveConfig({ buckets: next.buckets });
+            setEditOpen(false);
+          }} onClose={() => setEditOpen(false)}/>
+        );
+      })()}
     </Card>
   );
 };
