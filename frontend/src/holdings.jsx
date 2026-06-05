@@ -265,10 +265,9 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   // (covers both account switching and disabling benchmark on the current account)
   React.useEffect(() => {
     const acct = accounts.find(a => a.id === selectedAccountId);
-    if (tab === "benchmark" && acct && !acct.benchmark_enabled) {
-      setTab("positions");
-    }
-  }, [selectedAccountId, selectedAccount?.benchmark_enabled]);
+    if (tab === "benchmark" && acct && !acct.benchmark_enabled) setTab("positions");
+    if (tab === "rebalance" && acct && !acct.rebalance_enabled)  setTab("positions");
+  }, [selectedAccountId, selectedAccount?.benchmark_enabled, selectedAccount?.rebalance_enabled]);
 
   // Holdings filtered to selected snapshot only (prevents double-counting)
   // null/empty snapshot_name treated as "Unnamed"
@@ -604,7 +603,8 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           { id: "cashflows",    label: I18N.t("holdings.cashflows.title"),   count: acctIncome.filter(i => ["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.filter(i => !["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "dividends",    label: I18N.t("holdings.calendar.title"),    count: acctIncome.filter(i => i.category === "dividend").length || null },
-          ...(selectedAccount?.benchmark_enabled ? [{ id: "benchmark", label: I18N.t("benchmark.tab.title") }] : []),
+          ...(selectedAccount?.benchmark_enabled  ? [{ id: "benchmark", label: I18N.t("benchmark.tab.title") }] : []),
+          ...(selectedAccount?.rebalance_enabled  ? [{ id: "rebalance", label: I18N.t("holdings.rb.acct.tab") }] : []),
         ]}/>
       </div>
 
@@ -644,6 +644,21 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           account={selectedAccount}
           onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
           currency={currency}
+        />
+      )}
+      {tab === "rebalance" && selectedAccount?.rebalance_enabled && (
+        <RebalancePanel
+          positions={acctPositions}
+          total={acctPositions.reduce((s, p) => s + p.value, 0)}
+          currency={acctCcy}
+          birthDate={birthDate}
+          accountId={selectedAccount.id}
+          accountConfig={selectedAccount.rebalance_config}
+          onAccountConfigChange={cfg =>
+            apiUpdateAccount(selectedAccount.id, { rebalance_config: cfg })
+              .then(() => apiGetAccounts().then(setAccounts))
+              .catch(console.error)
+          }
         />
       )}
 
@@ -1542,6 +1557,14 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const [expandedBucket, setExpandedBucket] = React.useState(null);
   const [systemPresets, setSystemPresets] = React.useState(RB_PRESETS);
 
+  // Per-account mode state
+  const [acctConfigType, setAcctConfigType] = React.useState(() => accountConfig?.type || "global");
+  const [acctPresetId, setAcctPresetId] = React.useState(() => accountConfig?.preset_id || "classic_60_40");
+  const [acctPersonalData, setAcctPersonalData] = React.useState(() =>
+    accountConfig?.type === "personal" ? { buckets: accountConfig.buckets, trigger: accountConfig.trigger } : null
+  );
+  const [acctTrigger, setAcctTrigger] = React.useState(() => accountConfig?.trigger || RB_DEFAULT_TRIGGER);
+
   React.useEffect(() => {
     apiGetRebalanceDefaults()
       .then(defaults => {
@@ -1586,18 +1609,38 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
       .catch(() => {});
   }, []);
 
-  // Derive active config — fall back to preset defaults if not yet customised
+  // Derive active config — global mode (fall back to preset defaults if not yet customised)
   const activeData = perPreset[activeId] || {};
   const defaultBuckets = activeId === "age_rule"
     ? computeAgeRuleBuckets(computeAge(birthDate))
     : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === activeId)?.buckets || []));
-  const config = {
+  const globalConfig = {
     presetId: activeId,
     buckets:   activeData.buckets || defaultBuckets,
     trigger:   activeData.trigger || RB_DEFAULT_TRIGGER,
   };
 
+  // Resolve per-account config when accountId is set
+  const acctEffectiveConfig = accountId ? (() => {
+    if (acctConfigType === "global") return globalConfig;
+    if (acctConfigType === "preset") {
+      const sp = systemPresets.find(p => p.id === acctPresetId) || systemPresets[0];
+      const buckets = JSON.parse(JSON.stringify(sp?.buckets || []));
+      const codesOverride = accountConfig?.codes_override || {};
+      Object.entries(codesOverride).forEach(([i, codes]) => { if (buckets[i]) buckets[i].codes = codes; });
+      return { presetId: acctPresetId, buckets, trigger: acctTrigger };
+    }
+    return {
+      presetId: "personal",
+      buckets: acctPersonalData?.buckets || [],
+      trigger: acctPersonalData?.trigger || RB_DEFAULT_TRIGGER,
+    };
+  })() : null;
+
+  const config = acctEffectiveConfig || globalConfig;
+
   const persist = (id, data, newMap) => {
+    if (accountId) return; // per-account mode uses persistAccount
     const next = newMap || { ...perPreset, [id]: data };
     setPerPreset(next);
     const configs = Object.entries(next).map(([cid, cdata]) => ({ id: cid, ...cdata }));
@@ -1607,20 +1650,48 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     }).catch(() => {});
   };
 
+  const persistAccount = (typeOverride, update = {}) => {
+    const type = typeOverride || acctConfigType;
+    let cfg;
+    if (type === "global") cfg = { type: "global" };
+    else if (type === "preset") cfg = { type: "preset", preset_id: acctPresetId, trigger: acctTrigger, ...update };
+    else cfg = { type: "personal", ...(acctPersonalData || {}), ...update };
+    onAccountConfigChange && onAccountConfigChange(cfg);
+  };
+
   const saveConfig = (updates) => {
-    const data = { ...activeData, ...updates };
-    persist(activeId, data);
+    if (accountId) {
+      if (acctConfigType === "personal") {
+        const data = { ...(acctPersonalData || {}), ...updates };
+        setAcctPersonalData(data);
+        persistAccount("personal", data);
+      } else if (acctConfigType === "preset") {
+        const newTrigger = updates.trigger || acctTrigger;
+        setAcctTrigger(newTrigger);
+        persistAccount("preset", { trigger: newTrigger });
+      }
+    } else {
+      const data = { ...activeData, ...updates };
+      persist(activeId, data);
+    }
   };
 
   const switchPreset = (newId) => {
-    setActiveId(newId);
     setExpandedBucket(null);
-    const existing = perPreset[newId];
-    const newBuckets = newId === "age_rule"
-      ? computeAgeRuleBuckets(computeAge(birthDate))
-      : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === newId)?.buckets || []));
-    const newData = existing || { buckets: newBuckets, trigger: config.trigger };
-    persist(newId, newData, { ...perPreset, [newId]: newData });
+    if (accountId) {
+      setAcctPresetId(newId);
+      const sp = systemPresets.find(p => p.id === newId) || systemPresets[0];
+      const newTrigger = acctTrigger;
+      onAccountConfigChange && onAccountConfigChange({ type: "preset", preset_id: newId, trigger: newTrigger });
+    } else {
+      setActiveId(newId);
+      const existing = perPreset[newId];
+      const newBuckets = newId === "age_rule"
+        ? computeAgeRuleBuckets(computeAge(birthDate))
+        : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === newId)?.buckets || []));
+      const newData = existing || { buckets: newBuckets, trigger: globalConfig.trigger };
+      persist(newId, newData, { ...perPreset, [newId]: newData });
+    }
   };
 
   const setTrigger = (k, v) => saveConfig({ trigger: { ...config.trigger, [k]: v } });
@@ -1680,23 +1751,59 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const preset   = systemPresets.find(p => p.id === config.presetId) || systemPresets[0] || RB_PRESETS[0];
   const calLabel = (RB_CAL_OPTIONS.find(o => o.value === calFreq) || {}).label || "";
 
+  const activeChipId = accountId ? (acctConfigType === "preset" ? acctPresetId : null) : activeId;
+  const isReadOnly = accountId && acctConfigType === "global";
+
+  const switchAcctConfigType = (newType) => {
+    setAcctConfigType(newType);
+    if (newType === "personal" && !acctPersonalData) {
+      // seed personal from the currently resolved config
+      const seed = { buckets: JSON.parse(JSON.stringify(config.buckets)), trigger: config.trigger };
+      setAcctPersonalData(seed);
+      onAccountConfigChange && onAccountConfigChange({ type: "personal", ...seed });
+    } else {
+      persistAccount(newType);
+    }
+  };
+
   return (
     <Card padding={20}>
+      {/* Per-account: config type selector */}
+      {accountId && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 4 }}>{I18N.t("holdings.rb.acct.configType.label")}</span>
+          {[["global","holdings.rb.acct.configType.global"],["preset","holdings.rb.acct.configType.preset"],["personal","holdings.rb.acct.configType.personal"]].map(([t, key]) => (
+            <button key={t} onClick={() => switchAcctConfigType(t)} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: acctConfigType === t ? "var(--accent)" : "var(--line-2)",
+              background:  acctConfigType === t ? "var(--accent-soft)" : "transparent",
+              color:       acctConfigType === t ? "var(--accent)" : "var(--ink-3)",
+            }}>{I18N.t(key)}</button>
+          ))}
+        </div>
+      )}
+
       {/* Header: preset chips + edit button */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {systemPresets.map(p => (
-            <button key={p.id} onClick={() => switchPreset(p.id)}
+          {(accountId ? acctConfigType !== "personal" : true) && systemPresets.map(p => (
+            <button key={p.id}
+              onClick={() => !isReadOnly && switchPreset(p.id)}
+              disabled={isReadOnly}
               style={{
-                padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
-                borderColor: activeId === p.id ? "var(--accent)" : "var(--line-2)",
-                background:  activeId === p.id ? "var(--accent-soft)" : "transparent",
-                color:       activeId === p.id ? "var(--accent)" : "var(--ink-3)",
+                padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500,
+                cursor: isReadOnly ? "default" : "pointer", border: "1px solid",
+                borderColor: activeChipId === p.id ? "var(--accent)" : "var(--line-2)",
+                background:  activeChipId === p.id ? "var(--accent-soft)" : "transparent",
+                color:       activeChipId === p.id ? "var(--accent)" : "var(--ink-3)",
+                opacity: isReadOnly ? 0.6 : 1,
               }}
             >{p.label}</button>
           ))}
         </div>
-        <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
+        {(!accountId || acctConfigType === "personal") && (
+          <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
+        )}
       </div>
 
       {/* Strategy quote */}
