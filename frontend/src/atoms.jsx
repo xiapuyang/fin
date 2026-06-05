@@ -396,9 +396,36 @@ const Modal = ({ open, onClose, children, width = 520, title }) => {
   );
 };
 
+// Destructive-action modal requiring the user to type a specific value before
+// the Delete button activates. Use for irreversible operations that affect many
+// records (account delete, snapshot delete).
+const TypeConfirmModal = ({ title, body, confirmValue, onClose, onConfirm }) => {
+  const [typed, setTyped] = React.useState("");
+  const match = typed === confirmValue;
+  return (
+    <Modal open title={title} onClose={onClose} width={420}>
+      <div style={{ padding: "16px 20px 20px" }}>
+        {body && <div style={{ marginBottom: 16 }}>{body}</div>}
+        <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 6 }}>
+          {I18N.t("base.typeConfirm.label")}{" "}
+          <code style={{ background: "var(--line)", padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 12 }}>
+            {confirmValue}
+          </code>{" "}
+          {I18N.t("base.typeConfirm.suffix")}
+        </div>
+        <Input value={typed} onChange={setTyped} placeholder={confirmValue} autoComplete="off"/>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+          <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+          <Button variant="danger" disabled={!match} onClick={onConfirm}>{I18N.t("base.btn.delete")}</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 Object.assign(window, {
   fmtNum, fmtMoney, fmtPct, toCNY,
   MarketDot, MarketLabel, Badge, Button, Card, SectionHeader, Tabs,
-  Input, DateInput, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal,
+  Input, DateInput, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal, TypeConfirmModal,
   PRIVACY, setPrivacyMasked, usePrivacyMasked, Private,
 });

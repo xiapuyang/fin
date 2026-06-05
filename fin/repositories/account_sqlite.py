@@ -92,8 +92,14 @@ class AccountSQLiteRepository:
         return account
 
     def delete(self, id: int, user_id: int) -> None:
-        """Delete an account by primary key scoped to user. No-op if not found."""
+        """Delete an account and cascade-delete all associated holdings, transactions,
+        and income records that reference it by name."""
         account = self.get_by_id(id, user_id)
         if account:
+            name = account.name
+            for model in (HoldingModel, TransactionModel, IncomeModel):
+                self._db.query(model).filter(model.account == name).delete(
+                    synchronize_session=False
+                )
             self._db.delete(account)
             self._db.commit()
