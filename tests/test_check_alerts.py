@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fin.services.alert_checker import check_condition as _check_condition
-from fin.database import Base
+from fin.database import Base, import_all_models
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
 from fin.schemas.alert import AlertCreate
 
@@ -24,6 +24,7 @@ def db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()

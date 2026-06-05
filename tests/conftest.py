@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from fin.api import app
-from fin.database import Base, get_db
+from fin.database import Base, get_db, import_all_models
 
 
 @pytest.fixture()
@@ -16,6 +16,7 @@ def client():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

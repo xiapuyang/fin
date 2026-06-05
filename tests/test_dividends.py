@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from fin.api import app
-from fin.database import Base, get_db
+from fin.database import Base, get_db, import_all_models
 from fin.models.dividend_history import DividendHistoryModel
 from fin.routers.holdings import _annual_rate_from_history
 from fin.services.providers.yfinance_provider import YFinanceProvider
@@ -69,6 +69,7 @@ def div_env():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

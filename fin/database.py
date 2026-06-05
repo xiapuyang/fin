@@ -525,7 +525,13 @@ def _drop_holdings_as_of_date(db: "Session") -> None:
         db.rollback()
 
 
-def init_db() -> None:
+def import_all_models() -> None:
+    """Import every ORM model so SQLAlchemy registers them with Base.metadata.
+
+    Call this before Base.metadata.create_all() — including in tests — to
+    ensure all tables are created. init_db() calls this automatically, but
+    tests mock init_db, so they must call this directly before create_all.
+    """
     import fin.models.alert  # noqa: F401
     import fin.models.stock  # noqa: F401
     import fin.models.user  # noqa: F401
@@ -542,6 +548,10 @@ def init_db() -> None:
     import fin.models.price_history  # noqa: F401
     import fin.models.benchmark_result  # noqa: F401
     import fin.models.benchmark_custom_scheme  # noqa: F401
+
+
+def init_db() -> None:
+    import_all_models()
 
     db: Session = SessionLocal()
     try:

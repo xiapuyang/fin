@@ -158,13 +158,14 @@ def benchmark_client():
     from sqlalchemy.pool import StaticPool
 
     from fin.api import app
-    from fin.database import Base, get_db
+    from fin.database import Base, get_db, import_all_models
 
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -701,13 +702,14 @@ def _make_isolated_db():
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
 
-    from fin.database import Base
+    from fin.database import Base, import_all_models
 
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     return engine, sessionmaker(bind=engine)
 
