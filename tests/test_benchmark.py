@@ -592,12 +592,13 @@ def test_compute_no_income_returns_null_xirr(benchmark_client):
 # ── warn_orphaned_bench_ids ───────────────────────────────────────────────────
 
 
-def test_warn_orphaned_bench_ids_no_crash(benchmark_client):
+def test_warn_orphaned_bench_ids_no_crash():
     """warn_orphaned_bench_ids() should not raise even with orphaned rows."""
+    from unittest.mock import patch
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
-    from fin.database import Base
+    from fin.database import Base, import_all_models
     from fin.models.benchmark_result import BenchmarkResultModel
     from fin.services.benchmark_service import warn_orphaned_bench_ids
 
@@ -606,18 +607,18 @@ def test_warn_orphaned_bench_ids_no_crash(benchmark_client):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
-    # Insert a row with an unknown bench_id
     db.add(
         BenchmarkResultModel(
             account_id=1, bench_id="old_scheme_id", computed_date="2024-01-01"
         )
     )
     db.commit()
-    # Should not raise
-    warn_orphaned_bench_ids()
+    with patch("fin.database.SessionLocal", Session):
+        warn_orphaned_bench_ids()
     db.close()
     engine.dispose()
 
