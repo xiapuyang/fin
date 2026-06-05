@@ -66,7 +66,9 @@ def setup_logging(
         ch = logging.StreamHandler()
         ch.setLevel(console_level)
         ch.setFormatter(
-            RelativePathFormatter("[%(levelname)s] [%(request_id)s] %(message)s")
+            RelativePathFormatter(
+                "%(asctime)s [%(levelname)s] [%(request_id)s] %(message)s"
+            )
         )
         root.addHandler(ch)
 

@@ -82,12 +82,129 @@ const _fmtBarK = (v) => {
   return v.toFixed(2);
 };
 
-const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true }) => {
-  const padL = showAxis ? 44 : 4, padR = 8, padT = 20, padB = 22;
+// CJK-aware visual width (each CJK char counts as 2)
+const _cjkW = (s) => [...(s||"")].reduce((n, c) => n + (c.charCodeAt(0) > 0x2E7F ? 2 : 1), 0);
+
+// Wrap a single space-free token; never splits a run of [0-9%/.] mid-way
+const _wrapWord = (w, maxW) => {
+  const lines = []; let line = "", lineW = 0, numRunStart = -1;
+  for (const c of w) {
+    const cw = c.charCodeAt(0) > 0x2E7F ? 2 : 1;
+    const isNum = /[0-9%\/.]/.test(c);
+    if (!isNum) numRunStart = -1;
+    else if (numRunStart < 0) numRunStart = line.length;
+    if (lineW + cw > maxW && lineW > 0) {
+      if (numRunStart > 0) {
+        // back up to before the number run started
+        const carry = line.slice(numRunStart);
+        lines.push(line.slice(0, numRunStart));
+        line = carry + c; lineW = _cjkW(line); numRunStart = 0;
+      } else {
+        lines.push(line); line = c; lineW = cw; numRunStart = isNum ? 0 : -1;
+      }
+    } else { line += c; lineW += cw; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [w];
+};
+
+// Wrap string into lines of at most maxW visual units.
+// Breaks at spaces first; falls back to _wrapWord for tokens that still exceed maxW.
+const _wrapLabel = (s, maxW = 10) => {
+  const words = s.split(" ").filter(Boolean);
+  const lines = []; let line = "", lineW = 0;
+  for (const word of words) {
+    const ww = _cjkW(word);
+    if (lineW === 0) {
+      if (ww > maxW) {
+        const sub = _wrapWord(word, maxW);
+        for (let i = 0; i < sub.length - 1; i++) lines.push(sub[i]);
+        line = sub[sub.length - 1]; lineW = _cjkW(line);
+      } else { line = word; lineW = ww; }
+    } else if (lineW + 1 + ww <= maxW) {
+      line += " " + word; lineW += 1 + ww;
+    } else {
+      lines.push(line);
+      if (ww > maxW) {
+        const sub = _wrapWord(word, maxW);
+        for (let i = 0; i < sub.length - 1; i++) lines.push(sub[i]);
+        line = sub[sub.length - 1]; lineW = _cjkW(line);
+      } else { line = word; lineW = ww; }
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+};
+
+const BarChart = ({ data, width = 560, height = 180, color = "var(--ink)", showAxis = true, signed = false }) => {
+  const padL = showAxis ? 44 : 4, padR = 8, padT = 20;
+  const sqSz = 8, sqGap = 4, lineH = 12;
+
+  if (signed) {
+    // Pre-compute wrapped labels to size padB dynamically
+    const wrappedLabels = data.map(d => _wrapLabel(d.label));
+    const maxLines = Math.max(...wrappedLabels.map(ls => ls.length));
+    const padB = 18 + maxLines * lineH;
+    const hasTopLabels = data.some(d => d.topLabel);
+    const padT = hasTopLabels ? 34 : 20;
+    const svgH = height + (maxLines - 1) * lineH;
+    const w = width - padL - padR, h = svgH - padT - padB;
+    const bw = Math.min(w / data.length * 0.7, 48);
+    const gap = w / data.length - bw;
+    const maxAbs = Math.max(...data.map(d => Math.abs(d.value ?? 0))) || 1;
+    const zeroY = padT + h / 2;
+
+    return (
+      <svg width={width} height={svgH} style={{ display: "block" }}>
+        {showAxis && (
+          <line x1={padL} x2={padL + w} y1={zeroY} y2={zeroY} stroke="var(--line-2)" strokeWidth="1"/>
+        )}
+        {data.map((d, i) => {
+          const x = padL + i * (bw + gap) + gap / 2;
+          const cx = x + bw / 2;
+          const v = d.value ?? 0;
+          const bh = (Math.abs(v) / maxAbs) * (h / 2);
+          const isNeg = v < 0;
+          const barY = isNeg ? zeroY : zeroY - bh;
+          const c = d.color || (isNeg ? "var(--down)" : color);
+          const labelText = d.value == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+          const rawValueY = isNeg ? zeroY + bh + 11 : barY - 3;
+          const valueY = Math.min(rawValueY, zeroY - 3);
+          const lines = wrappedLabels[i];
+          const widestLine = Math.max(...lines.map(_cjkW));
+          const groupW = sqSz + sqGap + widestLine * 3.8;
+          const groupX = cx - groupW / 2;
+          const baseY = svgH - padB + lineH - 2;
+          return (
+            <g key={i}>
+              {bh > 0 && <rect x={x} y={barY} width={bw} height={bh} fill={c} rx="2"/>}
+              {d.topLabel && (
+                <text x={cx} y={valueY - 12} fontSize="8.5" fill="var(--ink-3)" textAnchor="middle" className="mono">
+                  {d.topLabel}
+                </text>
+              )}
+              <text x={cx} y={valueY} fontSize="9.5" fill={c} textAnchor="middle" className="mono">
+                {labelText}
+              </text>
+              {d.color && <rect x={groupX} y={baseY - sqSz + 1} width={sqSz} height={sqSz} fill={d.color} rx="1"/>}
+              <text fontSize="10" fill="var(--ink-4)" textAnchor="start">
+                {lines.map((l, li) => (
+                  <tspan key={li} x={groupX + sqSz + sqGap} dy={li === 0 ? baseY : lineH}>{l}</tspan>
+                ))}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+
+  const padB = 22;
   const w = width - padL - padR, h = height - padT - padB;
-  const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   const bw = Math.min(w / data.length * 0.7, 48);
   const gap = w / data.length - bw;
+
+  const max = Math.max(...data.map(d => Math.abs(d.value))) || 1;
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       {showAxis && [0, .25, .5, .75, 1].map((p, i) => (
@@ -214,4 +331,412 @@ const StackedBar = ({ data, width = 560, height = 18, gap = 2 }) => {
   );
 };
 
-Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar });
+// === Multi-series line chart (for benchmark history) =========================
+
+const _LINE_COLORS = [
+  "#3b82f6", // blue
+  "#e5484d", // red
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#8b5cf6", // purple
+  "#06b6d4", // cyan
+  "#f97316", // orange
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#14b8a6", // teal
+  "#6366f1", // indigo
+  "#f43f5e", // rose
+  "#a78bfa", // violet
+  "#22d3ee", // sky
+  "#fbbf24", // yellow
+];
+
+// Deterministic color from series name — consistent across chart types and rerenders
+const nameColor = (name) => {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return _LINE_COLORS[Math.abs(h) % _LINE_COLORS.length];
+};
+
+// Dedup-aware color map for a set of names. Each name gets its preferred hash
+// color if available; collisions get the next unused color in the palette.
+const nameColors = (names) => {
+  const used = new Set();
+  const result = {};
+  // First pass: claim preferred colors
+  for (const name of names) {
+    const c = nameColor(name);
+    if (!used.has(c)) { result[name] = c; used.add(c); }
+  }
+  // Second pass: resolve collisions with the next available color
+  for (const name of names) {
+    if (result[name]) continue;
+    for (const c of _LINE_COLORS) {
+      if (!used.has(c)) { result[name] = c; used.add(c); break; }
+    }
+    if (!result[name]) result[name] = nameColor(name); // palette exhausted
+  }
+  return result;
+};
+
+const MultiLineChart = ({ series = [], width = 600, height = 200, granularity = "month", colorMap = null }) => {
+  const [hover, setHover] = React.useState(null);
+  const [hidden, setHidden] = React.useState(new Set());
+  const clipId = React.useRef("mlc-" + Math.random().toString(36).slice(2, 7)).current;
+
+  const toggleSeries = (id) => setHidden(h => {
+    const next = new Set(h);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const padT = 14, padR = 16, padB = 30, padL = 44;
+  const w = width - padL - padR;
+  const h = height - padT - padB;
+
+  // Only visible series affect axis scale
+  const visible = series.filter(s => !hidden.has(s.id));
+  const allDates = [...new Set(visible.flatMap(s => s.data.map(d => d.date)))].sort();
+  if (allDates.length === 0) return <svg width={width} height={height}/>;
+
+  const allValues = visible.flatMap(s => s.data.map(d => d.xirr).filter(v => v != null));
+  if (allValues.length === 0) return <svg width={width} height={height}/>;
+
+  // Percentile fence: clip to p5–p95 so extreme early-period XIRR spikes
+  // (when portfolio has few deposits, XIRR is very noisy) don't compress
+  // the stable region. Lines outside the fence are clipped by SVG clipPath.
+  const sv = [...allValues].sort((a, b) => a - b);
+  const rawMin = Math.min(...allValues), rawMax = Math.max(...allValues);
+  const p5  = sv[Math.max(0, Math.floor(sv.length * 0.05))];
+  const p95 = sv[Math.min(sv.length - 1, Math.floor(sv.length * 0.95))];
+  const pRange = Math.max(p95 - p5, 1);
+  const fenceMin = p5  - pRange * 0.15;
+  const fenceMax = p95 + pRange * 0.15;
+  const minV = Math.max(rawMin, fenceMin);
+  const maxV = Math.min(rawMax, fenceMax);
+  const vPad = (maxV - minV) * 0.08 || 2;
+  const yMin = minV - vPad, yMax = maxV + vPad;
+
+  const dateIndex = new Map(allDates.map((d, i) => [d, i]));
+  const xOf = (date) => allDates.length === 1
+    ? padL + w / 2
+    : padL + ((dateIndex.get(date) ?? 0) / (allDates.length - 1)) * w;
+  const yOf = (v) => padT + h - ((v - yMin) / Math.max(yMax - yMin, 0.0001)) * h;
+
+  const yRange = yMax - yMin;
+  // Target ~7 gridlines; pick the smallest "nice" step that keeps ≤8 ticks.
+  const _niceSteps = [1, 2, 5, 10, 20, 50, 100];
+  const yStep = _niceSteps.find(s => yRange / s <= 8) || 100;
+  const yTicks = [];
+  for (let y = Math.ceil(yMin / yStep) * yStep; y <= yMax + 0.001; y += yStep) yTicks.push(y);
+
+  const xStep = Math.max(1, Math.floor(allDates.length / 5));
+  const xTicks = allDates.filter((_, i) => i % xStep === 0 || i === allDates.length - 1);
+
+  const _months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmtX = (d) => {
+    const parts = d.split("-");
+    if (allDates.length === 1) {
+      const mo = _months[+parts[1] - 1];
+      return parts[2] ? `${mo} ${+parts[2]}, ${parts[0]}` : `${mo} ${parts[0]}`;
+    }
+    if (granularity === "month") return `${_months[+parts[1]-1]} '${parts[0].slice(2)}`;
+    return d.slice(5);
+  };
+
+  const _colorMap = colorMap || nameColors(series.map(s => s.name));
+  const seriesColor = (name) => _colorMap[name] || nameColor(name);
+
+  // Per-date lookup for hover (includes hidden series in tooltip)
+  const dateMap = React.useMemo(() => {
+    const m = new Map();
+    series.forEach(s => {
+      if (hidden.has(s.id)) return;
+      s.data.forEach(d => {
+        if (d.xirr != null) {
+          if (!m.has(d.date)) m.set(d.date, []);
+          m.get(d.date).push({ name: s.name, color: seriesColor(s.name), xirr: d.xirr });
+        }
+      });
+    });
+    return m;
+  }, [series, hidden]);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let nearestIdx = 0, nearestDist = Infinity;
+    allDates.forEach((d, i) => {
+      const dist = Math.abs(mx - xOf(d));
+      if (dist < nearestDist) { nearestDist = dist; nearestIdx = i; }
+    });
+    const date = allDates[nearestIdx];
+    const entries = (dateMap.get(date) || []).slice().sort((a, b) => b.xirr - a.xirr);
+    if (entries.length) setHover({ date, x: xOf(date), entries });
+  };
+
+  const _charW = c => c.charCodeAt(0) > 255 ? 10 : 6;
+  const _nameW = name => [...(name || "")].reduce((s, c) => s + _charW(c), 0);
+  const TIP_W = Math.max(164, 11 + Math.max(...series.map(s => _nameW(s.name))) + 50);
+  const tipEntries = hover ? hover.entries : [];
+  const tipH = tipEntries.length * 17 + 22;
+  const tipX = hover ? (hover.x + 8 + TIP_W > width ? hover.x - TIP_W - 8 : hover.x + 8) : 0;
+
+  return (
+    <div>
+      <svg width={width} height={height} style={{ display: "block", overflow: "visible", cursor: "crosshair" }}
+        onMouseMove={handleMouseMove} onMouseLeave={() => setHover(null)}>
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={padL} y={padT} width={w} height={h}/>
+          </clipPath>
+        </defs>
+        {/* y-axis grid + labels */}
+        {yTicks.map(y => (
+          <g key={y}>
+            <line x1={padL} x2={padL + w} y1={yOf(y)} y2={yOf(y)} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
+            <text x={padL - 4} y={yOf(y) + 4} textAnchor="end" fontSize="9.5" fill="var(--ink-4)">
+              {y > 0 ? `+${y}%` : `${y}%`}
+            </text>
+          </g>
+        ))}
+        {yMin < 0 && yMax > 0 && (
+          <line x1={padL} x2={padL + w} y1={yOf(0)} y2={yOf(0)} stroke="var(--line-2)" strokeWidth="1.5"/>
+        )}
+        {xTicks.map(d => (
+          <text key={d} x={xOf(d)} y={padT + h + 16} textAnchor="middle" fontSize="9.5" fill="var(--ink-4)">{fmtX(d)}</text>
+        ))}
+        {/* series lines — clipped to chart area */}
+        <g clipPath={`url(#${clipId})`}>
+          {visible.map((s) => {
+            const color = seriesColor(s.name);
+            const pts = s.data.filter(d => d.xirr != null).map(d => `${xOf(d.date)},${yOf(d.xirr)}`).join(" ");
+            return pts ? <polyline key={s.id} points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/> : null;
+          })}
+        </g>
+        {/* terminal dots + labels */}
+        {!hover && visible.map((s) => {
+          const color = seriesColor(s.name);
+          const last = s.data.filter(d => d.xirr != null).at(-1);
+          if (!last) return null;
+          const cy = yOf(last.xirr);
+          // Don't render terminal label if point is outside the clipped area
+          if (cy < padT || cy > padT + h) return null;
+          return (
+            <g key={s.id}>
+              <circle cx={xOf(last.date)} cy={cy} r={3} fill={color}/>
+              <text x={xOf(last.date) + 6} y={cy + 4} fontSize="9" fill={color} fontFamily="monospace">
+                {last.xirr >= 0 ? `+${last.xirr.toFixed(1)}` : last.xirr.toFixed(1)}%
+              </text>
+            </g>
+          );
+        })}
+        {/* hover crosshair + tooltip */}
+        {hover && (
+          <g>
+            <line x1={hover.x} x2={hover.x} y1={padT} y2={padT + h}
+              stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3,2" opacity="0.5"/>
+            {tipEntries.map(e => {
+              const cy = yOf(e.xirr);
+              return (cy >= padT && cy <= padT + h)
+                ? <circle key={e.name} cx={hover.x} cy={cy} r={3.5} fill={e.color}/>
+                : null;
+            })}
+            <g transform={`translate(${tipX},${padT + 2})`}>
+              <rect width={TIP_W} height={tipH} rx={5} fill="var(--paper)"
+                stroke="var(--line-2)" strokeWidth="1" style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,.08))" }}/>
+              <text x={7} y={15} fontSize="9.5" fill="var(--ink-3)" fontFamily="monospace">
+                {(() => {
+                  const p = hover.date.split("-");
+                  return p.length === 2
+                    ? `${_months[+p[1]-1]} ${p[0]}`
+                    : `${_months[+p[1]-1]} ${+p[2]}, ${p[0]}`;
+                })()}
+              </text>
+              {tipEntries.map((e, i) => (
+                <g key={e.name} transform={`translate(7,${20 + i * 17})`}>
+                  <rect width={7} height={7} rx={1.5} y={0} fill={e.color}/>
+                  <text x={11} y={7.5} fontSize="10" fill="var(--ink-2)">{e.name}</text>
+                  <text x={TIP_W - 10} y={7.5} fontSize="10" fill={e.color}
+                    textAnchor="end" fontFamily="monospace" fontWeight="600">
+                    {e.xirr >= 0 ? `+${e.xirr.toFixed(1)}` : e.xirr.toFixed(1)}%
+                  </text>
+                </g>
+              ))}
+            </g>
+          </g>
+        )}
+      </svg>
+      {/* clickable legend — click to hide/show a series */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 6, paddingLeft: padL }}>
+        {series.map((s) => {
+          const color = seriesColor(s.name);
+          const isHidden = hidden.has(s.id);
+          return (
+            <div key={s.id} onClick={() => toggleSeries(s.id)}
+              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer",
+                color: isHidden ? "var(--ink-4)" : "var(--ink-3)",
+                opacity: isHidden ? 0.45 : 1, userSelect: "none" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2,
+                background: isHidden ? "var(--ink-4)" : color, flexShrink: 0 }}/>
+              <span style={{ textDecoration: isHidden ? "line-through" : "none" }}>{s.name}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ── XIRR Range Chart ─────────────────────────────────────────────────────────
+// Horizontal range bars showing min–max XIRR per scheme with current value dot.
+const _fmtMonthDate = (d) => {
+  if (!d) return "";
+  const _mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  if (d.length === 7) { const [y,m] = d.split("-"); return `${_mn[+m-1]} '${y.slice(2)}`; }
+  const [y,m,day] = d.split("-"); return `${_mn[+m-1]} ${+day} '${y.slice(2)}`;
+};
+
+const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width = 560 }) => {
+  const [hidden, setHidden] = React.useState(new Set());
+  const toggle = (id) => setHidden(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+  if (!series.length) return null;
+
+  // Compute per-series stats for ALL rows (so hidden rows still appear in legend)
+  const allRows = series.map(s => {
+    const pts = s.data.filter(d => d.xirr != null);
+    if (!pts.length) return null;
+    const minPt = pts.reduce((a, b) => b.xirr < a.xirr ? b : a);
+    const maxPt = pts.reduce((a, b) => b.xirr > a.xirr ? b : a);
+    return { id: s.id, name: s.name, min: minPt.xirr, minDate: minPt.date, max: maxPt.xirr, maxDate: maxPt.date, current: currentMap[s.id] ?? null };
+  }).filter(Boolean);
+
+  if (!allRows.length) return null;
+
+  const allDates = series.flatMap(s => s.data.map(d => d.date)).filter(Boolean).sort();
+  const rangeStart = allDates[0], rangeEnd = allDates[allDates.length - 1];
+
+  // x-axis range: IQR fence (Q3 + 1.5×IQR) to prevent one outlier stretching the axis
+  const visibleRows = allRows.filter(r => !hidden.has(r.id));
+  const axisVals = visibleRows.flatMap(r => [r.min, r.max, r.current].filter(v => v != null)).sort((a, b) => a - b);
+  if (!axisVals.length) return null;
+  const q1 = axisVals[Math.floor(axisVals.length * 0.25)];
+  const q3 = axisVals[Math.floor(axisVals.length * 0.75)];
+  const iqr = Math.max(q3 - q1, 1);
+  const rawMin = axisVals[0], rawMax = axisVals[axisVals.length - 1];
+  const fenceMax = q3 + 1.5 * iqr;
+  const xMin = rawMin - (rawMax - rawMin) * 0.04;
+  const xMax = Math.min(rawMax, fenceMax) + (rawMax - rawMin) * 0.04;
+
+  const _colorMap = colorMap || nameColors(allRows.map(r => r.name));
+  const rowH = 38, padL = 132, padR = 52, barH = 8;
+  const chartW = width - padL - padR;
+  // bottom: 36px for ticks + 28px for caption gap
+  const svgH = allRows.length * rowH + 36 + 28;
+
+  const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
+  const clampX = v => Math.min(Math.max(xOf(v), padL), padL + chartW);
+
+  // x-axis ticks
+  const axisRange = xMax - xMin;
+  const step = axisRange <= 8 ? 2 : axisRange <= 20 ? 5 : axisRange <= 60 ? 10 : 20;
+  const ticks = [];
+  for (let t = Math.ceil(xMin / step) * step; t <= xMax + 0.001; t += step) ticks.push(t);
+  const tickY = svgH - 36, captionY = svgH - 10;
+
+  const _pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+
+  return (
+  <div>
+    <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }} textRendering="geometricPrecision">
+      {/* grid lines */}
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={tickY - 4} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
+          {/* 0% label shifted right so it doesn't crowd left-side min labels */}
+          <text x={t === 0 ? xOf(0) + 4 : xOf(t)} y={tickY + 10}
+            textAnchor={t === 0 ? "start" : "middle"} fontSize="10" fill="var(--ink-4)">
+            {t === 0 ? "0%" : _pct(t)}
+          </text>
+        </g>
+      ))}
+      {/* zero line */}
+      {xMin < 0 && xMax > 0 && (
+        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={tickY - 4} stroke="var(--line-2)" strokeWidth="1.5"/>
+      )}
+      {allRows.map((r, i) => {
+        const isHidden = hidden.has(r.id);
+        const cy = i * rowH + rowH / 2;
+        const color = (_colorMap[r.name] || nameColor(r.name));
+        const x1 = clampX(r.min);
+        const rawX2 = xOf(r.max);
+        const clipped = rawX2 > padL + chartW;
+        const x2 = clipped ? padL + chartW : rawX2;
+        const curX = r.current != null ? clampX(r.current) : null;
+        const showMinLabel = (x1 - padL) > 24;
+        return (
+          <g key={r.id} style={{ cursor: "pointer" }} onClick={() => toggle(r.id)}>
+            {/* row label — dot kept here as alignment anchor */}
+            <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="11.5"
+              fill={isHidden ? "var(--ink-4)" : "var(--ink-2)"}
+              style={{ fontWeight: 500, textDecoration: isHidden ? "line-through" : "none" }}>
+              {r.name}
+            </text>
+            {!isHidden && (<>
+              {/* range bar */}
+              <rect x={x1} y={cy - barH / 2} width={Math.max(x2 - x1, 2)} height={barH}
+                rx={barH / 2} fill={color} opacity="0.22"/>
+              {/* end caps — right cap omitted when clipped (arrow instead) */}
+              <line x1={x1} x2={x1} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
+                stroke={color} strokeWidth="1.5" opacity="0.6"/>
+              {!clipped && <line x1={x2} x2={x2} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
+                stroke={color} strokeWidth="1.5" opacity="0.6"/>}
+              {/* min label — only when bar starts far enough from left edge */}
+              {showMinLabel && <>
+                <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
+                <text x={x1 - 3} y={cy + 10} textAnchor="end" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
+              </>}
+              {/* max label + date — at clip edge if clipped, with → prefix */}
+              <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">
+                {clipped ? `→${_pct(r.max)}` : _pct(r.max)}
+              </text>
+              <text x={x2 + 3} y={cy + 10} textAnchor="start" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.maxDate)}</text>
+              {/* current XIRR dot */}
+              {curX != null && (<>
+                <circle cx={curX} cy={cy} r={5} fill={color}/>
+                <text x={curX} y={cy - 8} textAnchor="middle" fontSize="10" fill={color} fontFamily="monospace" fontWeight="600">
+                  {_pct(r.current)}
+                </text>
+              </>)}
+            </>)}
+          </g>
+        );
+      })}
+      {/* date range caption below ticks */}
+      {rangeStart && rangeEnd && (
+        <text x={padL + chartW / 2} y={captionY} textAnchor="middle" fontSize="10" fill="var(--ink-4)">
+          {_fmtMonthDate(rangeStart)} – {_fmtMonthDate(rangeEnd)}
+        </text>
+      )}
+    </svg>
+    {/* Legend — colored dots matching bar colors, click to hide/show */}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 8, paddingLeft: padL }}>
+      {allRows.map(r => {
+        const color = (_colorMap[r.name] || nameColor(r.name));
+        const isHidden = hidden.has(r.id);
+        return (
+          <div key={r.id}
+            style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", opacity: isHidden ? 0.35 : 1 }}
+            onClick={() => toggle(r.id)}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: color, flexShrink: 0 }}/>
+            <span style={{ fontSize: 11, color: "var(--ink-3)", textDecoration: isHidden ? "line-through" : "none" }}>{r.name}</span>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+  );
+};
+
+Object.assign(window, { Donut, AreaChart, BarChart, TriggerTimeline, ProgressRing, StackedBar, MultiLineChart, XirrRangeChart, nameColor, nameColors });

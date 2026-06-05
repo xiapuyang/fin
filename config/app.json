@@ -1,4 +1,65 @@
 {
+  "_note": "benchmark_defaults[].id is immutable once stored in the database as bench_id. Never rename or remove a used id — add a new entry instead. name/description/allocations/cash_pct are safe to change. If you modify allocations or cash_pct of an existing default, delete the corresponding benchmark_results rows manually (DELETE FROM benchmark_results WHERE bench_id = '<id>') to avoid stale history in the chart.",
+  "benchmark_recompute_interval_minutes": 10,
+  "benchmark_snapshot_interval_days": 30,
+  "benchmark_defaults": [
+    {
+      "id": "sp500",
+      "name": "S&P 500",
+      "description": "SPY 100%",
+      "allocations": [{"symbol": "SPY", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "global_6040",
+      "name": "Global 60/40",
+      "description": "VT 60% · BNDW 40%",
+      "allocations": [{"symbol": "VT", "pct": 60}, {"symbol": "BNDW", "pct": 40}],
+      "cash_pct": 0
+    },
+    {
+      "id": "us_8110",
+      "name": "US 80/10/10",
+      "description": "VOO 80% · BSV 10% · Cash 10%",
+      "allocations": [{"symbol": "VOO", "pct": 80}, {"symbol": "BSV", "pct": 10}],
+      "cash_pct": 10
+    },
+    {
+      "id": "nasdaq100",
+      "name": "Nasdaq 100",
+      "description": "QQQ 100%",
+      "allocations": [{"symbol": "QQQ", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "hs_tech",
+      "name": "Hang Seng Tech",
+      "description": "3033.HK 100%",
+      "allocations": [{"symbol": "3033.HK", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "csi300",
+      "name": "CSI 300",
+      "description": "000300.SS 100%",
+      "allocations": [{"symbol": "000300.SS", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "shcomp",
+      "name": "SSE Composite",
+      "description": "000001.SS 100%",
+      "allocations": [{"symbol": "000001.SS", "pct": 100}],
+      "cash_pct": 0
+    },
+    {
+      "id": "btc",
+      "name": "Bitcoin",
+      "description": "BTC-USD 100%",
+      "allocations": [{"symbol": "BTC-USD", "pct": 100}],
+      "cash_pct": 0
+    }
+  ],
   "i18n": {
     "default_lang": "en",
     "supported_langs": ["en", "zh"]

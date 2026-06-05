@@ -150,10 +150,9 @@ const computeAccountXIRR = (incomeItems, positions) => {
   const today = new Date().toISOString().slice(0, 10);
   const cfs = [];
   incomeItems.forEach(i => {
+    if (i.category !== "deposit" && i.category !== "withdrawal") return;
     const amt = i.amount * (FX[i.currency] || 1);
-    if (i.category === "deposit")    cfs.push({ date: i.date, amount: -amt });
-    else if (i.category === "withdrawal") cfs.push({ date: i.date, amount: amt });
-    else                             cfs.push({ date: i.date, amount: amt });
+    cfs.push({ date: i.date, amount: i.category === "deposit" ? -amt : amt });
   });
   const terminalValue = positions.reduce((s, p) => s + p.value, 0);
   if (terminalValue > 0) cfs.push({ date: today, amount: terminalValue });
@@ -260,6 +259,15 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     if (snapshots.length > 0) setSelectedSnapshot(snapshots[snapshots.length - 1]);
     else setSelectedSnapshot(null);
   }, [acctName, snapshots.join(",")]);
+
+  // Reset tab to "positions" when on benchmark tab but benchmark is not enabled
+  // (covers both account switching and disabling benchmark on the current account)
+  React.useEffect(() => {
+    const acct = accounts.find(a => a.id === selectedAccountId);
+    if (tab === "benchmark" && acct && !acct.benchmark_enabled) {
+      setTab("positions");
+    }
+  }, [selectedAccountId, selectedAccount?.benchmark_enabled]);
 
   // Holdings filtered to selected snapshot only (prevents double-counting)
   // null/empty snapshot_name treated as "Unnamed"
@@ -429,11 +437,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
             <div>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.mkt")} </span>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allMarketValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div>
-              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
+              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.cash")} </span>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{summarySym}{fmtNum(allCashValue/summaryFx, 2)}</Private> : "—"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -517,11 +525,11 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               </div>
               <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Mkt </span>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.mkt")} </span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctMarketValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Cash </span>
+                  <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.cash")} </span>
                   <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{pricesReady ? <Private>{sym}{fmtNum(acctCashValue, 2)}</Private> : "—"}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -557,7 +565,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
               value={pricesReady ? maskDigits(`${acctUnrealized >= 0 ? "+" : "−"}${sym}${fmtNum(Math.abs(acctUnrealized), 0)}`) : "—"}
               tone={!pricesReady ? "neutral" : acctUnrealized >= 0 ? "up" : "down"}
               pct={hpr}
-              sub={pricesReady ? `HPR ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
+              sub={pricesReady ? `${I18N.t("holdings.stat.hpr")} ${hpr != null ? (hpr >= 0 ? "+" : "") + hpr.toFixed(2) + "%" : "—"} · ${I18N.t("holdings.stat.netDeposits")} ${maskDigits(`${sym}${fmtNum(acctDeposits, 0)}`)}` : I18N.t("holdings.stat.mwrr.loading")}
             />
             <StatTile label={I18N.t("holdings.stat.realized")} value={maskDigits(`+${sym}${fmtNum((acctRealized + acctIncomeTotal), 0)}`)} tone="up" sub={maskDigits(I18N.tf("holdings.stat.realized.detail", { realized: `${sym}${fmtNum(acctRealized, 0)}`, income: `${sym}${fmtNum(acctIncomeTotal, 0)}` }))}/>
             {!pricesReady
@@ -578,6 +586,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           { id: "cashflows",    label: I18N.t("holdings.cashflows.title"),   count: acctIncome.filter(i => ["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "income",       label: I18N.t("holdings.income.title"),      count: acctIncome.filter(i => !["deposit","withdrawal"].includes(i.category)).length || null },
           { id: "dividends",    label: I18N.t("holdings.calendar.title"),    count: acctIncome.filter(i => i.category === "dividend").length || null },
+          ...(selectedAccount?.benchmark_enabled ? [{ id: "benchmark", label: I18N.t("benchmark.tab.title") }] : []),
         ]}/>
       </div>
 
@@ -612,6 +621,13 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           defaultAccount={acctName}
         />; })()}
       {tab === "dividends"    && <DividendCalendar incomeItems={acctIncome} positions={acctPositions} acctCcy={acctCcy} acctFx={acctFx}/>}
+      {tab === "benchmark" && selectedAccount?.benchmark_enabled && (
+        <BenchmarkTab
+          account={selectedAccount}
+          onAccountUpdated={() => apiGetAccounts().then(setAccounts)}
+          currency={currency}
+        />
+      )}
 
 {showHoldingModal && <HoldingModal editing={editingHolding} accounts={accounts} defaultAccount={acctName} onClose={() => setShowHoldingModal(false)}
           onSaved={h => {
@@ -691,7 +707,7 @@ const PositionsTable = ({ positions, total, acctCcy = "CNY", acctFx = 1, snapsho
                   {!cash && p.txnCount > 0 && <span style={{ fontSize: 10, color: "var(--ink-4)", padding: "1px 6px", border: "1px solid var(--line)", borderRadius: 4 }}>{p.txnCount} {I18N.t("holdings.positions.txns")}</span>}
                 </div>
               </div>
-              <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? p.shares : "—")}</span>
+              <span className="mono" style={{textAlign:"right",fontSize:12}}>{cash ? "—" : (p.shares > 0 ? maskDigits(String(p.shares)) : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:12,color:"var(--ink-3)"}}>{cash ? "—" : fmtMoney(p.avgCost, p.currency, priceDp(p))}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}>{cash ? "—" : (p.sym.price ? fmtMoney(p.sym.price, p.currency, priceDp(p)) : "—")}</span>
               <span className="mono" style={{textAlign:"right",fontSize:13,fontWeight:600}}><Private>{sym}{fmtNum(p.value / acctFx, 0)}</Private></span>
@@ -794,10 +810,10 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
         : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "100px 80px 90px 80px 100px 110px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-              <span>DATE</span><span>TYPE</span><span>SYMBOL</span>
-              <span style={{textAlign:"right"}}>SHARES</span><span style={{textAlign:"right"}}>PRICE</span>
-              <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>REALIZED</span>
-              <span style={{paddingLeft:24}}>NOTE</span><span/>
+              <span>{I18N.t("holdings.txns.col.date")}</span><span>{I18N.t("holdings.txns.col.type")}</span><span>{I18N.t("holdings.txns.col.symbol")}</span>
+              <span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.shares")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.price")}</span>
+              <span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.amount")}</span><span style={{textAlign:"right"}}>{I18N.t("holdings.txns.col.realized")}</span>
+              <span style={{paddingLeft:24}}>{I18N.t("holdings.txns.col.note")}</span><span/>
             </div>
             {data.items.map((t, i) => {
               const amt = t.shares * t.price;
@@ -806,11 +822,11 @@ const TransactionsTable = ({ account, refreshKey = 0, allSymbols = [], assetType
                   <span className="mono" style={{color:"var(--ink-3)"}}>{t.date}</span>
                   <Badge tone={t.side === "buy" ? "up" : "down"} solid={false} size="sm">{t.side === "buy" ? I18N.t("holdings.txns.buy") : I18N.t("holdings.txns.sell")}</Badge>
                   <span className="mono" style={{fontWeight:600}}>{t.code}</span>
-                  <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? t.shares : "—"}</span>
+                  <span className="mono" style={{textAlign:"right"}}>{t.shares > 0 ? maskDigits(String(t.shares)) : "—"}</span>
                   <span className="mono" style={{textAlign:"right"}}>{t.price > 0 ? fmtMoney(t.price, t.currency, assetTypeOf(t.code) === "mutualfund" ? 4 : 2) : "—"}</span>
-                  <span className="mono" style={{textAlign:"right",fontWeight:600}}>{amt > 0 ? fmtMoney(amt, t.currency, 0) : "—"}</span>
+                  <span className="mono" style={{textAlign:"right",fontWeight:600}}><Private>{amt > 0 ? fmtMoney(amt, t.currency, 0) : "—"}</Private></span>
                   <span className="mono" style={{textAlign:"right",color:t.realized>=0?"var(--up)":t.realized!=null?"var(--down)":"var(--ink-4)",fontWeight:600}}>
-                    {t.realized != null ? (t.realized >= 0 ? "+" : "−") + fmtMoney(Math.abs(t.realized), t.currency, 0) : "—"}
+                    <Private>{t.realized != null ? (t.realized >= 0 ? "+" : "−") + fmtMoney(Math.abs(t.realized), t.currency, 0) : "—"}</Private>
                   </span>
                   <span style={{color:"var(--ink-3)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingLeft:24}}>{t.note || ""}</span>
                   <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
@@ -896,9 +912,9 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
           : (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "100px 110px 1.4fr 130px 130px 1fr 52px", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", fontSize: 10.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>
-                <span>DATE</span><span>TYPE</span><span>SOURCE</span>
-                <span style={{textAlign:"right"}}>AMOUNT</span><span style={{textAlign:"right"}}>≈ {acctCcy}</span>
-                <span>NOTE</span><span/>
+                <span>{I18N.t("holdings.income.col.date")}</span><span>{I18N.t("holdings.income.col.type")}</span><span>{I18N.t("holdings.income.col.source")}</span>
+                <span style={{textAlign:"right"}}>{I18N.t("holdings.income.col.amount")}</span><span style={{textAlign:"right"}}>{I18N.tf("holdings.income.col.equiv", { ccy: acctCcy })}</span>
+                <span>{I18N.t("holdings.income.col.note")}</span><span/>
               </div>
               {sorted.map((i, idx) => {
                 const acctAmt = i.amount * (FX[i.currency] || 1) / acctFx;
@@ -910,10 +926,10 @@ const IncomeTable = ({ items, total, acctCcy = "CNY", acctFx = 1, onAdd, onEdit,
                     <Badge tone={i.category === "dividend" ? "down" : i.category === "option" ? "violet" : i.category === "withdrawal" ? "up" : "info"} size="sm">{catLabels[i.category] || i.category}</Badge>
                     <span>{i.source}</span>
                     <span className="mono" style={{textAlign:"right",fontWeight:600,color:"var(--up)"}}>
-                      {sign}{fmtMoney(i.amount, i.currency, 2)}
+                      <Private>{sign}{fmtMoney(i.amount, i.currency, 2)}</Private>
                     </span>
                     <span className="mono" style={{textAlign:"right",color:"var(--ink-3)"}}>
-                      {i.currency !== acctCcy ? `${sign}${sym}${fmtNum(acctAmt, 0)}` : "—"}
+                      <Private>{i.currency !== acctCcy ? `${sign}${sym}${fmtNum(acctAmt, 0)}` : "—"}</Private>
                     </span>
                     <span style={{color:"var(--ink-3)",fontSize:12}}>{i.note || "—"}</span>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
@@ -959,7 +975,7 @@ const DivUpcomingStrip = ({ upcoming, posByCode, acctFx, sym }) => {
             <Card key={u.code} padding={14} style={{ minWidth: 120 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{u.code}</div>
               <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{u.ex_date}</div>
-              {perShare && <div className="mono" style={{ fontSize: 11, color: "var(--up)", marginTop: 2 }}>{ccySymbol(pos?.currency || "USD")}{perShare.toFixed(3)}/sh</div>}
+              {perShare && <div className="mono" style={{ fontSize: 11, color: "var(--up)", marginTop: 2 }}>{ccySymbol(pos?.currency || "USD")}{perShare.toFixed(3)}{I18N.t("holdings.calendar.perShare")}</div>}
               {estPmt && <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--up)", marginTop: 3 }}>≈ {sym}{fmtNum(estPmt, 0)}</div>}
             </Card>
           );
@@ -1036,7 +1052,7 @@ const DivMonthGrid = ({ year, month, today, eventsByDate, selectedDay, setSelect
                 </Badge>
               </div>
               <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>
-                {e.type === "income" ? `+${fmtMoney(e.amount, e.currency, 2)}` : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}/sh` : "—"}
+                {e.type === "income" ? `+${fmtMoney(e.amount, e.currency, 2)}` : e.amount ? `${ccySymbol(e.currency || "USD")}${e.amount.toFixed(3)}${I18N.t("holdings.calendar.perShare")}` : "—"}
               </span>
             </div>
           ))}
@@ -1067,7 +1083,7 @@ const DivStockList = ({ divData, posByCode, today, acctFx, sym }) => (
               {d.ex_date && <div style={{ fontSize: 11, color: d.ex_date >= today ? "var(--up)" : "var(--ink-4)", marginTop: 2 }}>{I18N.t("holdings.calendar.exDate")} {d.ex_date}</div>}
             </div>
             <div style={{ textAlign: "right" }}>
-              {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}/sh/yr</div>}
+              {d.annual_rate && <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{ccySymbol(pos?.currency || "USD")}{d.annual_rate.toFixed(2)}{I18N.t("holdings.calendar.perShareYear")}</div>}
               {yieldPct && <div className="mono" style={{ fontSize: 12, color: "var(--up)", marginTop: 2 }}>{yieldPct.toFixed(2)}%</div>}
             </div>
           </div>
@@ -1847,12 +1863,693 @@ const useForm = (initial) => {
   return [form, set, setForm];
 };
 
+// ── Benchmark Tab ────────────────────────────────────────────────────────────
+
+const _knownSymbols = () => [
+  { value: "SPY",       label: `SPY — ${I18N.t("symbol.SPY")}` },
+  { value: "QQQ",       label: `QQQ — ${I18N.t("symbol.QQQ")}` },
+  { value: "^HSI",      label: `^HSI — ${I18N.t("symbol.HSI")}` },
+  { value: "3033.HK",   label: `3033.HK — ${I18N.t("symbol.HS_TECH")}` },
+  { value: "000300.SS", label: `000300.SS — ${I18N.t("symbol.CSI300")}` },
+  { value: "000001.SS", label: `000001.SS — ${I18N.t("symbol.SSE_COMP")}` },
+  { value: "VT",        label: `VT — ${I18N.t("symbol.VT")}` },
+  { value: "BNDW",      label: `BNDW — ${I18N.t("symbol.BNDW")}` },
+  { value: "VOO",       label: `VOO — ${I18N.t("symbol.VOO")}` },
+  { value: "BSV",       label: `BSV — ${I18N.t("symbol.BSV")}` },
+  { value: "BTC-USD",   label: `BTC-USD — ${I18N.t("symbol.BTC")}` },
+];
+
+const _CASH_VALUE = "__CASH__";
+
+const CustomSchemeEditor = ({ scheme, onSave, onCancel }) => {
+  const knownSymbols = _knownSymbols();
+  const [name, setName] = React.useState(scheme?.name || "");
+  const [rows, setRows] = React.useState(
+    scheme?.allocations?.length
+      ? scheme.allocations.map(a => ({ type: "symbol", symbol: a.symbol, pct: String(a.pct) }))
+      : [{ type: "symbol", symbol: "SPY", pct: "100" }]
+  );
+  const [cashPct, setCashPct] = React.useState(String(scheme?.cash_pct ?? 0));
+  const [customSymbol, setCustomSymbol] = React.useState({});
+  const [editConfirmed, setEditConfirmed] = React.useState(false);
+
+  const isEditMode = !!scheme;
+  const allocSum = rows.reduce((s, r) => s + (parseFloat(r.pct) || 0), 0) + (parseFloat(cashPct) || 0);
+  const isValid = name.trim() && Math.abs(allocSum - 100) < 0.01 && rows.length > 0 && (!isEditMode || editConfirmed);
+
+  const updateRow = (i, field, val) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [field]: val } : r));
+  const removeRow = (i) => setRows(rs => rs.filter((_, j) => j !== i));
+  const addRow = () => setRows(rs => [...rs, { type: "symbol", symbol: "SPY", pct: "0" }]);
+
+  const handleSave = () => {
+    const allocations = rows.map(r => ({
+      symbol: r.type === _CASH_VALUE ? _CASH_VALUE : (customSymbol[rows.indexOf(r)] || r.symbol),
+      pct: parseFloat(r.pct) || 0,
+    })).filter(a => a.symbol !== _CASH_VALUE);
+    onSave({ id: scheme?.id, name: name.trim(), allocations, cash_pct: parseFloat(cashPct) || 0 });
+  };
+
+  return (
+    <div style={{ background: "var(--paper-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "14px 16px", marginTop: 10 }}>
+      {isEditMode && (
+        <div style={{ fontSize: 12, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", marginBottom: 12 }}>
+          <div style={{ marginBottom: 7 }}>⚠ {I18N.t("benchmark.custom.editWarning")}</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", userSelect: "none" }}>
+            <input type="checkbox" checked={editConfirmed} onChange={e => setEditConfirmed(e.target.checked)}
+              style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#d97706" }}/>
+            <span>{I18N.t("benchmark.custom.editConfirm")}</span>
+          </label>
+        </div>
+      )}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.name")}</label>
+        <input value={name} onChange={e => setName(e.target.value)} autoComplete="off"
+          style={{ display: "block", marginTop: 4, width: "100%", fontSize: 13, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", boxSizing: "border-box" }}/>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.alloc")}</label>
+        <div style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 80px 28px", gap: "4px 6px", alignItems: "center" }}>
+          {rows.map((r, i) => {
+            const knownOpt = knownSymbols.find(s => s.value === r.symbol);
+            const isCustomSym = !knownOpt;
+            return (
+              <React.Fragment key={i}>
+                <div>
+                  <select value={knownOpt ? r.symbol : "__custom__"} onChange={e => {
+                      if (e.target.value === "__custom__") updateRow(i, "symbol", "");
+                      else updateRow(i, "symbol", e.target.value);
+                    }}
+                    style={{ width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)" }}>
+                    {knownSymbols.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <option value="__custom__">{I18N.t("benchmark.scheme.customSymbol")}</option>
+                  </select>
+                  {(!knownOpt) && (
+                    <input value={r.symbol} onChange={e => updateRow(i, "symbol", e.target.value.toUpperCase())} autoComplete="off"
+                      placeholder="e.g. ARKK" style={{ marginTop: 4, width: "100%", fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", boxSizing: "border-box" }}/>
+                  )}
+                </div>
+                <input value={r.pct} onChange={e => updateRow(i, "pct", e.target.value)} autoComplete="off"
+                  type="number" min="0" max="100" step="1"
+                  style={{ fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", textAlign: "right" }}/>
+                <button type="button" onClick={() => removeRow(i)} disabled={rows.length <= 1}
+                  style={{ border: "none", background: "none", color: "var(--ink-4)", cursor: rows.length <= 1 ? "default" : "pointer", fontSize: 15, padding: 0, opacity: rows.length <= 1 ? 0.3 : 1 }}>✕</button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+        <button type="button" onClick={addRow} style={{ marginTop: 6, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "3px 10px", cursor: "pointer" }}>+ Add</button>
+      </div>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>{I18N.t("benchmark.scheme.cashPct")}</label>
+        <input value={cashPct} onChange={e => setCashPct(e.target.value)} autoComplete="off"
+          type="number" min="0" max="100" step="1"
+          style={{ width: 70, fontSize: 12, padding: "5px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", textAlign: "right" }}/>
+        <span style={{ fontSize: 12, color: Math.abs(allocSum - 100) < 0.01 ? "var(--accent)" : "var(--up)", fontWeight: 600 }}>
+          {I18N.t("benchmark.scheme.allocSum").replace("{n}", allocSum.toFixed(1))}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" onClick={onCancel} style={{ fontSize: 12, padding: "5px 14px", border: "1px solid var(--line)", borderRadius: 6, background: "none", color: "var(--ink-3)", cursor: "pointer" }}>{I18N.t("benchmark.custom.cancel")}</button>
+        <button type="button" onClick={handleSave} disabled={!isValid} style={{ fontSize: 12, padding: "5px 14px", border: "none", borderRadius: 6, background: isValid ? "var(--ink)" : "var(--line)", color: isValid ? "#fff" : "var(--ink-4)", cursor: isValid ? "pointer" : "default" }}>{I18N.t("benchmark.custom.save")}</button>
+      </div>
+    </div>
+  );
+};
+
+const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
+  const [defaults, setDefaults] = React.useState([]);
+  const [results, setResults] = React.useState(null);
+  const [customSchemes, setCustomSchemes] = React.useState([]);
+  const [snapshots, setSnapshots] = React.useState([]);
+  const [history, setHistory] = React.useState(null);
+  const [expandedSnapId, setExpandedSnapId] = React.useState(null);
+  const [historyView, setHistoryView] = React.useState("trend"); // "trend" | "range" | "diff"
+  const [diffRefId, setDiffRefId] = React.useState("sp500");
+  const [computing, setComputing] = React.useState(false);
+  const [crudLoading, setCrudLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [localEnabled, setLocalEnabled] = React.useState(null); // null = all defaults on
+  const [editingCustomId, setEditingCustomId] = React.useState(null);
+  const [addingCustom, setAddingCustom] = React.useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const toggleVersionRef = React.useRef(0);
+  const reloadVersionRef = React.useRef(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const [defs, res, customs, snaps] = await Promise.all([
+          apiGetBenchmarkDefaults(),
+          apiGetBenchmarkResults(account.id),
+          apiGetCustomSchemes(account.id),
+          apiGetPortfolioSnapshots(account.id),
+        ]);
+        if (cancelled) return;
+        setDefaults(defs);
+        setCustomSchemes(customs);
+        setSnapshots(snaps);
+        const stored = account.benchmark_schemes;
+        const storedEnabled = stored ? (stored.enabled_defaults ?? null) : null;
+        setLocalEnabled(storedEnabled);
+
+        // Detect missing schemes
+        const enabledDefaultAndCustomIds = new Set(
+          storedEnabled === null ? defs.map(d => d.id) : storedEnabled
+        );
+        customs.forEach(cs => { if (cs.enabled !== 0) enabledDefaultAndCustomIds.add(String(cs.id)); });
+        const computedIds = new Set((res.schemes || []).map(s => s.id));
+        const missingDefaultOrCustom = [...enabledDefaultAndCustomIds].some(id => !computedIds.has(id));
+        const missingPortfolio = res.portfolio_xirr == null;
+        const missingSnaps = snaps.some(s => s.enabled !== 0 && !computedIds.has(String(s.id)));
+        const staleDate = !res.computed_date || res.computed_date !== today;
+
+        const needsCompute = staleDate || missingDefaultOrCustom || missingPortfolio;
+        const needsBackfill = missingSnaps;
+
+        // Backfill runs in the background — fire-and-forget, don't block rendering.
+        if (needsBackfill) apiTriggerBackfill(account.id);
+
+        // Returns true when a snapshot exists in history but has only 1 data point —
+        // meaning it was just created and only has the current month, not full historical curves.
+        const _snapNeedsBackfill = (h) => {
+          if (needsBackfill) return false;
+          const snapHistMap = {};
+          (h.series || []).forEach(s => { if (s.is_portfolio_snap) snapHistMap[s.id] = s.data?.length ?? 0; });
+          return snaps.some(s => s.enabled !== 0 && (
+            !snapHistMap.hasOwnProperty(String(s.id)) || snapHistMap[String(s.id)] <= 1
+          ));
+        };
+
+        if (needsCompute) {
+          setComputing(true);
+          const computed = await apiComputeBenchmark(account.id);
+          const h = await apiGetBenchmarkHistory(account.id);
+          if (!cancelled) { setResults(computed); setHistory(h); setComputing(false); }
+          if (!cancelled && _snapNeedsBackfill(h)) apiTriggerBackfill(account.id);
+        } else {
+          setResults(res);
+          const h = await apiGetBenchmarkHistory(account.id);
+          if (!cancelled) {
+            setHistory(h);
+            if (_snapNeedsBackfill(h)) apiTriggerBackfill(account.id);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      }
+    };
+    init();
+    return () => { cancelled = true; };
+  }, [account.id]);
+
+  // Active bench IDs for bar chart + history display
+  const activeIds = React.useMemo(() => {
+    const ids = localEnabled === null ? new Set(defaults.map(d => d.id)) : new Set(localEnabled);
+    customSchemes.forEach(cs => { if (cs.enabled !== 0) ids.add(String(cs.id)); });
+    return ids;
+  }, [localEnabled, defaults, customSchemes]);
+
+  // Localized name for a default scheme — falls back to d.name if no i18n key exists
+  const _defLabel = (d) => {
+    const key = `benchmark.default.${d.id}.name`;
+    const v = I18N.t(key);
+    return v !== key ? v : d.name;
+  };
+  const defById = React.useMemo(() => {
+    const m = {};
+    defaults.forEach(d => { m[d.id] = d; });
+    return m;
+  }, [defaults]);
+  const _schemeLabel = (id, fallback) => {
+    const d = defById[id];
+    return d ? _defLabel(d) : fallback;
+  };
+
+  const toggleDefault = async (id) => {
+    const version = ++toggleVersionRef.current;
+    const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
+    const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
+    setLocalEnabled(next);
+    setComputing(true);
+    try {
+      await apiUpdateBenchmarkSchemes(account.id, { enabled_defaults: next });
+      const computed = await apiComputeBenchmark(account.id);
+      const h = await apiGetBenchmarkHistory(account.id);
+      if (version !== toggleVersionRef.current) return;
+      setResults(computed);
+      setHistory(h);
+      if (onAccountUpdated) onAccountUpdated();
+    } catch (err) {
+      if (version !== toggleVersionRef.current) return;
+      setError(err.message);
+    } finally {
+      if (version === toggleVersionRef.current) setComputing(false);
+    }
+  };
+
+  const _reloadAfterCRUD = async () => {
+    const version = ++reloadVersionRef.current;
+    setComputing(true);
+    const [customs, snaps, computed] = await Promise.all([
+      apiGetCustomSchemes(account.id),
+      apiGetPortfolioSnapshots(account.id),
+      apiComputeBenchmark(account.id),
+    ]);
+    const h = await apiGetBenchmarkHistory(account.id);
+    if (version !== reloadVersionRef.current) return;
+    setCustomSchemes(customs);
+    setSnapshots(snaps);
+    setResults(computed);
+    setHistory(h);
+    setComputing(false);
+  };
+
+  const handleSaveCustom = async (schemeData) => {
+    setCrudLoading(true);
+    try {
+      if (editingCustomId !== null) {
+        await apiUpdateCustomScheme(account.id, editingCustomId, schemeData);
+      } else {
+        await apiCreateCustomScheme(account.id, schemeData);
+        apiTriggerBackfill(account.id); // fire-and-forget: fill history for new scheme
+      }
+      setEditingCustomId(null);
+      setAddingCustom(false);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
+    }
+  };
+
+  const handleToggleCustomEnabled = async (id, currentEnabled) => {
+    setCrudLoading(true);
+    try {
+      await apiSetCustomSchemeEnabled(account.id, id, !currentEnabled);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
+    }
+  };
+
+  const handleToggleSnapshotEnabled = async (id, currentEnabled) => {
+    setCrudLoading(true);
+    try {
+      await apiSetCustomSchemeEnabled(account.id, id, !currentEnabled);
+      await _reloadAfterCRUD();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrudLoading(false);
+    }
+  };
+
+  const rowStyle = { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" };
+  const xirrStyle = { fontSize: 13, fontWeight: 600, fontFamily: "monospace", width: 58, textAlign: "right", flexShrink: 0 };
+  const sectionHead = (label, hint) => (
+    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 6, marginTop: 20 }}>
+      {label}{hint && <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 8, color: "var(--ink-4)" }}>{hint}</span>}
+    </div>
+  );
+
+  const _fmtSchemeDesc = (allocations, cashPct) => {
+    const parts = (allocations || []).map(a => `${a.symbol} ${a.pct.toFixed(1)}%`);
+    if (cashPct > 0) parts.push(`Cash ${cashPct.toFixed(1)}%`);
+    return parts.join(' · ');
+  };
+
+  const _fmtValue = (usdVal) => {
+    if (usdVal == null) return null;
+    const acctCcy = account?.currency || "CNY";
+    const v = usdVal * (FX.USD || 7.24) / (FX[acctCcy] || 1);
+    const sym = ccySymbol(acctCcy);
+    let s;
+    if (v >= 1e6) s = `${sym}${(v / 1e6).toFixed(1)}M`;
+    else if (v >= 1e3) s = `${sym}${Math.round(v / 1e3)}k`;
+    else s = `${sym}${Math.round(v)}`;
+    return maskDigits(s);
+  };
+
+  const chartData = React.useMemo(() => {
+    const portfolioLabel = I18N.t("benchmark.return.portfolio");
+    if (results?.schemes) {
+      // Sort: defaults in config order first, then customs
+      const defaultOrder = new Map(defaults.map((d, i) => [d.id, i]));
+      const snapIds = new Set(snapshots.map(s => s.id));
+      const sorted = [...results.schemes].sort((a, b) => {
+        const aIdx = defaultOrder.has(a.id) ? defaultOrder.get(a.id) : 999;
+        const bIdx = defaultOrder.has(b.id) ? defaultOrder.get(b.id) : 999;
+        return aIdx - bIdx;
+      });
+      const visible = sorted.filter(s => activeIds.has(s.id));
+      // Best-performing enabled snapshot to show in bar chart
+      const enabledSnaps = snapshots.filter(s => s.enabled !== 0);
+      const bestSnap = enabledSnaps.length
+        ? results.schemes
+            .filter(s => snapIds.has(s.id) && s.xirr != null)
+            .sort((a, b) => (b.xirr ?? -Infinity) - (a.xirr ?? -Infinity))[0]
+        : null;
+      const bestSnapLabel = bestSnap
+        ? I18N.tf("benchmark.portfolio.snap", { date: (snapshots.find(s => s.id === bestSnap.id)?.name || "").replace(/^Portfolio /, "").split(" ")[0] })
+        : null;
+      const allLabels = [portfolioLabel, ...(bestSnapLabel ? [bestSnapLabel] : []), ...visible.map(s => _schemeLabel(s.id, s.name))];
+      const cmap = nameColors(allLabels);
+      const data = [{
+        label: portfolioLabel,
+        value: results?.portfolio_xirr ?? null,
+        topLabel: _fmtValue(results?.portfolio_value_usd),
+        color: cmap[portfolioLabel],
+      }];
+      if (bestSnap && bestSnapLabel) {
+        data.push({ label: bestSnapLabel, value: bestSnap.xirr, topLabel: _fmtValue(bestSnap.current_value_usd), color: cmap[bestSnapLabel] });
+      }
+      visible.forEach(s => {
+        const label = _schemeLabel(s.id, s.name);
+        data.push({ label, value: s.xirr, topLabel: _fmtValue(s.current_value_usd), color: cmap[label] });
+      });
+      return data;
+    }
+    return [{ label: portfolioLabel, value: results?.portfolio_xirr ?? null, topLabel: _fmtValue(results?.portfolio_value_usd), color: nameColor(portfolioLabel) }];
+  }, [results, defaults, activeIds, snapshots, account?.currency, PRIVACY.masked]);
+
+  // Shared dedup color map — same colors in bar chart and line chart
+  const sharedColorMap = React.useMemo(
+    () => nameColors(chartData.map(d => d.label)),
+    [chartData]
+  );
+
+  const getXIRR = (id) => results?.schemes?.find(s => s.id === id)?.xirr ?? null;
+  const fmtPct = (v) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  const isNonUSD = account.currency && account.currency !== "USD";
+
+  const _portfolioSeriesLabel = (s) => {
+    if (s.id === "__portfolio__") return I18N.t("benchmark.return.portfolio");
+    if (s.is_portfolio_snap && s.snap_date) return I18N.tf("benchmark.portfolio.snap", { date: s.snap_date });
+    return _schemeLabel(s.id, s.name);
+  };
+
+  // Delta series for the "diff" tab — XIRR relative to a reference scheme
+  const _diffData = React.useMemo(() => {
+    if (!history || !history.series.length) return { series: [], ref: null, options: [] };
+    const allSeries = history.series
+      .filter(s => s.id === "__portfolio__" || s.is_portfolio_snap || activeIds.has(s.id))
+      .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
+    const options = allSeries.map(s => ({ id: s.id, name: s.name }));
+    const refId = allSeries.some(s => s.id === diffRefId) ? diffRefId
+      : (allSeries.find(s => s.id === "sp500") || allSeries[0])?.id;
+    const refSeries = allSeries.find(s => s.id === refId);
+    if (!refSeries) return { series: [], ref: null, options };
+    const refMap = {};
+    refSeries.data.forEach(d => { if (d.xirr != null) refMap[d.date] = d.xirr; });
+    const deltaSeries = allSeries
+      .filter(s => s.id !== refId)
+      .map(s => ({
+        ...s,
+        data: s.data
+          .filter(d => d.xirr != null && refMap[d.date] != null)
+          .map(d => ({ date: d.date, xirr: d.xirr - refMap[d.date] })),
+      }))
+      .filter(s => s.data.length > 0);
+    return { series: deltaSeries, ref: refSeries, options };
+  }, [history, diffRefId, activeIds]);
+
+  const _diffStats = React.useMemo(() =>
+    _diffData.series.map(s => {
+      const diffs = s.data;
+      if (!diffs.length) return null;
+      const beatCount = diffs.filter(d => d.xirr > 0).length;
+      const maxD = diffs.reduce((a, b) => b.xirr > a.xirr ? b : a);
+      const minD = diffs.reduce((a, b) => b.xirr < a.xirr ? b : a);
+      return { id: s.id, name: s.name, beatPct: beatCount / diffs.length * 100,
+        beatDays: beatCount, totalDays: diffs.length,
+        maxDiff: maxD.xirr, maxDate: maxD.date, minDiff: minD.xirr, minDate: minD.date };
+    }).filter(Boolean),
+  [_diffData]);
+
+  if (error) return <Empty text={I18N.t("benchmark.error")}/>;
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
+      {computing && (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "var(--ink-3)", fontSize: 13 }}>
+          <div style={{ fontSize: 22, marginBottom: 8 }}>⏳</div>
+          {I18N.t("benchmark.computing")}
+        </div>
+      )}
+
+      {!computing && results && (
+        <>
+          {/* Bar chart — current snapshot */}
+          <div style={{ marginBottom: 4, display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+              {I18N.t("benchmark.chart.title")}
+            </span>
+            {results?.computed_date && (
+              <span style={{ fontSize: 10, color: "var(--ink-4)" }}>
+                {I18N.tf("benchmark.chart.asOf", { date: results.computed_date })}
+              </span>
+            )}
+          </div>
+          <div style={{ overflowX: "auto", marginBottom: 16 }}>
+            <BarChart data={chartData} signed={true} width={Math.max(chartData.length * 90 + 60, 400)} height={160}/>
+          </div>
+
+          {/* History charts — Trend line + XIRR Range */}
+          {history && history.series.length > 0 && (() => {
+            const visibleSeries = history.series
+              .filter(s => s.id === "__portfolio__" || s.is_portfolio_snap || activeIds.has(s.id))
+              .map(s => ({ ...s, name: _portfolioSeriesLabel(s) }));
+            // currentMap: name → current XIRR for range chart dots
+            const currentMap = {};
+            chartData.forEach(d => { if (d.value != null) currentMap[d.label] = d.value; });
+            const hasEnoughForRange = visibleSeries.some(s => s.data.length >= 2);
+            return (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                    {I18N.t("benchmark.history.title")}
+                  </span>
+                  {hasEnoughForRange && (
+                    <Tabs variant="pill" value={historyView} onChange={setHistoryView}
+                      tabs={[
+                        { id: "trend",  label: I18N.t("benchmark.history.tab.trend") },
+                        { id: "range",  label: I18N.t("benchmark.history.tab.range") },
+                        { id: "diff",   label: I18N.t("benchmark.history.tab.diff") },
+                      ]}/>
+                  )}
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  {historyView === "trend" && (
+                    <MultiLineChart
+                      series={visibleSeries}
+                      granularity={history.granularity} width={560} height={320} colorMap={sharedColorMap}/>
+                  )}
+                  {historyView === "range" && (
+                    <XirrRangeChart
+                      series={visibleSeries}
+                      currentMap={currentMap}
+                      colorMap={sharedColorMap}
+                      width={560}/>
+                  )}
+                  {historyView === "diff" && (() => {
+                    const { series: ds, ref: refS, options: refOpts } = _diffData;
+                    const diffColorMap = nameColors(ds.map(s => s.name));
+                    return (
+                      <div>
+                        {/* Reference selector */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{I18N.t("benchmark.diff.ref")}:</span>
+                          <select value={diffRefId} onChange={e => setDiffRefId(e.target.value)} autoComplete="off"
+                            style={{ fontSize: 11, padding: "3px 6px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
+                            {refOpts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                          </select>
+                        </div>
+                        {ds.length > 0 ? (<>
+                          <MultiLineChart series={ds} granularity={history.granularity} width={560} height={240} colorMap={diffColorMap}/>
+                          {/* Stats table */}
+                          <div style={{ marginTop: 14, display: "inline-block", minWidth: 500 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "220px 110px 140px 140px", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)", fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                              <span>{I18N.t("benchmark.diff.scheme")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.beat")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxOut")}</span>
+                              <span style={{ textAlign: "right" }}>{I18N.t("benchmark.diff.maxLag")}</span>
+                            </div>
+                            {_diffStats.map(st => (
+                              <div key={st.id} style={{ display: "grid", gridTemplateColumns: "220px 110px 140px 140px", gap: 6, padding: "7px 0", borderBottom: "1px solid var(--line)", fontSize: 12, alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: diffColorMap[st.name] || nameColor(st.name), flexShrink: 0 }}/>
+                                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.name}</span>
+                                </div>
+                                <span className="mono" style={{ textAlign: "right", color: st.beatPct >= 50 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                                  {st.beatPct.toFixed(0)}%
+                                  <span style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 400, marginLeft: 3 }}>({st.beatDays}/{st.totalDays})</span>
+                                </span>
+                                <div style={{ textAlign: "right" }}>
+                                  <span className="mono" style={{ color: "var(--up)", fontWeight: 600 }}>+{st.maxDiff.toFixed(1)}pp</span>
+                                  <div style={{ fontSize: 10, color: "var(--ink-4)" }}>{st.maxDate}</div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <span className="mono" style={{ color: "var(--down)", fontWeight: 600 }}>{st.minDiff.toFixed(1)}pp</span>
+                                  <div style={{ fontSize: 10, color: "var(--ink-4)" }}>{st.minDate}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>) : (
+                          <div style={{ color: "var(--ink-4)", fontSize: 12, padding: "16px 0" }}>{I18N.t("benchmark.diff.noData")}</div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Warnings */}
+          {results.excluded_deposits > 0 && (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10, background: "var(--paper-2)", borderRadius: 6, padding: "6px 10px" }}>
+              ⚠ {I18N.t("benchmark.excludedDeposits").replace("{n}", results.excluded_deposits)}
+            </div>
+          )}
+          {isNonUSD && (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 14, background: "var(--paper-2)", borderRadius: 6, padding: "6px 10px" }}>
+              ℹ {I18N.t("benchmark.disclaimer")}
+            </div>
+          )}
+        </>
+      )}
+
+      {!computing && !results && (
+        <div style={{ color: "var(--ink-4)", fontSize: 13, padding: "16px 0" }}>{I18N.t("benchmark.noDeposits")}</div>
+      )}
+
+      {/* Scheme table — defaults + customs share the same row layout */}
+      {(defaults.length > 0 || customSchemes.length > 0 || true) && (() => {
+        return (
+          <div style={{ marginBottom: 20 }}>
+            {/* Default schemes */}
+            {defaults.length > 0 && (
+              <>
+                {sectionHead(I18N.t("benchmark.defaults.title"), I18N.t("benchmark.defaults.hint"))}
+                {defaults.map(d => {
+                  const xirr = getXIRR(d.id);
+                  const active = activeIds.has(d.id);
+                  const label = _defLabel(d);
+                  return (
+                    <div key={d.id} style={rowStyle}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[label] || nameColor(label), flexShrink: 0 }}/>
+                      <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+                        <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+                        {d.description && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.description}</div>}
+                      </div>
+                      <span style={{ ...xirrStyle, color: active && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                        {active ? fmtPct(xirr) : "—"}
+                      </span>
+                      <Toggle value={active} onChange={() => toggleDefault(d.id)} size="sm" disabled={computing || crudLoading}/>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Custom schemes */}
+            {sectionHead(I18N.t("benchmark.custom.title"))}
+            {customSchemes.map(cs => {
+              const csEnabled = cs.enabled !== 0;
+              const xirr = csEnabled ? getXIRR(String(cs.id)) : null;
+              const desc = _fmtSchemeDesc(cs.allocations, cs.cash_pct);
+              return (
+                <div key={cs.id}>
+                  <div style={{ ...rowStyle, opacity: csEnabled ? 1 : 0.45 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[cs.name] || nameColor(cs.name), flexShrink: 0 }}/>
+                    <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+                      <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cs.name}</div>
+                      {desc && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</div>}
+                    </div>
+                    <span style={{ ...xirrStyle, color: csEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                      {csEnabled ? fmtPct(xirr) : "—"}
+                    </span>
+                    <Toggle value={csEnabled} onChange={() => handleToggleCustomEnabled(cs.id, csEnabled)} size="sm" disabled={crudLoading}/>
+                    <button type="button" onClick={() => { setEditingCustomId(cs.id); setAddingCustom(false); }}
+                      disabled={crudLoading}
+                      style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: crudLoading ? "default" : "pointer", flexShrink: 0 }}>
+                      {I18N.t("benchmark.custom.edit")}
+                    </button>
+                  </div>
+                  {editingCustomId === cs.id && (
+                    <CustomSchemeEditor scheme={cs} onSave={handleSaveCustom} onCancel={() => setEditingCustomId(null)}/>
+                  )}
+                </div>
+              );
+            })}
+            {addingCustom && (
+              <CustomSchemeEditor scheme={null} onSave={handleSaveCustom} onCancel={() => setAddingCustom(false)}/>
+            )}
+            {!addingCustom && (
+              <button type="button" onClick={() => { setAddingCustom(true); setEditingCustomId(null); }}
+                style={{ marginTop: 8, fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 12px", cursor: "pointer" }}>
+                {I18N.t("benchmark.custom.add")}
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Portfolio Snapshots ─────────────────────────────────────────────── */}
+      <div>
+        {sectionHead(I18N.t("benchmark.snapshots.title"))}
+        <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8, marginTop: -4 }}>{I18N.t("benchmark.snapshots.subtitle")}</div>
+        {snapshots.length === 0
+          ? <div style={{ fontSize: 12, color: "var(--ink-4)" }}>{I18N.t("benchmark.snapshots.empty")}</div>
+          : snapshots.map(snap => {
+            const snapEnabled = snap.enabled !== 0;
+            const xirr = snapEnabled ? (results?.schemes || []).find(s => s.id === snap.id)?.xirr ?? null : null;
+            const isExpanded = expandedSnapId === snap.id;
+            const snapDate = snap.name.startsWith("Portfolio ") ? snap.name.slice("Portfolio ".length).split(" ")[0] : snap.name;
+            return (
+              <div key={snap.id} style={{ marginBottom: 4 }}>
+                <div style={{ ...rowStyle, opacity: snapEnabled ? 1 : 0.45 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: sharedColorMap[I18N.tf("benchmark.portfolio.snap", { date: snapDate })] || nameColor(snap.name), flexShrink: 0 }}/>
+                  <div style={{ width: 220, flexShrink: 0, overflow: "hidden" }}>
+                    <div style={{ fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {I18N.tf("benchmark.portfolio.snap", { date: snapDate })}
+                    </div>
+                  </div>
+                  <span style={{ ...xirrStyle, color: snapEnabled && xirr != null ? (xirr >= 0 ? "var(--up)" : "var(--down)") : "var(--ink-4)" }}>
+                    {snapEnabled ? fmtPct(xirr) : "—"}
+                  </span>
+                  <Toggle value={snapEnabled} onChange={() => handleToggleSnapshotEnabled(snap.id, snapEnabled)} size="sm" disabled={crudLoading}/>
+                  <button type="button" onClick={() => setExpandedSnapId(isExpanded ? null : snap.id)}
+                    style={{ fontSize: 12, color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: 5, background: "none", padding: "2px 8px", cursor: "pointer", flexShrink: 0 }}>
+                    {isExpanded ? I18N.t("benchmark.snapshots.hide") : I18N.t("benchmark.snapshots.view")}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div style={{ paddingLeft: 22, paddingTop: 4, paddingBottom: 6, fontSize: 11, color: "var(--ink-3)", lineHeight: 1.7 }}>
+                    {_fmtSchemeDesc(snap.allocations, snap.cash_pct)}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        }
+      </div>
+
+    </div>
+  );
+};
+
 const _ADV_KEY = "fin_acct_adv";
 const _getAdv = () => localStorage.getItem(_ADV_KEY) === "1";
 const _setAdv = (v) => localStorage.setItem(_ADV_KEY, v ? "1" : "0");
 
 const AccountModal = ({ onClose, onSaved }) => {
-  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "" });
+  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "", benchmark_enabled: false });
   const [advOpen, setAdvOpen] = React.useState(_getAdv);
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
@@ -1865,6 +2562,7 @@ const AccountModal = ({ onClose, onSaved }) => {
         name: form.name.trim(), currency: form.currency,
         note: form.note || null,
         cutoff_date: form.cutoff_date.trim() || null,
+        benchmark_enabled: form.benchmark_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -1890,8 +2588,15 @@ const AccountModal = ({ onClose, onSaved }) => {
                 {I18N.t("holdings.acct.new.cutoff")}
               </div>
               <DateInput value={form.cutoff_date} onChange={v => set("cutoff_date", v)} style={{ marginBottom: 6 }}/>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 4, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 14, lineHeight: 1.5 }}>
                 {I18N.t("holdings.acct.cutoff.hint")}
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.benchmark_enabled} onChange={v => set("benchmark_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("benchmark.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
+                </div>
               </div>
             </div>
           )}
@@ -1914,10 +2619,11 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     cutoff_date: account.cutoff_date || "",
     balance_account_id: account.balance_account_id ? String(account.balance_account_id) : "",
     balance_sub_account_id: account.balance_sub_account_id ? String(account.balance_sub_account_id) : "",
+    benchmark_enabled: !!account.benchmark_enabled,
   });
   const [advOpen, setAdvOpen] = React.useState(() => {
     const stored = localStorage.getItem(_ADV_KEY);
-    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length;
+    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length || !!account.benchmark_enabled;
   });
   // symbol_markets edited as [{code, market}] rows for convenience
   const [smRows, setSmRows] = React.useState(() =>
@@ -1951,6 +2657,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
         balance_account_id: form.balance_account_id ? Number(form.balance_account_id) : null,
         balance_sub_account_id: form.balance_sub_account_id ? Number(form.balance_sub_account_id) : null,
         symbol_markets: Object.keys(sm).length ? sm : null,
+        benchmark_enabled: form.benchmark_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -2024,6 +2731,13 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
                 style={{ fontSize: 12, color: "var(--ink-3)", border: "1px dashed var(--line-2)", borderRadius: 6, background: "none", padding: "4px 10px", cursor: "pointer" }}>
                 {I18N.t("holdings.acct.edit.addMapping")}
               </button>
+              <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.benchmark_enabled} onChange={v => set("benchmark_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("benchmark.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
+                </div>
+              </div>
             </div>
           )}
         </div>

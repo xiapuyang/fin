@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from fin.database import Base
+from fin.database import Base, import_all_models
 from fin.repositories.stock_sqlite import StockSQLiteRepository
 
 
@@ -18,6 +18,7 @@ def db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    import_all_models()
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()

@@ -116,6 +116,16 @@ Naming conventions in the existing hierarchy (mixed — pick what matches the pa
 - **Product types**: `Checking`, `Savings`, `GIC`, `股票账户`, `信用卡分期消费` — used when the bank/broker offers distinct product lines.
 - **Generic**: `现金`, `零钱` — used for single-purpose wallets.
 
+### Benchmark defaults (`config/app.json`)
+
+`benchmark_defaults[].id` values are **immutable once the app has run** — they are stored verbatim as `bench_id` in the `benchmark_results` table. Renaming or removing a used ID orphans all historical rows for that scheme (a startup warning is logged when orphaned IDs are detected).
+
+Rules:
+- **Never rename or remove an existing `id`** — add a new entry with a new ID instead.
+- `name`, `description`, `allocations`, `cash_pct` are all safe to change.
+- IDs use `snake_case`. Scheme order in the array controls display order in the UI.
+- Symbols must be valid yfinance tickers (e.g. `SPY`, `3033.HK`, `510300.SS`, `BTC-USD`).
+
 ### Add a brokerage / wallet account (`accounts` table)
 
 Use the holdings router's `POST /api/accounts` endpoint (or `AccountSQLiteRepository` directly). Required: `name`. Common: `currency` (defaults to `CNY`), `note`, `balance_account_id` to link this broker into the balance hierarchy.
@@ -178,6 +188,18 @@ This applies to any direct file write, Python script, or shell command that modi
 - SQLite DB lives at `data/fin.db`. The `data/` and `logs/` directories are created automatically at import time in `config.py`.
 - All queries eager-load related models via `selectinload` to avoid N+1 issues.
 - The frontend modules not yet backed by an API (holdings, ledger, balance, fire) are client-side only.
+
+## Price fetching — always use QuoteService
+
+Never call `yf.Ticker` directly outside of `fin/services/providers/`. All market data (current price, historical OHLC, dividends, FX rates) must go through the provider abstraction so data sources can be swapped in one place.
+
+- Current prices → `QuoteService` (`fin/services/quote.py`) → routes by symbol type:
+  - Exchange-listed ETFs/stocks → `YFinanceProvider` (after `normalize_symbol` adds `.SS`/`.SZ`/`.HK`)
+  - 6-digit OTC mutual funds (e.g. `013308`) → `ChinaFundProvider` → EastMoney
+- Historical OHLC → `price_history_service.fetch_symbol()` — must support OTC funds via EastMoney historical NAV API, not fall through to yfinance (which can't serve them)
+- Dividends → should eventually go through a provider; `fin/routers/holdings.py` `_fetch_one` is a known gap
+
+The only file allowed to call `yf.Ticker` directly is `fin/services/providers/yfinance_provider.py`.
 
 # Karpathy Guidelines
 

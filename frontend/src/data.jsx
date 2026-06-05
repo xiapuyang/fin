@@ -93,6 +93,20 @@ async function apiCreateAccount(data)     { return _apiFetch("/api/accounts", _J
 async function apiUpdateAccount(id, data) { return _apiFetch(`/api/accounts/${id}`, _PUT(data)); }
 async function apiDeleteAccount(id)       { return _apiFetch(`/api/accounts/${id}`, _DEL()); }
 
+// ── Benchmark API helpers ────────────────────────────────────────────────────
+async function apiGetBenchmarkDefaults()                  { return _apiFetch("/api/benchmark/defaults"); }
+async function apiGetBenchmarkResults(accountId)          { return _apiFetch(`/api/benchmark/results/${accountId}`); }
+async function apiComputeBenchmark(accountId)             { return _apiFetch(`/api/benchmark/compute/${accountId}`, { method: "POST" }); }
+async function apiUpdateBenchmarkSchemes(accountId, data) { return _apiFetch(`/api/benchmark/schemes/${accountId}`, _PUT(data)); }
+async function apiGetCustomSchemes(accountId)             { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}`); }
+async function apiCreateCustomScheme(accountId, data)     { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}`, _JSON(data)); }
+async function apiUpdateCustomScheme(accountId, id, data) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _PUT(data)); }
+async function apiDeleteCustomScheme(accountId, id)       { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}`, _DEL()); }
+async function apiSetCustomSchemeEnabled(accountId, id, enabled) { return _apiFetch(`/api/benchmark/custom-schemes/${accountId}/${id}/enabled`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: enabled ? 1 : 0 }) }); }
+async function apiGetBenchmarkHistory(accountId, since)   { return _apiFetch(`/api/benchmark/history/${accountId}${since ? `?since=${since}` : ""}`); }
+async function apiGetPortfolioSnapshots(accountId)        { return _apiFetch(`/api/benchmark/portfolio-snapshots/${accountId}`); }
+async function apiTriggerBackfill(accountId)              { return _apiFetch(`/api/benchmark/backfill/${accountId}`, { method: "POST" }); }
+
 // Module 4 — Balance Sheet category colors (consumed by dashboard.jsx).
 const BS_CAT_COLORS = {
   "现金":      "#1F8A4C",
@@ -131,6 +145,7 @@ Object.assign(window, {
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiGetTransactionsPaged, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,
+  apiGetPortfolioSnapshots,
   apiGetAccounts, apiCreateAccount, apiUpdateAccount, apiDeleteAccount,
   apiGetBalanceAccounts, apiCreateBalanceAccount, apiUpdateBalanceAccount, apiDeleteBalanceAccount,
   apiGetBalanceSnapshots, apiCreateBalanceSnapshot, apiUpdateBalanceSnapshot, apiDeleteBalanceSnapshot, apiCopyBalanceSnapshot,

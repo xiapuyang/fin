@@ -2,33 +2,6 @@
 
 const STATE_LABEL = new Proxy({}, { get: (_, k) => I18N.t(`base.state.${k.toLowerCase()}`) });
 
-// Fallback used only when the backend's /api/market-states is stale or unavailable.
-// Backend (exchange_calendars) is authoritative — it handles holidays correctly.
-// This client-side approximation does not.
-const MARKET_HOURS = (now = new Date()) => {
-  const day = now.getUTCDay();
-  const t = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const inRange = (lo, hi) => t >= lo && t < hi;
-  const weekday = day >= 1 && day <= 5;
-
-  // US (NYSE/NASDAQ) and CA (TSX) share Eastern Time — pre 04:00, regular 09:30-16:00, post 16:00-20:00 ET.
-  // Hardcoded to EDT (UTC-4); will be off by 1h when DST is not in effect.
-  const etState = !weekday ? "CLOSED"
-    : inRange(13 * 60 + 30, 20 * 60) ? "REGULAR"
-    : inRange(20 * 60, 24 * 60)       ? "POST"
-    : inRange(8 * 60, 13 * 60 + 30)  ? "PRE"
-    : "CLOSED";
-
-  // HK: HKEX Mon-Fri 09:30-12:00 and 13:00-16:00 HKT = 01:30-04:00 and 05:00-08:00 UTC
-  const hkState = weekday && (inRange(1 * 60 + 30, 4 * 60) || inRange(5 * 60, 8 * 60)) ? "REGULAR" : "CLOSED";
-
-  // CN: SSE/SZSE Mon-Fri 09:30-11:30 and 13:00-15:00 CST = 01:30-03:30 and 05:00-07:00 UTC
-  const cnState = weekday && (inRange(1 * 60 + 30, 3 * 60 + 30) || inRange(5 * 60, 7 * 60)) ? "REGULAR" : "CLOSED";
-
-  const mk = (state) => ({ state, label: STATE_LABEL[state] });
-  return { US: mk(etState), HK: mk(hkState), CN: mk(cnState), CA: mk(etState) };
-};
-
 // Compute CNY value of a balance item
 const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
 

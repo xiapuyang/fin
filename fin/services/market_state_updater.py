@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 UPDATE_INTERVAL: int = 300  # 5 minutes
 
 _CALENDARS: dict | None = None
+_write_lock = threading.Lock()
 
 _US_PRE_OFFSET = timedelta(hours=5, minutes=30)  # open − 5h30m = 4:00 AM EDT
 _US_POST_OFFSET = timedelta(hours=4)  # close + 4h = 8:00 PM EDT
@@ -82,9 +83,10 @@ def compute_and_write() -> None:
         "CA": _et_state("CA", now),
         "updated_at": now.isoformat(),
     }
-    tmp = MARKET_STATE_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(states))
-    tmp.replace(MARKET_STATE_PATH)
+    with _write_lock:
+        tmp = MARKET_STATE_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(states))
+        tmp.replace(MARKET_STATE_PATH)
     logger.info(
         "market states: US=%s HK=%s CN=%s CA=%s",
         states["US"],

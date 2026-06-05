@@ -102,6 +102,9 @@ _KNOWN_TABLES = {
     "balance_accounts",
     "balance_snapshots",
     "balance_items",
+    "price_history",
+    "benchmark_results",
+    "benchmark_custom_schemes",
 }
 
 
@@ -152,6 +155,36 @@ def _migrate_columns(db: "Session") -> None:
             "alert_fires",
             "value",
             "ALTER TABLE alert_fires ADD COLUMN value FLOAT",
+        ),
+        (
+            "accounts",
+            "benchmark_enabled",
+            "ALTER TABLE accounts ADD COLUMN benchmark_enabled TEXT DEFAULT '0'",
+        ),
+        (
+            "accounts",
+            "benchmark_schemes",
+            "ALTER TABLE accounts ADD COLUMN benchmark_schemes TEXT",
+        ),
+        (
+            "benchmark_custom_schemes",
+            "enabled",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1",
+        ),
+        (
+            "benchmark_custom_schemes",
+            "is_portfolio_snapshot",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN is_portfolio_snapshot INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
+            "benchmark_custom_schemes",
+            "user_id",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN user_id BIGINT",
+        ),
+        (
+            "benchmark_results",
+            "user_id",
+            "ALTER TABLE benchmark_results ADD COLUMN user_id BIGINT",
         ),
     ]
     _KNOWN_TABLES.add("watchlist")
@@ -341,6 +374,16 @@ def _migrate_indexes(db: "Session") -> None:
             "ix_ledger_user_date",
             "CREATE INDEX IF NOT EXISTS ix_ledger_user_date ON ledger(user_id, date)",
         ),
+        (
+            "uq_price_history_sym_date",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_history_sym_date "
+            "ON price_history(symbol, date)",
+        ),
+        (
+            "uq_benchmark_custom_schemes_acct_name",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_custom_schemes_acct_name "
+            "ON benchmark_custom_schemes(account_id, name)",
+        ),
     ]
     existing = {
         row[1]
@@ -415,6 +458,44 @@ def _migrate_balance_indexes(db: "Session") -> None:
     db.commit()
 
 
+def _drop_old_benchmark_results(db: "Session") -> None:
+    """Drop benchmark_results if it has the old schema (results_json column).
+
+    The table is recreated by create_all with the new per-bench_id row design.
+    Safe to call with no data present.
+    """
+    from sqlalchemy import text
+
+    cols = {
+        row[1]
+        for row in db.execute(text("PRAGMA table_info(benchmark_results)")).fetchall()
+    }
+    if cols and "bench_id" not in cols:
+        db.execute(text("DROP TABLE IF EXISTS benchmark_results"))
+        db.commit()
+
+
+def _migrate_benchmark_result_columns(db: "Session") -> None:
+    """Add current_value_usd and computed_at columns to benchmark_results if missing."""
+    from sqlalchemy import text
+
+    cols = {
+        row[1]
+        for row in db.execute(text("PRAGMA table_info(benchmark_results)")).fetchall()
+    }
+    if not cols:
+        return
+    for col, typedef in [
+        ("current_value_usd", "REAL"),
+        ("computed_at", "DATETIME"),
+    ]:
+        if col not in cols:
+            db.execute(
+                text(f"ALTER TABLE benchmark_results ADD COLUMN {col} {typedef}")
+            )
+    db.commit()
+
+
 def _drop_holdings_as_of_date(db: "Session") -> None:
     """Drop the as_of_date column from holdings.
 
@@ -444,7 +525,13 @@ def _drop_holdings_as_of_date(db: "Session") -> None:
         db.rollback()
 
 
-def init_db() -> None:
+def import_all_models() -> None:
+    """Import every ORM model so SQLAlchemy registers them with Base.metadata.
+
+    Call this before Base.metadata.create_all() — including in tests — to
+    ensure all tables are created. init_db() calls this automatically, but
+    tests mock init_db, so they must call this directly before create_all.
+    """
     import fin.models.alert  # noqa: F401
     import fin.models.stock  # noqa: F401
     import fin.models.user  # noqa: F401
@@ -458,10 +545,18 @@ def init_db() -> None:
     import fin.models.balance_snapshot  # noqa: F401
     import fin.models.balance_item  # noqa: F401
     import fin.models.dividend_history  # noqa: F401
+    import fin.models.price_history  # noqa: F401
+    import fin.models.benchmark_result  # noqa: F401
+    import fin.models.benchmark_custom_scheme  # noqa: F401
+
+
+def init_db() -> None:
+    import_all_models()
 
     db: Session = SessionLocal()
     try:
         _migrate_alerts_to_int_id(db)
+        _drop_old_benchmark_results(db)
     finally:
         db.close()
 
@@ -480,5 +575,6 @@ def init_db() -> None:
         _migrate_indexes(db)
         _migrate_balance_indexes(db)
         _drop_holdings_as_of_date(db)
+        _migrate_benchmark_result_columns(db)
     finally:
         db.close()

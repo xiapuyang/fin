@@ -6,9 +6,8 @@ import math
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated
 
-import yfinance as yf
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from pydantic import Field
 from sqlalchemy.exc import IntegrityError
@@ -63,6 +62,12 @@ def _account_response(a: AccountModel) -> AccountResponse:
             sm = json.loads(a.symbol_markets)
         except json.JSONDecodeError:
             sm = None
+    bs = None
+    if a.benchmark_schemes:
+        try:
+            bs = json.loads(a.benchmark_schemes)
+        except json.JSONDecodeError:
+            bs = None
     return AccountResponse(
         id=a.id,
         name=a.name,
@@ -72,6 +77,8 @@ def _account_response(a: AccountModel) -> AccountResponse:
         balance_account_id=a.balance_account_id,
         balance_sub_account_id=a.balance_sub_account_id,
         symbol_markets=sm,
+        benchmark_enabled=a.benchmark_enabled == "1",
+        benchmark_schemes=bs,
         create_time=a.create_time.strftime(TS_FMT),
         update_time=a.update_time.strftime(TS_FMT),
     )
@@ -532,23 +539,6 @@ async def import_income(
     }
 
 
-def _yf_parse_info(info: dict[str, Any]) -> tuple[str | None, str | None, float | None]:
-    """Extract (ex_date, pay_date, annual_rate) from a yfinance info dict."""
-    ex_ts = info.get("exDividendDate")
-    ex_date = (
-        datetime.fromtimestamp(ex_ts, tz=timezone.utc).strftime("%Y-%m-%d")
-        if ex_ts
-        else None
-    )
-    pay_ts = info.get("dividendDate")
-    pay_date = (
-        datetime.fromtimestamp(pay_ts, tz=timezone.utc).strftime("%Y-%m-%d")
-        if pay_ts
-        else None
-    )
-    return ex_date, pay_date, info.get("dividendRate")
-
-
 def _annual_rate_from_history(history: list[dict]) -> float | None:
     """Sum of actual dividend payments in the last 365 days.
 
@@ -562,20 +552,6 @@ def _annual_rate_from_history(history: list[dict]) -> float | None:
     )
     total = sum(h["amount"] for h in history if h["date"] >= one_year_ago)
     return round(total, 4) if total > 0 else None
-
-
-def _yf_fetch_history(ticker: yf.Ticker, since: datetime) -> list[dict]:
-    """Return dividend history entries on or after *since* as [{date, amount}]."""
-    hist = ticker.dividends
-    if hist.empty:
-        return []
-    idx = hist.index.tz_localize(None) if hist.index.tz is not None else hist.index
-    since_naive = since.replace(tzinfo=None)
-    return [
-        {"date": str(d.date()), "amount": round(float(a), 4)}
-        for d, a in zip(idx, hist.values)
-        if d >= since_naive
-    ]
 
 
 def _parse_fetched_at(ts: str) -> datetime:
@@ -597,31 +573,42 @@ def _parse_history_json(raw: str | None) -> list[dict]:
 def _fetch_one(
     code: str, existing_json: str | None, now: datetime
 ) -> tuple[str, dict | None]:
-    """Fetch yfinance data for one symbol; returns (code, data) or (code, None) on failure."""
+    """Fetch dividend data for one symbol via the provider layer.
+
+    Returns (code, data) where data has ex_date, pay_date, annual_rate, history,
+    or (code, None) on failure or when the provider does not support dividends.
+    """
+    from fin.services.providers import build_default_providers
+    from fin.services.quote import normalize_symbol
+
+    norm = normalize_symbol(code)
+    providers = build_default_providers()
+    provider = next((p for p in providers if p.supports(norm)), None)
+    if provider is None:
+        return code, None
+
+    existing = _parse_history_json(existing_json) if existing_json is not None else None
+    if existing is not None:
+        last_date = max((e["date"] for e in existing), default=None)
+        since = (
+            (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1)).strftime(
+                "%Y-%m-%d"
+            )
+            if last_date
+            else (now - timedelta(days=90)).strftime("%Y-%m-%d")
+        )
+    else:
+        since = (now - timedelta(days=_DIVIDEND_HIST_YEARS * 365)).strftime("%Y-%m-%d")
+
     try:
-        ticker = yf.Ticker(code)
-        if not ticker.info:
-            # Empty info dict signals a transient rate-limit or unavailability.
-            # Returning None prevents caching an empty record for 24 h.
+        result = provider.fetch_dividends(norm, since)
+        if not result:
             return code, None
-        ex_date, pay_date, annual_rate = _yf_parse_info(ticker.info)
-        if existing_json is not None:
-            existing = _parse_history_json(existing_json)
-            last_date = max((e["date"] for e in existing), default=None)
-            since = (
-                (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1))
-                if last_date
-                else (now - timedelta(days=90))
-            )
-            history = existing + _yf_fetch_history(ticker, since)
-        else:
-            history = _yf_fetch_history(
-                ticker, now - timedelta(days=_DIVIDEND_HIST_YEARS * 365)
-            )
-        effective_rate = annual_rate or _annual_rate_from_history(history)
+        history = (existing or []) + result.get("history", [])
+        effective_rate = result.get("annual_rate") or _annual_rate_from_history(history)
         return code, {
-            "ex_date": ex_date,
-            "pay_date": pay_date,
+            "ex_date": result.get("ex_date"),
+            "pay_date": result.get("pay_date"),
             "annual_rate": effective_rate,
             "history": history,
         }
