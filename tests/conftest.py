@@ -1,3 +1,4 @@
+import logging
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -5,8 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from fin.api import app
+from fin.api import app  # triggers setup_logging — must come before disable()
 from fin.database import Base, get_db, import_all_models
+
+# Suppress ERROR/WARNING noise from intentional mock failures in tests.
+# setup_logging() registered a StreamHandler above; disable() silences it
+# globally without touching production logging configuration.
+logging.disable(logging.ERROR)
 
 
 @pytest.fixture()
