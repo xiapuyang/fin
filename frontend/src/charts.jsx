@@ -630,10 +630,10 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const xMax = Math.min(rawMax, fenceMax) + (rawMax - rawMin) * 0.04;
 
   const _colorMap = colorMap || nameColors(allRows.map(r => r.name));
-  const rowH = 38, padL = 132, padR = 52, barH = 8;
+  const rowH = 38, padL = 260, padR = 52, barH = 8;
   const chartW = width - padL - padR;
-  // bottom: 36px for ticks + 28px for caption gap
-  const svgH = allRows.length * rowH + 36 + 28;
+  // bottom: 52px for rotated tick labels + 20px for caption
+  const svgH = allRows.length * rowH + 52 + 20;
 
   const xOf = v => padL + ((v - xMin) / Math.max(xMax - xMin, 0.0001)) * chartW;
   const clampX = v => Math.min(Math.max(xOf(v), padL), padL + chartW);
@@ -643,28 +643,29 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
   const step = axisRange <= 8 ? 2 : axisRange <= 20 ? 5 : axisRange <= 60 ? 10 : 20;
   const ticks = [];
   for (let t = Math.ceil(xMin / step) * step; t <= xMax + 0.001; t += step) ticks.push(t);
-  const tickY = svgH - 36, captionY = svgH - 10;
+  const tickY = svgH - 52, captionY = svgH - 4;
 
   const _pct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
   return (
   <div>
     <svg width={width} height={svgH} style={{ display: "block", overflow: "visible" }} textRendering="geometricPrecision">
-      {/* grid lines */}
-      {ticks.map(t => (
+      {/* grid lines — skip t=0, zero line below handles it */}
+      {ticks.filter(t => t !== 0).map(t => (
         <g key={t}>
           <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={tickY - 4} stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"/>
-          {/* 0% label shifted right so it doesn't crowd left-side min labels */}
-          <text x={t === 0 ? xOf(0) + 4 : xOf(t)} y={tickY + 10}
-            textAnchor={t === 0 ? "start" : "middle"} fontSize="10" fill="var(--ink-4)">
-            {t === 0 ? "0%" : _pct(t)}
+          <text x={xOf(t)} y={tickY + 4} textAnchor="end" fontSize="10" fill="var(--ink-4)"
+            transform={`rotate(-45, ${xOf(t)}, ${tickY + 4})`}>
+            {_pct(t)}
           </text>
         </g>
       ))}
-      {/* zero line */}
-      {xMin < 0 && xMax > 0 && (
-        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={tickY - 4} stroke="var(--line-2)" strokeWidth="1.5"/>
-      )}
+      {/* zero line — red dashed, renders when axis spans negative→positive */}
+      {xMin < 0 && xMax > 0 && (<>
+        <line x1={xOf(0)} x2={xOf(0)} y1={0} y2={tickY - 4} stroke="#e05050" strokeWidth="1.5" strokeDasharray="4,3"/>
+        <text x={xOf(0)} y={tickY + 4} textAnchor="end" fontSize="10" fill="#e05050" fontWeight="600"
+          transform={`rotate(-45, ${xOf(0)}, ${tickY + 4})`}>0%</text>
+      </>)}
       {allRows.map((r, i) => {
         const isHidden = hidden.has(r.id);
         const cy = i * rowH + rowH / 2;
@@ -674,16 +675,18 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
         const clipped = rawX2 > padL + chartW;
         const x2 = clipped ? padL + chartW : rawX2;
         const curX = r.current != null ? clampX(r.current) : null;
-        const showMinLabel = (x1 - padL) > 24;
         return (
           <g key={r.id} style={{ cursor: "pointer" }} onClick={() => toggle(r.id)}>
-            {/* row label — dot kept here as alignment anchor */}
-            <text x={padL - 14} y={cy + 4} textAnchor="end" fontSize="11.5"
+            {/* row label — left zone, ends at padL - 80 */}
+            <text x={padL - 80} y={cy + 4} textAnchor="end" fontSize="11.5"
               fill={isHidden ? "var(--ink-4)" : "var(--ink-2)"}
               style={{ fontWeight: 500, textDecoration: isHidden ? "line-through" : "none" }}>
               {r.name}
             </text>
             {!isHidden && (<>
+              {/* min label — fixed column just left of axis; XIRR shares baseline with row label */}
+              <text x={padL - 8} y={cy + 4} textAnchor="end" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
+              <text x={padL - 8} y={cy + 14} textAnchor="end" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
               {/* range bar */}
               <rect x={x1} y={cy - barH / 2} width={Math.max(x2 - x1, 2)} height={barH}
                 rx={barH / 2} fill={color} opacity="0.22"/>
@@ -692,11 +695,6 @@ const XirrRangeChart = ({ series = [], currentMap = {}, colorMap = null, width =
                 stroke={color} strokeWidth="1.5" opacity="0.6"/>
               {!clipped && <line x1={x2} x2={x2} y1={cy - barH/2 - 3} y2={cy + barH/2 + 3}
                 stroke={color} strokeWidth="1.5" opacity="0.6"/>}
-              {/* min label — only when bar starts far enough from left edge */}
-              {showMinLabel && <>
-                <text x={x1 - 3} y={cy - 1} textAnchor="end" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">{_pct(r.min)}</text>
-                <text x={x1 - 3} y={cy + 10} textAnchor="end" fontSize="9" fill={color} opacity="0.5" fontFamily="monospace">{_fmtMonthDate(r.minDate)}</text>
-              </>}
               {/* max label + date — at clip edge if clipped, with → prefix */}
               <text x={x2 + 3} y={cy - 1} textAnchor="start" fontSize="10" fill={color} opacity="0.8" fontFamily="monospace">
                 {clipped ? `→${_pct(r.max)}` : _pct(r.max)}

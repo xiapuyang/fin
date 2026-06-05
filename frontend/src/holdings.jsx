@@ -645,7 +645,17 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
           onSaved={a => { setAccounts(prev => [...prev, a]); setSelectedAccountId(a.id); setShowAccountModal(false); }}/>}
       {editingAccount && <AccountEditModal account={editingAccount} onClose={() => setEditingAccount(null)}
-          onSaved={a => { setAccounts(prev => prev.map(x => x.id === a.id ? a : x)); setEditingAccount(null); }}/>}
+          onSaved={a => {
+            const nameChanged = a.name !== editingAccount.name;
+            setAccounts(prev => prev.map(x => x.id === a.id ? a : x));
+            setEditingAccount(null);
+            if (nameChanged) {
+              const old = editingAccount.name, next = a.name;
+              setHoldings(prev => prev.map(h => h.account === old ? { ...h, account: next } : h));
+              setTransactions(prev => prev.map(t => t.account === old ? { ...t, account: next } : t));
+              setIncome(prev => prev.map(i => i.account === old ? { ...i, account: next } : i));
+            }
+          }}/>}
 
       </>)}
     </div>
@@ -2353,7 +2363,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
                       series={visibleSeries}
                       currentMap={currentMap}
                       colorMap={sharedColorMap}
-                      width={560}/>
+                      width={640}/>
                   )}
                   {historyView === "diff" && (() => {
                     const { series: ds, ref: refS, options: refOpts } = _diffData;
