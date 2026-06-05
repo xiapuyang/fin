@@ -10,26 +10,6 @@ Personal and family finance dashboard. Manage your household finances like a com
 
 Everything feeds into a FIRE calculator that estimates your financial independence date from real historical data.
 
-## Why fin
-
-**Consolidating all accounts into one view** is the core purpose. Most tools cover only one market or one function — stock tracking, or expense logging, or crypto. People with assets spread across US / HK / CN end up with N spreadsheets plus a manual summary. fin puts them into one database and one UI:
-
-- **Cross-market portfolios** — CN stocks, HK stocks, US equities, ETFs, indices; watchlist with live quotes across all markets.
-- **Multi-currency FX** — Positions, income, and net worth all stored in account-native currency; CNY / USD / HKD / CAD converted via yfinance live rates with fallback to stored rates on failure.
-- **All account types** — Checking, savings, GIC, money market, credit card installments — all are just rows on the balance sheet, snapshotted and reconciled the same way.
-- **True rate of return (XIRR)** — Cash-flow-weighted IRR solved via Newton-Raphson from deposit/withdrawal history + current market value. Per-account and aggregate MWRR, more honest than simple gain %.
-- **Bulk import** — Load broker CSV exports, bank statements, position lists in one shot; with preview / dedup / confirmation gate; idempotent. Companion Claude Code skill (`skills/fin-import`) handles messy data via LLM.
-- **Price alerts** — Price and change-% conditions on US / HK / CN / index symbols; cron checks every 20 minutes, triggers send email.
-
-## Features
-
-- **Dashboard** — Net worth, FX rates, market snapshot, watchlist quotes
-- **Alerts** — Price / change conditions on any symbol (cron every 20 min, email on trigger)
-- **Holdings** — Positions + trade history + dividends / interest / transfers; realized / unrealized P&L; **XIRR annualized return**
-- **Ledger** — Income and expense tracking, category-based monthly summaries
-- **Balance Sheet** — Account hierarchy (parent / child), multi-currency snapshots, copy-from-prior-period, automatic FX to unified net worth
-- **FIRE Calculator** — Monte Carlo simulation + deterministic CAGR + inflation adjustment
-
 ## Screenshots
 
 > All screenshots use demo data unrelated to any real account.
@@ -48,10 +28,10 @@ Everything feeds into a FIRE calculator that estimates your financial independen
 
 ## Install (desktop app)
 
-| Platform | Chip | Requirement | Version |
-|---|---|---|---|
-| macOS | Apple Silicon (M1+) | macOS 11+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-v0.2.2-arm64.dmg) |
-| Windows | x86\_64 | Windows 10+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-Setup-v0.2.2.exe) |
+| Platform | Chip | Requirement | Version | Download |
+|---|---|---|---|---|
+| macOS | Apple Silicon (M1+) | macOS 11+ | v0.2.2 | [Download .dmg](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-v0.2.2-arm64.dmg) |
+| Windows | x86\_64 | Windows 10+ | v0.2.2 | [Download .exe](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-Setup-v0.2.2.exe) |
 
 ### macOS
 
@@ -76,6 +56,26 @@ Price alerts can send email when triggered. Without configuration alerts still r
 2. In the app **Settings**, enter the API Key, Inbox address, and **notification email**, then enable notifications.
 
 ---
+
+## Why fin
+
+**Consolidating all accounts into one view** is the core purpose. Most tools cover only one market or one function — stock tracking, or expense logging, or crypto. People with assets spread across US / HK / CN end up with N spreadsheets plus a manual summary. fin puts them into one database and one UI:
+
+- **Cross-market portfolios** — CN stocks, HK stocks, US equities, ETFs, indices; watchlist with live quotes across all markets.
+- **Multi-currency FX** — Positions, income, and net worth all stored in account-native currency; CNY / USD / HKD / CAD converted via yfinance live rates with fallback to stored rates on failure.
+- **All account types** — Checking, savings, GIC, money market, credit card installments — all are just rows on the balance sheet, snapshotted and reconciled the same way.
+- **True rate of return (XIRR)** — Cash-flow-weighted IRR solved via Newton-Raphson from deposit/withdrawal history + current market value. Per-account and aggregate MWRR, more honest than simple gain %.
+- **Bulk import** — Load broker CSV exports, bank statements, position lists in one shot; with preview / dedup / confirmation gate; idempotent. Companion Claude Code skill (`skills/fin-import`) handles messy data via LLM.
+- **Price alerts** — Price and change-% conditions on US / HK / CN / index symbols; cron checks every 20 minutes, triggers send email.
+
+## Features
+
+- **Dashboard** — Net worth, FX rates, market snapshot, watchlist quotes
+- **Alerts** — Price / change conditions on any symbol (cron every 20 min, email on trigger)
+- **Holdings** — Positions + trade history + dividends / interest / transfers; realized / unrealized P&L; **XIRR annualized return**
+- **Ledger** — Income and expense tracking, category-based monthly summaries
+- **Balance Sheet** — Account hierarchy (parent / child), multi-currency snapshots, copy-from-prior-period, automatic FX to unified net worth
+- **FIRE Calculator** — Monte Carlo simulation + deterministic CAGR + inflation adjustment
 
 ## Claude Code Skills
 
