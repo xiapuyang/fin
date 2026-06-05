@@ -14,7 +14,9 @@ _EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ", ".TO", ".V", ".NE")
 _FX_TTL = 60  # seconds
 _HISTORY_TIMEOUT_SECONDS = 30
 
-_ASSET_TYPES = frozenset({"equity", "etf", "bond", "mutualfund", "index"})
+_ASSET_TYPES = frozenset(
+    {"equity", "etf", "bond", "mutualfund", "index", "cryptocurrency"}
+)
 
 
 class YFinanceProvider(QuoteProvider):

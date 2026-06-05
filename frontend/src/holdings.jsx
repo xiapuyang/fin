@@ -1247,6 +1247,38 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
 
 const RB_EQUITY_TYPES = ["equity", "etf", "mutualfund", "cryptocurrency"];
 
+// Stable asset category identifiers — IDs are immutable once stored in user configs
+const ASSET_CATEGORIES = [
+  { id: "equity_us",      get label() { return I18N.t("holdings.rb.cat.equity_us"); } },
+  { id: "equity_hk",      get label() { return I18N.t("holdings.rb.cat.equity_hk"); } },
+  { id: "equity_cn",      get label() { return I18N.t("holdings.rb.cat.equity_cn"); } },
+  { id: "index_fund_us",  get label() { return I18N.t("holdings.rb.cat.index_fund_us"); } },
+  { id: "index_fund_hk",  get label() { return I18N.t("holdings.rb.cat.index_fund_hk"); } },
+  { id: "index_fund_cn",  get label() { return I18N.t("holdings.rb.cat.index_fund_cn"); } },
+  { id: "etf_global",     get label() { return I18N.t("holdings.rb.cat.etf_global"); } },
+  { id: "bond_us",        get label() { return I18N.t("holdings.rb.cat.bond_us"); } },
+  { id: "bond_global",    get label() { return I18N.t("holdings.rb.cat.bond_global"); } },
+  { id: "crypto",         get label() { return I18N.t("holdings.rb.cat.crypto"); } },
+  { id: "reit",           get label() { return I18N.t("holdings.rb.cat.reit"); } },
+];
+
+// Maps each category ID to a predicate that tests whether a position belongs to it.
+// etf_global excludes US/HK/CN to prevent double-counting with index_fund_* categories.
+// bond_global excludes US to prevent double-counting with bond_us.
+const CATEGORY_MATCHERS = {
+  equity_us:     (p, market) => p.sym?.asset_type === "equity" && market === "US",
+  equity_hk:     (p, market) => p.sym?.asset_type === "equity" && market === "HK",
+  equity_cn:     (p, market) => p.sym?.asset_type === "equity" && market === "CN",
+  index_fund_us: (p, market) => p.sym?.asset_type === "etf" && market === "US",
+  index_fund_hk: (p, market) => p.sym?.asset_type === "etf" && market === "HK",
+  index_fund_cn: (p, market) => ["etf", "mutualfund"].includes(p.sym?.asset_type) && market === "CN",
+  etf_global:    (p, market) => p.sym?.asset_type === "etf" && !["US", "HK", "CN"].includes(market),
+  bond_us:       (p, market) => p.sym?.asset_type === "bond" && market === "US",
+  bond_global:   (p, market) => p.sym?.asset_type === "bond" && market !== "US",
+  crypto:        (p, market) => p.sym?.asset_type === "cryptocurrency" || market === "CRYPTO",
+  reit:          (p, market) => p.sym?.asset_type === "reit",
+};
+
 const computeAge = (birthDate) => {
   if (!birthDate) return 30;
   const ms = Date.now() - new Date(birthDate).getTime();
@@ -1567,6 +1599,12 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
   const matchesBucket = (p, b) => {
     if (p.code === "CASH") return false; // CASH always falls to isCash remainder
     if (b.codes?.includes(p.code)) return true;
+    // New categories-first path
+    if (b.categories?.length > 0) {
+      const market = _guessMarket(p.code);
+      return b.categories.some(cat => CATEGORY_MATCHERS[cat]?.(p, market) ?? false);
+    }
+    // Legacy assetTypes + markets path (backward compat for old bucket data)
     const hasType = b.assetTypes?.length > 0;
     const hasMkt  = b.markets?.length > 0;
     if (!hasType && !hasMkt) return false;
