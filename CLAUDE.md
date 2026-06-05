@@ -189,6 +189,18 @@ This applies to any direct file write, Python script, or shell command that modi
 - All queries eager-load related models via `selectinload` to avoid N+1 issues.
 - The frontend modules not yet backed by an API (holdings, ledger, balance, fire) are client-side only.
 
+## Price fetching — always use QuoteService
+
+Never call `yf.Ticker` directly outside of `fin/services/providers/`. All market data (current price, historical OHLC, dividends, FX rates) must go through the provider abstraction so data sources can be swapped in one place.
+
+- Current prices → `QuoteService` (`fin/services/quote.py`) → routes by symbol type:
+  - Exchange-listed ETFs/stocks → `YFinanceProvider` (after `normalize_symbol` adds `.SS`/`.SZ`/`.HK`)
+  - 6-digit OTC mutual funds (e.g. `013308`) → `ChinaFundProvider` → EastMoney
+- Historical OHLC → `price_history_service.fetch_symbol()` — must support OTC funds via EastMoney historical NAV API, not fall through to yfinance (which can't serve them)
+- Dividends → should eventually go through a provider; `fin/routers/holdings.py` `_fetch_one` is a known gap
+
+The only file allowed to call `yf.Ticker` directly is `fin/services/providers/yfinance_provider.py`.
+
 # Karpathy Guidelines
 
 Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.

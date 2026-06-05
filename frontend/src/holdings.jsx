@@ -1992,6 +1992,8 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
   const [editingCustomId, setEditingCustomId] = React.useState(null);
   const [addingCustom, setAddingCustom] = React.useState(false);
   const today = new Date().toISOString().slice(0, 10);
+  const toggleVersionRef = React.useRef(0);
+  const reloadVersionRef = React.useRef(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -2028,15 +2030,30 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         // Backfill runs in the background — fire-and-forget, don't block rendering.
         if (needsBackfill) apiTriggerBackfill(account.id);
 
+        // Returns true when a snapshot exists in history but has only 1 data point —
+        // meaning it was just created and only has the current month, not full historical curves.
+        const _snapNeedsBackfill = (h) => {
+          if (needsBackfill) return false;
+          const snapHistMap = {};
+          (h.series || []).forEach(s => { if (s.is_portfolio_snap) snapHistMap[s.id] = s.data?.length ?? 0; });
+          return snaps.some(s => s.enabled !== 0 && (
+            !snapHistMap.hasOwnProperty(String(s.id)) || snapHistMap[String(s.id)] <= 1
+          ));
+        };
+
         if (needsCompute) {
           setComputing(true);
           const computed = await apiComputeBenchmark(account.id);
           const h = await apiGetBenchmarkHistory(account.id);
           if (!cancelled) { setResults(computed); setHistory(h); setComputing(false); }
+          if (!cancelled && _snapNeedsBackfill(h)) apiTriggerBackfill(account.id);
         } else {
           setResults(res);
           const h = await apiGetBenchmarkHistory(account.id);
-          if (!cancelled) setHistory(h);
+          if (!cancelled) {
+            setHistory(h);
+            if (_snapNeedsBackfill(h)) apiTriggerBackfill(account.id);
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -2070,6 +2087,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
   };
 
   const toggleDefault = async (id) => {
+    const version = ++toggleVersionRef.current;
     const current = localEnabled === null ? defaults.map(d => d.id) : [...localEnabled];
     const next = current.includes(id) ? current.filter(i => i !== id) : [...current, id];
     setLocalEnabled(next);
@@ -2078,17 +2096,20 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
       await apiUpdateBenchmarkSchemes(account.id, { enabled_defaults: next });
       const computed = await apiComputeBenchmark(account.id);
       const h = await apiGetBenchmarkHistory(account.id);
+      if (version !== toggleVersionRef.current) return;
       setResults(computed);
       setHistory(h);
       if (onAccountUpdated) onAccountUpdated();
     } catch (err) {
+      if (version !== toggleVersionRef.current) return;
       setError(err.message);
     } finally {
-      setComputing(false);
+      if (version === toggleVersionRef.current) setComputing(false);
     }
   };
 
   const _reloadAfterCRUD = async () => {
+    const version = ++reloadVersionRef.current;
     setComputing(true);
     const [customs, snaps, computed] = await Promise.all([
       apiGetCustomSchemes(account.id),
@@ -2096,6 +2117,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
       apiComputeBenchmark(account.id),
     ]);
     const h = await apiGetBenchmarkHistory(account.id);
+    if (version !== reloadVersionRef.current) return;
     setCustomSchemes(customs);
     setSnapshots(snaps);
     setResults(computed);

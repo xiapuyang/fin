@@ -80,6 +80,56 @@ class ChinaFundProvider(QuoteProvider):
             logger.warning("EastMoney fetch failed for %s: %s", symbol, e)
             return {}
 
+    def fetch_history(self, symbol: str, start: str, end: str) -> list[dict]:
+        """Return historical unit NAV series from akshare (EastMoney data).
+
+        Args:
+            symbol: 6-digit fund code.
+            start: Start date inclusive "YYYY-MM-DD".
+            end: End date exclusive "YYYY-MM-DD".
+
+        Returns:
+            List of {"date", "close"} sorted ascending, or [] on failure.
+        """
+        try:
+            import akshare as ak
+        except ImportError:
+            logger.error(
+                "akshare is not installed; cannot fetch history for %s", symbol
+            )
+            return []
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(
+                    ak.fund_open_fund_info_em, symbol=symbol, indicator="单位净值走势"
+                )
+                df = future.result(timeout=30)
+
+            if df is None or df.empty:
+                return []
+
+            rows = []
+            for _, row in df.iterrows():
+                date_str = str(row["净值日期"])[:10]
+                if date_str < start or date_str >= end:
+                    continue
+                nav = float(row["单位净值"])
+                if nav > 0:
+                    rows.append({"date": date_str, "close": nav})
+
+            return sorted(rows, key=lambda r: r["date"])
+        except concurrent.futures.TimeoutError:
+            logger.warning("akshare fetch_history timed out for %s", symbol)
+            return []
+        except Exception as exc:
+            logger.warning("akshare fetch_history failed for %s: %s", symbol, exc)
+            return []
+
+    def fetch_dividends(self, symbol: str, since: str) -> dict:
+        """OTC funds do not report dividends separately (returns are in NAV)."""
+        return {}
+
     def fetch_full(self, symbol: str) -> dict:
         """Fetch historical NAV series via akshare and return the latest entry.
 

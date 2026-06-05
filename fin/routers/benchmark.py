@@ -8,12 +8,12 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from fin.config import APP_CONFIG_PATH
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
 from fin.models.benchmark_result import BenchmarkResultModel
 from fin.models.user import MOCK_USER_ID
+from fin.services.benchmark_service import _PORTFOLIO_BENCH_ID, _load_benchmark_defaults
 from fin.services.price_history_service import fetch_symbol
 
 logger = logging.getLogger(__name__)
@@ -21,21 +21,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/benchmark")
 
 _DEFAULT_SINCE_YEARS = 10
-_PORTFOLIO_BENCH_ID = "__portfolio__"
-
-_DEFAULTS_CACHE: Optional[list[dict]] = None
-
-
-def _get_defaults() -> list[dict]:
-    global _DEFAULTS_CACHE
-    if _DEFAULTS_CACHE is None:
-        try:
-            cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
-            _DEFAULTS_CACHE = cfg.get("benchmark_defaults", [])
-        except Exception as exc:
-            logger.warning("Failed to load benchmark_defaults: %s", exc)
-            _DEFAULTS_CACHE = []
-    return _DEFAULTS_CACHE
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -61,6 +46,15 @@ class CustomSchemePayload(BaseModel):
 
 class SchemesPayload(BaseModel):
     enabled_defaults: list[str]
+
+
+class CustomSchemeResponse(BaseModel):
+    id: str
+    name: str
+    allocations: list[dict]
+    cash_pct: float
+    enabled: int
+    is_portfolio_snap: bool
 
 
 class BenchmarkResultResponse(BaseModel):
@@ -113,7 +107,7 @@ def _cs_to_dict(row: BenchmarkCustomSchemeModel) -> dict:
         "allocations": json.loads(row.allocations_json),
         "cash_pct": row.cash_pct,
         "enabled": row.enabled if row.enabled is not None else 1,
-        "is_snapshot": bool(row.is_portfolio_snapshot),
+        "is_portfolio_snap": bool(row.is_portfolio_snapshot),
     }
 
 
@@ -140,7 +134,7 @@ def _build_results_response(db: Session, account_id: int) -> dict:
         .all()
     )
 
-    defaults_map = {d["id"]: d["name"] for d in _get_defaults()}
+    defaults_map = {d["id"]: d["name"] for d in _load_benchmark_defaults()}
     customs = (
         db.query(BenchmarkCustomSchemeModel)
         .filter(BenchmarkCustomSchemeModel.account_id == account_id)
@@ -185,7 +179,7 @@ def _build_results_response(db: Session, account_id: int) -> dict:
 @router.get("/defaults")
 def get_defaults():
     """Return the list of default benchmark schemes from config/app.json."""
-    return _get_defaults()
+    return _load_benchmark_defaults()
 
 
 @router.get("/results/{account_id}", response_model=BenchmarkResultResponse)
@@ -218,8 +212,10 @@ def compute_benchmark(
 
     try:
         result = benchmark_compute(db, account_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=404, detail="Account not found or benchmark disabled"
+        )
     return result
 
 
@@ -253,7 +249,7 @@ def update_schemes(
     """Update which default schemes are enabled for an account."""
     account = _get_account_or_404(db, account_id)
 
-    default_ids = {d["id"] for d in _get_defaults()}
+    default_ids = {d["id"] for d in _load_benchmark_defaults()}
     unknown = [i for i in payload.enabled_defaults if i not in default_ids]
     if unknown:
         raise HTTPException(
@@ -285,7 +281,7 @@ def _sample_portfolio_snaps(snap_ids: list[str], max_total: int = 5) -> set[str]
     return {snap_ids[i] for i in indices}
 
 
-@router.get("/custom-schemes/{account_id}")
+@router.get("/custom-schemes/{account_id}", response_model=list[CustomSchemeResponse])
 def list_custom_schemes(account_id: int, db: Session = Depends(get_db)):
     """List all custom schemes for an account (excludes portfolio snapshots)."""
     _get_account_or_404(db, account_id)
@@ -301,7 +297,9 @@ def list_custom_schemes(account_id: int, db: Session = Depends(get_db)):
     return [_cs_to_dict(r) for r in rows]
 
 
-@router.get("/portfolio-snapshots/{account_id}")
+@router.get(
+    "/portfolio-snapshots/{account_id}", response_model=list[CustomSchemeResponse]
+)
 def list_portfolio_snapshots(account_id: int, db: Session = Depends(get_db)):
     """List portfolio composition snapshots for an account (newest first)."""
     _get_account_or_404(db, account_id)
@@ -317,7 +315,9 @@ def list_portfolio_snapshots(account_id: int, db: Session = Depends(get_db)):
     return [_cs_to_dict(r) for r in rows]
 
 
-@router.post("/custom-schemes/{account_id}", status_code=201)
+@router.post(
+    "/custom-schemes/{account_id}", status_code=201, response_model=CustomSchemeResponse
+)
 def create_custom_scheme(
     account_id: int, payload: CustomSchemePayload, db: Session = Depends(get_db)
 ):
@@ -338,7 +338,9 @@ def create_custom_scheme(
     return _cs_to_dict(row)
 
 
-@router.put("/custom-schemes/{account_id}/{scheme_id}")
+@router.put(
+    "/custom-schemes/{account_id}/{scheme_id}", response_model=CustomSchemeResponse
+)
 def update_custom_scheme(
     account_id: int,
     scheme_id: int,
@@ -402,7 +404,10 @@ class EnabledPayload(BaseModel):
     enabled: int
 
 
-@router.patch("/custom-schemes/{account_id}/{scheme_id}/enabled")
+@router.patch(
+    "/custom-schemes/{account_id}/{scheme_id}/enabled",
+    response_model=CustomSchemeResponse,
+)
 def set_custom_scheme_enabled(
     account_id: int,
     scheme_id: int,
@@ -502,7 +507,7 @@ def get_history(
                 monthly[entry["date"][:7]] = entry["xirr"]  # last wins (sorted asc)
             by_bench[key] = [{"date": k, "xirr": v} for k, v in sorted(monthly.items())]
 
-    defaults_map = {d["id"]: d["name"] for d in _get_defaults()}
+    defaults_map = {d["id"]: d["name"] for d in _load_benchmark_defaults()}
     customs = (
         db.query(BenchmarkCustomSchemeModel)
         .filter(BenchmarkCustomSchemeModel.account_id == account_id)
@@ -520,7 +525,7 @@ def get_history(
         return defaults_map.get(bid) or custom_map.get(bid) or bid
 
     order_map: dict[str, int] = {}
-    for i, d in enumerate(_get_defaults()):
+    for i, d in enumerate(_load_benchmark_defaults()):
         order_map[d["id"]] = i
 
     snap_id_set = set(snap_id_list)

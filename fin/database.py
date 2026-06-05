@@ -176,6 +176,16 @@ def _migrate_columns(db: "Session") -> None:
             "is_portfolio_snapshot",
             "ALTER TABLE benchmark_custom_schemes ADD COLUMN is_portfolio_snapshot INTEGER NOT NULL DEFAULT 0",
         ),
+        (
+            "benchmark_custom_schemes",
+            "user_id",
+            "ALTER TABLE benchmark_custom_schemes ADD COLUMN user_id BIGINT",
+        ),
+        (
+            "benchmark_results",
+            "user_id",
+            "ALTER TABLE benchmark_results ADD COLUMN user_id BIGINT",
+        ),
     ]
     _KNOWN_TABLES.add("watchlist")
     for table, col, stmt in pending:
@@ -368,6 +378,11 @@ def _migrate_indexes(db: "Session") -> None:
             "uq_price_history_sym_date",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_history_sym_date "
             "ON price_history(symbol, date)",
+        ),
+        (
+            "uq_benchmark_custom_schemes_acct_name",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_custom_schemes_acct_name "
+            "ON benchmark_custom_schemes(account_id, name)",
         ),
     ]
     existing = {

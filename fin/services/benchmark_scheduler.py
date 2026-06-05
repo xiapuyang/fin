@@ -14,7 +14,7 @@ triggers), while the hourly compute is triggered from the frontend.
 
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _seconds_until_next_6am_utc() -> float:
     """Return seconds until next 06:00 UTC (minimum 60 s)."""
     now = datetime.now(timezone.utc)
     today_6am = now.replace(hour=6, minute=0, second=0, microsecond=0)
-    target = today_6am if now < today_6am else today_6am.replace(day=today_6am.day + 1)
+    target = today_6am if now < today_6am else today_6am + timedelta(days=1)
     return max((target - now).total_seconds(), 60)
 
 

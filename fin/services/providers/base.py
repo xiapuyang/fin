@@ -36,6 +36,33 @@ class QuoteProvider(ABC):
         """
         ...
 
+    def fetch_history(self, symbol: str, start: str, end: str) -> list[dict]:
+        """Return OHLC history as [{"date": "YYYY-MM-DD", "close": float}] sorted ascending.
+
+        Args:
+            symbol: Normalized symbol.
+            start: Start date inclusive "YYYY-MM-DD".
+            end: End date exclusive "YYYY-MM-DD".
+
+        Returns:
+            List of {"date", "close"} dicts, or [] on failure or if unsupported.
+        """
+        return []
+
+    def fetch_dividends(self, symbol: str, since: str) -> dict:
+        """Return dividend metadata and payment history since since_date.
+
+        Args:
+            symbol: Normalized symbol.
+            since: Earliest date to include "YYYY-MM-DD".
+
+        Returns:
+            {"ex_date": str|None, "pay_date": str|None, "annual_rate": float|None,
+             "history": [{"date": str, "amount": float}]}
+            or {} on failure or when dividends are not applicable for this symbol type.
+        """
+        return {}
+
     def fetch_fx(self, pairs: dict[str, str]) -> dict:
         """Fetch FX rates keyed by currency code.
 

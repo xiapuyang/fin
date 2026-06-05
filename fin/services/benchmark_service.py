@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import yfinance as yf
 from sqlalchemy.orm import Session
 
 from fin.config import APP_CONFIG_PATH
@@ -21,6 +20,7 @@ from fin.services.price_history_service import fetch_symbol
 logger = logging.getLogger(__name__)
 
 _NEAREST_PRICE_WINDOW_DAYS = 10  # covers Chinese New Year holiday gap
+_DEFAULTS_CACHE: Optional[list] = None
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
 _PORTFOLIO_BENCH_ID = "__portfolio__"
 
@@ -28,7 +28,7 @@ _PORTFOLIO_BENCH_ID = "__portfolio__"
 # ── XIRR (Newton-Raphson) ─────────────────────────────────────────────────────
 
 
-def xirr(flows: list[tuple]) -> Optional[float]:
+def xirr(flows: list[tuple[str, float]]) -> Optional[float]:
     """Compute XIRR from a list of (date_str, amount) tuples.
 
     Negative amount = outflow (deposit). Positive = inflow (withdrawal / terminal).
@@ -50,6 +50,8 @@ def xirr(flows: list[tuple]) -> Optional[float]:
 
     t0 = datetime.strptime(flows[0][0], "%Y-%m-%d")
     years = [(datetime.strptime(f[0], "%Y-%m-%d") - t0).days / 365.25 for f in flows]
+    if max(years) < 1e-9:
+        return None
 
     r = 0.1
     for _ in range(200):
@@ -82,12 +84,13 @@ def nearest_price(series: list[dict], target_date: str) -> Optional[float]:
     Returns:
         The close price, or None if no suitable price is found in the window.
     """
-    target = datetime.strptime(target_date, "%Y-%m-%d").date()
-    deadline = target + timedelta(days=_NEAREST_PRICE_WINDOW_DAYS)
+    deadline = (
+        datetime.strptime(target_date, "%Y-%m-%d")
+        + timedelta(days=_NEAREST_PRICE_WINDOW_DAYS)
+    ).strftime("%Y-%m-%d")
     for entry in series:
-        entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
-        if entry_date >= target:
-            if entry_date <= deadline:
+        if entry["date"] >= target_date:
+            if entry["date"] <= deadline:
                 return entry["close"]
             break
     return None
@@ -223,7 +226,8 @@ def has_recent_result(db: Session, account_id: int) -> bool:
     try:
         cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
         interval = int(cfg.get("benchmark_recompute_interval_minutes", 10))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to read benchmark_recompute_interval_minutes: %s", exc)
         interval = 10
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=interval)
@@ -243,7 +247,11 @@ def has_recent_result(db: Session, account_id: int) -> bool:
     if portfolio_row is None:
         return False
 
-    account = db.query(AccountModel).filter(AccountModel.id == account_id).first()
+    account = (
+        db.query(AccountModel)
+        .filter(AccountModel.id == account_id, AccountModel.user_id == MOCK_USER_ID)
+        .first()
+    )
     if account is None:
         return False
 
@@ -262,14 +270,290 @@ def has_recent_result(db: Session, account_id: int) -> bool:
     return active_ids.issubset(computed_ids)
 
 
+def _serialize_income(rows) -> list[dict]:
+    """Serialize IncomeModel ORM rows to plain dicts safe for threaded access."""
+    return [
+        {
+            "date": r.date,
+            "currency": r.currency,
+            "amount": r.amount,
+            "category": r.category,
+        }
+        for r in rows
+    ]
+
+
+def _build_holdings_positions(
+    db: Session,
+    account: AccountModel,
+    fx: dict[str, float],
+) -> dict[str, tuple[float, HoldingModel]]:
+    """Return {code: (live_shares, holding)} for all non-zero positions.
+
+    Applies post-snapshot transaction deltas, matching the frontend's computePositions.
+    Used by both _compute_portfolio_xirr and _build_portfolio_scheme.
+    """
+    holdings_all = (
+        db.query(HoldingModel)
+        .filter(
+            HoldingModel.user_id == MOCK_USER_ID, HoldingModel.account == account.name
+        )
+        .all()
+    )
+    best: dict[str, HoldingModel] = {}
+    for h in holdings_all:
+        if h.code not in best or (h.snapshot_name or "") > (
+            best[h.code].snapshot_name or ""
+        ):
+            best[h.code] = h
+
+    transactions = (
+        db.query(TransactionModel)
+        .filter(
+            TransactionModel.user_id == MOCK_USER_ID,
+            TransactionModel.account == account.name,
+        )
+        .order_by(TransactionModel.date)
+        .all()
+    )
+    cutoff = account.cutoff_date or ""
+    cash_currency = (best["CASH"].currency if "CASH" in best else "USD") or "USD"
+    cash_fx = fx.get(cash_currency, 1.0)
+    cash_snap = (best["CASH"].snapshot_name if "CASH" in best else "") or ""
+    delta: dict[str, float] = defaultdict(float)
+
+    for t in transactions:
+        if cutoff and t.date < cutoff:
+            continue
+        snap = (best[t.code].snapshot_name if t.code in best else "") or ""
+        if t.date <= snap:
+            continue
+        delta[t.code] += t.shares if t.side == "buy" else -t.shares
+        if t.code != "CASH" and "CASH" in best and t.date > cash_snap:
+            cost = t.shares * t.price * fx.get(t.currency, 1.0) / cash_fx
+            delta["CASH"] += -cost if t.side == "buy" else cost
+
+    return {
+        code: (h.shares + delta.get(code, 0.0), h)
+        for code, h in best.items()
+        if h.shares + delta.get(code, 0.0) > 0
+    }
+
+
+# ── compute() helpers ────────────────────────────────────────────────────────
+
+
+def _fetch_price_data(
+    sym_list: list[str], earliest_date: str
+) -> tuple[dict[str, list[dict]], dict[str, float]]:
+    """Fetch historical and live prices for all symbols in parallel.
+
+    Args:
+        sym_list: Sorted list of symbols to fetch.
+        earliest_date: Start date for historical fetch ("YYYY-MM-DD").
+
+    Returns:
+        (price_cache, current_prices) both keyed by symbol.
+    """
+    price_cache: dict[str, list[dict]] = {}
+    current_prices: dict[str, float] = {}
+
+    def _fetch_history(sym: str) -> tuple[str, list[dict]]:
+        from fin.database import SessionLocal
+
+        worker_db = SessionLocal()
+        try:
+            return sym, fetch_symbol(worker_db, sym, earliest_date)
+        except Exception as exc:
+            logger.warning("Price fetch failed for %s: %s", sym, exc)
+            return sym, []
+        finally:
+            worker_db.close()
+
+    def _fetch_live(sym: str) -> tuple[str, Optional[float]]:
+        return sym, _fetch_current_price(sym)
+
+    n = min(max(1, len(sym_list)), 8)
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        hist_futs = {ex.submit(_fetch_history, s): s for s in sym_list}
+        live_futs = {ex.submit(_fetch_live, s): s for s in sym_list}
+        for f in as_completed(hist_futs):
+            sym, series = f.result()
+            price_cache[sym] = series
+        for f in as_completed(live_futs):
+            sym, live = f.result()
+            if live:
+                current_prices[sym] = live
+            else:
+                series = price_cache.get(sym, [])
+                if series:
+                    current_prices[sym] = series[-1]["close"]
+
+    return price_cache, current_prices
+
+
+def _simulate_schemes(
+    schemes: list[dict],
+    income_plain: list[dict],
+    price_cache: dict[str, list[dict]],
+    current_prices: dict[str, float],
+    fx: dict[str, float],
+) -> tuple[list[dict], int]:
+    """Simulate all schemes in parallel and return (results, total_excluded).
+
+    Args:
+        schemes: List of scheme dicts with id, name, allocations, cash_pct.
+        income_plain: Serialized income rows.
+        price_cache: Historical price series per symbol.
+        current_prices: Live price per symbol.
+        fx: CNY-based FX rates.
+
+    Returns:
+        (scheme_results list, total excluded deposit count).
+    """
+    scheme_results = []
+    total_excluded = 0
+
+    with ThreadPoolExecutor(max_workers=min(max(1, len(schemes)), 8)) as executor:
+        future_to_scheme = {
+            executor.submit(
+                simulate_scheme, s, income_plain, price_cache, current_prices, fx
+            ): s
+            for s in schemes
+        }
+        for future in as_completed(future_to_scheme):
+            s = future_to_scheme[future]
+            try:
+                xirr_pct, excl, scheme_value_usd = future.result()
+                total_excluded = max(total_excluded, excl)
+            except Exception as exc:
+                logger.warning("Scheme %s simulation failed: %s", s.get("id"), exc)
+                xirr_pct = None
+                scheme_value_usd = None
+            scheme_results.append(
+                {
+                    "id": s.get("id"),
+                    "name": s.get("name"),
+                    "xirr": xirr_pct,
+                    "current_value_usd": scheme_value_usd,
+                }
+            )
+
+    return scheme_results, total_excluded
+
+
+def _compute_portfolio_snap_result(
+    db: Session,
+    account_id: int,
+    income_plain: list[dict],
+    price_cache: dict[str, list[dict]],
+    current_prices: dict[str, float],
+    fx: dict[str, float],
+) -> Optional[dict]:
+    """Compute today's XIRR for the most recent portfolio composition snapshot.
+
+    The backfill only runs to yesterday; this provides today's live data point.
+    Returns a scheme_result dict, or None if no snapshot exists.
+    """
+    latest_snap = (
+        db.query(BenchmarkCustomSchemeModel)
+        .filter(
+            BenchmarkCustomSchemeModel.account_id == account_id,
+            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+        )
+        .order_by(BenchmarkCustomSchemeModel.id.desc())
+        .first()
+    )
+    if latest_snap is None:
+        return None
+
+    snap_scheme = {
+        "id": str(latest_snap.id),
+        "name": latest_snap.name,
+        "allocations": json.loads(latest_snap.allocations_json),
+        "cash_pct": latest_snap.cash_pct,
+    }
+    earliest = income_plain[0]["date"] if income_plain else None
+    for a in snap_scheme["allocations"]:
+        sym = a["symbol"]
+        if sym not in price_cache:
+            try:
+                price_cache[sym] = fetch_symbol(db, sym, earliest) if earliest else []
+            except Exception:
+                price_cache[sym] = []
+        if sym not in current_prices:
+            live = _fetch_current_price(sym)
+            if live:
+                current_prices[sym] = live
+            elif price_cache.get(sym):
+                current_prices[sym] = price_cache[sym][-1]["close"]
+
+    try:
+        snap_xirr, _, snap_value = simulate_scheme(
+            snap_scheme, income_plain, price_cache, current_prices, fx
+        )
+        return {
+            "id": str(latest_snap.id),
+            "name": latest_snap.name,
+            "xirr": snap_xirr,
+            "current_value_usd": snap_value,
+        }
+    except Exception as exc:
+        logger.warning(
+            "Portfolio snapshot compute failed for %s: %s", latest_snap.id, exc
+        )
+        return None
+
+
+def _write_bench_results(
+    db: Session,
+    account_id: int,
+    today: str,
+    portfolio_xirr: Optional[float],
+    portfolio_value_usd: float,
+    scheme_results: list[dict],
+) -> None:
+    """Upsert one BenchmarkResultModel row per bench_id."""
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    now_utc = datetime.now(timezone.utc)
+    rows_to_write = [(_PORTFOLIO_BENCH_ID, portfolio_xirr, portfolio_value_usd)]
+    for sr in scheme_results:
+        rows_to_write.append((sr["id"], sr.get("xirr"), sr.get("current_value_usd")))
+
+    for bench_id, xirr_val, value_usd in rows_to_write:
+        stmt = sqlite_insert(BenchmarkResultModel).values(
+            account_id=account_id,
+            bench_id=bench_id,
+            computed_date=today,
+            xirr=xirr_val,
+            current_value_usd=value_usd,
+            computed_at=now_utc,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["account_id", "bench_id", "computed_date"],
+            set_={
+                "xirr": stmt.excluded.xirr,
+                "current_value_usd": stmt.excluded.current_value_usd,
+                "computed_at": stmt.excluded.computed_at,
+            },
+        )
+        db.execute(stmt)
+    db.commit()
+
+
 # ── Main service ──────────────────────────────────────────────────────────────
 
 
 def _load_benchmark_defaults() -> list[dict]:
-    """Read benchmark_defaults from config/app.json."""
+    """Read benchmark_defaults from config/app.json (cached after first successful load)."""
+    global _DEFAULTS_CACHE
+    if _DEFAULTS_CACHE is not None:
+        return _DEFAULTS_CACHE
     try:
         cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
-        return cfg.get("benchmark_defaults", [])
+        _DEFAULTS_CACHE = cfg.get("benchmark_defaults", [])
+        return _DEFAULTS_CACHE
     except Exception as exc:
         logger.warning("Failed to load benchmark_defaults: %s", exc)
         return []
@@ -329,15 +613,22 @@ def _fetch_fx(db: Session) -> dict[str, float]:
 
 
 def _fetch_current_price(symbol: str) -> Optional[float]:
-    """Fetch the current close price for *symbol* via yfinance."""
+    """Fetch current price via QuoteService (routes to EastMoney for OTC funds)."""
+    from fin.database import SessionLocal
+    from fin.services.providers import build_default_providers
+    from fin.services.quote import QuoteService
+
+    db = SessionLocal()
     try:
-        hist = yf.Ticker(symbol).history(period="2d")
-        closes = hist["Close"].dropna()
-        if closes.empty:
-            return None
-        return float(closes.iloc[-1])
-    except Exception:
+        q = QuoteService(db, build_default_providers()).get_quote(symbol)
+        if q and q.get("price"):
+            return float(q["price"])
         return None
+    except Exception as exc:
+        logger.debug("QuoteService price lookup failed for %s: %s", symbol, exc)
+        return None
+    finally:
+        db.close()
 
 
 def _holding_current_price(
@@ -371,7 +662,7 @@ def _holding_current_price(
         logger.debug("QuoteService price lookup failed for holding %s: %s", code, exc)
     if fallback_series:
         return fallback_series[-1]["close"]
-    return _fetch_current_price(code)
+    return None
 
 
 def compute(db: Session, account_id: int) -> dict:
@@ -390,8 +681,6 @@ def compute(db: Session, account_id: int) -> dict:
     Raises:
         ValueError: If the account does not exist or benchmark is disabled.
     """
-    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
     today = str(datetime.now(timezone.utc).date())
 
     account = (
@@ -435,167 +724,34 @@ def compute(db: Session, account_id: int) -> dict:
         }
 
     earliest_date = income[0].date
+    # Serialize before threading — SQLAlchemy ORM instances are not thread-safe.
+    income_plain = _serialize_income(income)
 
-    # Serialize ORM objects to plain dicts before any threaded or async access.
-    # SQLAlchemy ORM instances are not thread-safe; passing them into a
-    # ThreadPoolExecutor causes intermittent "Instance has been deleted" errors.
-    income_plain = [
-        {
-            "date": r.date,
-            "currency": r.currency,
-            "amount": r.amount,
-            "category": r.category,
-        }
-        for r in income
-    ]
-
-    all_symbols: set[str] = set()
-    for scheme in schemes:
-        for alloc in scheme.get("allocations", []):
-            all_symbols.add(alloc["symbol"])
-
-    # Fetch historical price series and live prices in parallel across symbols.
-    price_cache: dict[str, list[dict]] = {}
-    current_prices: dict[str, float] = {}
-    sym_list = sorted(all_symbols)
-
-    def _fetch_history(sym: str) -> tuple[str, list[dict]]:
-        try:
-            return sym, fetch_symbol(db, sym, earliest_date)
-        except Exception as exc:
-            logger.warning("Price fetch failed for %s: %s", sym, exc)
-            return sym, []
-
-    def _fetch_live(sym: str) -> tuple[str, Optional[float]]:
-        return sym, _fetch_current_price(sym)
-
-    n = max(1, len(sym_list))
-    with ThreadPoolExecutor(max_workers=n) as ex:
-        hist_futs = {ex.submit(_fetch_history, s): s for s in sym_list}
-        live_futs = {ex.submit(_fetch_live, s): s for s in sym_list}
-        for f in as_completed(hist_futs):
-            sym, series = f.result()
-            price_cache[sym] = series
-        for f in as_completed(live_futs):
-            sym, live = f.result()
-            if live:
-                current_prices[sym] = live
-            else:
-                series = price_cache.get(sym, [])
-                if series:
-                    current_prices[sym] = series[-1]["close"]
-
+    all_symbols: set[str] = {
+        a["symbol"] for s in schemes for a in s.get("allocations", [])
+    }
+    price_cache, current_prices = _fetch_price_data(sorted(all_symbols), earliest_date)
     fx = _fetch_fx(db)
 
     portfolio_xirr, portfolio_value_usd = _compute_portfolio_xirr(
         db, account, income_plain, fx, price_cache, earliest_date
     )
 
-    scheme_results = []
-    total_excluded = 0
-
-    with ThreadPoolExecutor(max_workers=max(1, len(schemes))) as executor:
-        future_to_scheme = {
-            executor.submit(
-                simulate_scheme, s, income_plain, price_cache, current_prices, fx
-            ): s
-            for s in schemes
-        }
-        for future in as_completed(future_to_scheme):
-            s = future_to_scheme[future]
-            try:
-                xirr_pct, excl, scheme_value_usd = future.result()
-                total_excluded = max(total_excluded, excl)
-            except Exception as exc:
-                logger.warning("Scheme %s simulation failed: %s", s.get("id"), exc)
-                xirr_pct = None
-                scheme_value_usd = None
-            scheme_results.append(
-                {
-                    "id": s.get("id"),
-                    "name": s.get("name"),
-                    "xirr": xirr_pct,
-                    "current_value_usd": scheme_value_usd,
-                }
-            )
-
+    scheme_results, total_excluded = _simulate_schemes(
+        schemes, income_plain, price_cache, current_prices, fx
+    )
     scheme_order = {s.get("id"): i for i, s in enumerate(schemes)}
     scheme_results.sort(key=lambda r: scheme_order.get(r["id"], 999))
 
-    # Also compute today's result for the most recent portfolio snapshot so the
-    # trend chart's last data point uses today's live prices (backfill only runs
-    # to yesterday).
-    latest_snap = (
-        db.query(BenchmarkCustomSchemeModel)
-        .filter(
-            BenchmarkCustomSchemeModel.account_id == account_id,
-            BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
-        )
-        .order_by(BenchmarkCustomSchemeModel.id.desc())
-        .first()
+    snap_result = _compute_portfolio_snap_result(
+        db, account_id, income_plain, price_cache, current_prices, fx
     )
-    if latest_snap:
-        snap_scheme = {
-            "id": str(latest_snap.id),
-            "name": latest_snap.name,
-            "allocations": json.loads(latest_snap.allocations_json),
-            "cash_pct": latest_snap.cash_pct,
-        }
-        for a in snap_scheme["allocations"]:
-            sym = a["symbol"]
-            if sym not in price_cache:
-                try:
-                    price_cache[sym] = fetch_symbol(db, sym, earliest_date)
-                except Exception:
-                    price_cache[sym] = []
-            if sym not in current_prices:
-                live = _fetch_current_price(sym)
-                if live:
-                    current_prices[sym] = live
-                elif price_cache.get(sym):
-                    current_prices[sym] = price_cache[sym][-1]["close"]
-        try:
-            snap_xirr, _, snap_value = simulate_scheme(
-                snap_scheme, income_plain, price_cache, current_prices, fx
-            )
-            scheme_results.append(
-                {
-                    "id": str(latest_snap.id),
-                    "name": latest_snap.name,
-                    "xirr": snap_xirr,
-                    "current_value_usd": snap_value,
-                }
-            )
-        except Exception as exc:
-            logger.warning(
-                "Portfolio snapshot compute failed for %s: %s", latest_snap.id, exc
-            )
+    if snap_result:
+        scheme_results.append(snap_result)
 
-    # Write one row per bench_id (portfolio + each scheme)
-    now_utc = datetime.now(timezone.utc)
-    rows_to_write = [(_PORTFOLIO_BENCH_ID, portfolio_xirr, portfolio_value_usd)]
-    for sr in scheme_results:
-        rows_to_write.append((sr["id"], sr.get("xirr"), sr.get("current_value_usd")))
-
-    for bench_id, xirr_val, value_usd in rows_to_write:
-        stmt = sqlite_insert(BenchmarkResultModel).values(
-            account_id=account_id,
-            bench_id=bench_id,
-            computed_date=today,
-            xirr=xirr_val,
-            current_value_usd=value_usd,
-            computed_at=now_utc,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["account_id", "bench_id", "computed_date"],
-            set_={
-                "xirr": stmt.excluded.xirr,
-                "current_value_usd": stmt.excluded.current_value_usd,
-                "computed_at": stmt.excluded.computed_at,
-            },
-        )
-        db.execute(stmt)
-    db.commit()
+    _write_bench_results(
+        db, account_id, today, portfolio_xirr, portfolio_value_usd, scheme_results
+    )
 
     return {
         "portfolio_xirr": portfolio_xirr,
@@ -613,7 +769,7 @@ def _compute_portfolio_xirr(
     fx: dict[str, float],
     price_cache: dict[str, list[dict]],
     earliest_date: str,
-) -> Optional[float]:
+) -> tuple[Optional[float], float]:
     """Compute XIRR for the actual portfolio using income flows + current holdings value.
 
     Uses the shared price_cache (populated during scheme computation) so holding
@@ -644,65 +800,9 @@ def _compute_portfolio_xirr(
         else:
             flows.append((dep["date"], amount_usd))
 
-    holdings_all = (
-        db.query(HoldingModel)
-        .filter(
-            HoldingModel.user_id == MOCK_USER_ID,
-            HoldingModel.account == account.name,
-        )
-        .all()
-    )
-    # Keep latest snapshot per code (matches frontend snapshotHoldings logic)
-    best: dict[str, HoldingModel] = {}
-    for h in holdings_all:
-        if h.code not in best or (h.snapshot_name or "") > (
-            best[h.code].snapshot_name or ""
-        ):
-            best[h.code] = h
-
-    # Apply post-snapshot transactions so share counts match the frontend's computePositions
-    transactions = (
-        db.query(TransactionModel)
-        .filter(
-            TransactionModel.user_id == MOCK_USER_ID,
-            TransactionModel.account == account.name,
-        )
-        .order_by(TransactionModel.date)
-        .all()
-    )
-    cutoff = account.cutoff_date or ""
-    # share delta: code -> float (positive = net bought since snapshot)
-    delta: dict[str, float] = defaultdict(float)
-    # CASH delta is in CASH's native currency (same units as h.shares for CASH holding)
-    cash_currency = (best["CASH"].currency if "CASH" in best else "USD") or "USD"
-    cash_fx = fx.get(cash_currency, 1.0)
-    # Only adjust CASH for transactions that occurred after the CASH snapshot date.
-    # The CASH snapshot already reflects all flows up to that point.
-    cash_snap_date = (best["CASH"].snapshot_name if "CASH" in best else "") or ""
-    for t in transactions:
-        if cutoff and t.date < cutoff:
-            continue
-        snap_date = (best[t.code].snapshot_name if t.code in best else "") or ""
-        if t.date <= snap_date:
-            continue
-        if t.side == "buy":
-            delta[t.code] += t.shares
-        else:
-            delta[t.code] -= t.shares
-        # Deduct/credit CASH for post-snapshot stock trades (CASH snapshot is fixed)
-        if t.code != "CASH" and "CASH" in best and t.date > cash_snap_date:
-            cost_in_cash = t.shares * t.price * fx.get(t.currency, 1.0) / cash_fx
-            if t.side == "buy":
-                delta["CASH"] -= cost_in_cash
-            else:
-                delta["CASH"] += cost_in_cash
-
+    positions = _build_holdings_positions(db, account, fx)
     terminal_usd = 0.0
-    for code, h in best.items():
-        live_shares = h.shares + delta.get(code, 0.0)
-        if live_shares <= 0:
-            continue
-        # CASH is a virtual position where shares == amount in the holding currency
+    for code, (live_shares, h) in positions.items():
         if code == "CASH":
             price = 1.0
         else:
@@ -716,8 +816,7 @@ def _compute_portfolio_xirr(
             price = _holding_current_price(db, code, series)
         if price is None:
             continue
-        h_fx = fx.get(h.currency, 1.0)
-        terminal_usd += live_shares * price * h_fx / usd_rate
+        terminal_usd += live_shares * price * fx.get(h.currency, 1.0) / usd_rate
 
     if terminal_usd > 0:
         today = str(datetime.now(timezone.utc).date())

@@ -25,7 +25,12 @@ PRICES_CACHE_ONLY: bool = os.environ.get("FIN_PRICES_CACHE_ONLY", "").lower() in
     "yes",
 )
 
-SYMBOL_ALIASES = {".SPX": "^GSPC", ".NDX": "^NDX", ".DJI": "^DJI"}
+SYMBOL_ALIASES = {
+    ".SPX": "^GSPC",
+    ".NDX": "^NDX",
+    ".DJI": "^DJI",
+    "^HSTECH": "HSTECH.HK",
+}
 
 # Fields from provider responses that are not DB columns and must be stripped
 # before persisting (market_state and change_pct are computed/transient).
@@ -73,7 +78,24 @@ def _read_market_states() -> dict:
 
 def normalize_symbol(symbol: str) -> str:
     s = symbol.upper()
-    return SYMBOL_ALIASES.get(s, s)
+    s = SYMBOL_ALIASES.get(s, s)
+    # Bare 6-digit CN codes that are exchange-listed need a yfinance suffix.
+    # OTC mutual funds (e.g. 013308) share the same 6-digit format but yfinance
+    # can't serve them — only match known exchange code prefix ranges.
+    if len(s) == 6 and s.isdigit():
+        p = s[:3]
+        # Shenzhen: main board 000-003, ETF/LOF 150-169, ChiNext/ChiNext-B 300-301
+        if (
+            p in {"000", "001", "002", "003"}
+            or "150" <= p <= "169"
+            or p in {"300", "301"}
+        ):
+            return f"{s}.SZ"
+        # Shanghai: fund/ETF 500-588, main board 600-606, STAR Market 688
+        if "500" <= p <= "588" or "600" <= p <= "606" or p == "688":
+            return f"{s}.SS"
+        # Everything else (e.g. 013xxx OTC funds) — leave as-is for EastMoney
+    return s
 
 
 def _stock_to_dict(stock: StockModel) -> dict:

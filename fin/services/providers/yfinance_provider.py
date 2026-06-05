@@ -9,9 +9,10 @@ from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
-_EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ")
+_EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ", ".TO", ".V", ".NE")
 
 _FX_TTL = 60  # seconds
+_HISTORY_TIMEOUT_SECONDS = 30
 
 _ASSET_TYPES = frozenset({"equity", "etf", "bond", "mutualfund", "index"})
 
@@ -177,6 +178,72 @@ class YFinanceProvider(QuoteProvider):
             }
         except Exception as e:
             logger.warning("full quote fetch failed for %s: %s", symbol, e)
+            return {}
+
+    def fetch_history(self, symbol: str, start: str, end: str) -> list[dict]:
+        """Return OHLC history from yfinance as [{"date", "close"}]."""
+        try:
+            hist = yf.Ticker(symbol).history(
+                start=start, end=end, timeout=_HISTORY_TIMEOUT_SECONDS
+            )
+            if hist.empty:
+                return []
+            rows = []
+            for ts, row in hist.iterrows():
+                date_str = ts.astimezone(timezone.utc).strftime("%Y-%m-%d")
+                close = float(row["Close"])
+                if not math.isnan(close) and close > 0:
+                    rows.append({"date": date_str, "close": close})
+            return rows
+        except Exception as exc:
+            logger.warning("history fetch failed for %s: %s", symbol, exc)
+            return []
+
+    def fetch_dividends(self, symbol: str, since: str) -> dict:
+        """Return dividend metadata and payment history since since_date."""
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            if not info:
+                return {}
+            ex_ts = info.get("exDividendDate")
+            ex_date = (
+                datetime.fromtimestamp(ex_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+                if ex_ts
+                else None
+            )
+            pay_ts = info.get("dividendDate")
+            pay_date = (
+                datetime.fromtimestamp(pay_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+                if pay_ts
+                else None
+            )
+            annual_rate = info.get("dividendRate")
+
+            hist = ticker.dividends
+            if hist.empty:
+                history = []
+            else:
+                idx = (
+                    hist.index.tz_localize(None)
+                    if hist.index.tz is not None
+                    else hist.index
+                )
+                since_dt = datetime.strptime(since, "%Y-%m-%d")
+                history = [
+                    {"date": str(d.date()), "amount": round(float(a), 4)}
+                    for d, a in zip(idx, hist.values)
+                    if d >= since_dt
+                ]
+
+            return {
+                "ex_date": ex_date,
+                "pay_date": pay_date,
+                "annual_rate": annual_rate,
+                "history": history,
+            }
+        except Exception as exc:
+            logger.warning("dividend fetch failed for %s: %s", symbol, exc)
             return {}
 
     def fetch_fx(self, pairs: dict[str, str]) -> dict:

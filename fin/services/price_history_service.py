@@ -1,7 +1,6 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-import yfinance as yf
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -16,13 +15,13 @@ _STALE_DAYS = 1  # re-fetch if most recent row is older than yesterday
 def fetch_symbol(db: Session, symbol: str, since_date: str) -> list[dict]:
     """Return historical closes for *symbol* starting from *since_date* ("YYYY-MM-DD").
 
-    Incremental: only fetches from yfinance when the cache is stale (no row for
+    Incremental: only fetches via the provider when the cache is stale (no row for
     yesterday or today UTC). Stores rows keyed by the original *symbol* string;
-    normalization is applied only for the yfinance call.
+    normalization is applied only for provider routing.
 
     Args:
         db: SQLAlchemy session.
-        symbol: Original ticker string (e.g. "SPY", "000300.SS").
+        symbol: Original ticker string (e.g. "SPY", "000300.SS", "013308").
         since_date: Earliest date to include in the returned list.
 
     Returns:
@@ -38,7 +37,7 @@ def fetch_symbol(db: Session, symbol: str, since_date: str) -> list[dict]:
     ).scalar()
 
     if row is None or row < str(yesterday):
-        _fetch_from_yfinance(db, symbol, row, since_date, today)
+        _fetch_from_provider(db, symbol, row, since_date, today)
 
     rows = db.execute(
         text(
@@ -50,14 +49,17 @@ def fetch_symbol(db: Session, symbol: str, since_date: str) -> list[dict]:
     return [{"date": r[0], "close": r[1]} for r in rows]
 
 
-def _fetch_from_yfinance(
+def _fetch_from_provider(
     db: Session,
     symbol: str,
     max_date: str | None,
     since_date: str,
-    today,
+    today: date,
 ) -> None:
-    """Fetch history from yfinance and upsert into price_history.
+    """Fetch history via the appropriate provider and upsert into price_history.
+
+    Routes through the provider abstraction so OTC funds (e.g. 013308) go to
+    ChinaFundProvider/akshare and exchange-listed symbols go to YFinanceProvider.
 
     Args:
         db: SQLAlchemy session.
@@ -67,6 +69,8 @@ def _fetch_from_yfinance(
         today: Today's UTC date.
     """
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    from fin.services.providers import build_default_providers
 
     if max_date:
         start = str(
@@ -78,26 +82,20 @@ def _fetch_from_yfinance(
     end = str(today + timedelta(days=1))
 
     yf_symbol = normalize_symbol(symbol)
-    try:
-        hist = yf.Ticker(yf_symbol).history(start=start, end=end)
-    except Exception as exc:
-        logger.warning("yfinance fetch failed for %s: %s", symbol, exc)
+    providers = build_default_providers()
+    provider = next((p for p in providers if p.supports(yf_symbol)), None)
+    if provider is None:
+        logger.warning("no provider supports symbol: %s", symbol)
         return
 
-    if hist.empty:
-        logger.debug("yfinance returned empty history for %s start=%s", symbol, start)
+    raw_rows = provider.fetch_history(yf_symbol, start, end)
+    if not raw_rows:
+        logger.debug("provider returned empty history for %s start=%s", symbol, start)
         return
 
-    rows = []
-    for ts, row in hist.iterrows():
-        date_str = ts.astimezone(timezone.utc).strftime("%Y-%m-%d")
-        close = float(row["Close"])
-        if close and close == close:  # skip NaN
-            rows.append({"symbol": symbol, "date": date_str, "close": close})
-
-    if not rows:
-        return
-
+    rows = [
+        {"symbol": symbol, "date": r["date"], "close": r["close"]} for r in raw_rows
+    ]
     stmt = sqlite_insert(PriceHistoryModel).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=["symbol", "date"],

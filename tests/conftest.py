@@ -27,10 +27,14 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    with patch("fin.api.init_db"):
-        with patch("fin.api.start_price_updater"):
-            with TestClient(app) as c:
-                yield c
+    with (
+        patch("fin.api.init_db"),
+        patch("fin.api.start_price_updater"),
+        patch("fin.api.start_benchmark_backfill", return_value=lambda: None),
+        patch("fin.api.stop_benchmark_backfill"),
+    ):
+        with TestClient(app) as c:
+            yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
     engine.dispose()

@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     balance_account_id      INTEGER,
     balance_sub_account_id  INTEGER,
     symbol_markets          TEXT,      -- JSON: {"013308": "HK"} — per-symbol market classification overrides
+    benchmark_enabled       TEXT     DEFAULT '0',  -- '1' = include in benchmark compute
+    benchmark_schemes       TEXT,                  -- JSON: [scheme_id, ...] (null = use defaults)
     create_time  DATETIME NOT NULL,
     update_time  DATETIME NOT NULL
 );
@@ -239,3 +241,49 @@ CREATE TABLE IF NOT EXISTS dividend_history (
     create_time   DATETIME NOT NULL,
     update_time   DATETIME NOT NULL
 );
+
+-- ── price_history (daily close prices per symbol, cached from yfinance) ────────
+CREATE TABLE IF NOT EXISTS price_history (
+    id          INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    symbol      VARCHAR  NOT NULL,
+    date        VARCHAR  NOT NULL,  -- YYYY-MM-DD
+    close       FLOAT    NOT NULL,
+    create_time DATETIME NOT NULL,
+    update_time DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_price_history_sym_date
+    ON price_history (symbol, date);
+
+-- ── benchmark_custom_schemes (per-account benchmark allocation definitions) ────
+-- is_portfolio_snapshot=1 rows are auto-generated snapshots of actual holdings.
+CREATE TABLE IF NOT EXISTS benchmark_custom_schemes (
+    id                    INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    user_id               BIGINT,
+    account_id            INTEGER  NOT NULL,
+    name                  VARCHAR  NOT NULL,
+    allocations_json      TEXT     NOT NULL,  -- JSON: [{"symbol": str, "pct": float}]
+    cash_pct              FLOAT    NOT NULL DEFAULT 0.0,
+    enabled               INTEGER  NOT NULL DEFAULT 1,
+    is_portfolio_snapshot INTEGER  NOT NULL DEFAULT 0,
+    create_time           DATETIME NOT NULL,
+    update_time           DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_custom_schemes_acct_name
+    ON benchmark_custom_schemes (account_id, name);
+
+-- ── benchmark_results (computed XIRR results per account / scheme / date) ──────
+-- bench_id = "__portfolio__" for the actual portfolio, or the scheme name.
+CREATE TABLE IF NOT EXISTS benchmark_results (
+    id                INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+    user_id           BIGINT,
+    account_id        INTEGER  NOT NULL,
+    bench_id          VARCHAR  NOT NULL,  -- "__portfolio__" or scheme name
+    computed_date     VARCHAR  NOT NULL,  -- YYYY-MM-DD
+    xirr              FLOAT,
+    current_value_usd FLOAT,              -- terminal value in USD
+    computed_at       DATETIME,           -- exact timestamp of last compute
+    create_time       DATETIME NOT NULL,
+    update_time       DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_benchmark_results_acct_bench_date
+    ON benchmark_results (account_id, bench_id, computed_date);
