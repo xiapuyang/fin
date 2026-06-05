@@ -1407,7 +1407,7 @@ const RB_DEFAULT_CONFIG = {
 
 // ── Rebalance edit modal ────────────────────────────────────────────────────────
 
-const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
+const RebalanceEditModal = ({ config, birthDate = "", presets = RB_PRESETS, onSave, onClose }) => {
   const [draft, setDraft] = React.useState(JSON.parse(JSON.stringify(config)));
   const [codesTexts, setCodesTexts] = React.useState(config.buckets.map(b => (b.codes || []).join(", ")));
 
@@ -1439,7 +1439,7 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
       <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.preset")}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-          {RB_PRESETS.map(p => (
+          {presets.map(p => (
             <button key={p.id} onClick={() => applyPreset(p)} style={{
               padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
               borderColor: draft.presetId === p.id ? "var(--accent)" : "var(--line-2)",
@@ -1450,7 +1450,7 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
         </div>
 
         {(() => {
-          const pr = RB_PRESETS.find(p => p.id === draft.presetId);
+          const pr = presets.find(p => p.id === draft.presetId);
           return pr && pr.id !== "personal" && (
             <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 18, borderLeft: "3px solid var(--accent)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-2)", fontStyle: "italic" }}>"{pr.quote}"</div>
@@ -1510,6 +1510,21 @@ const RebalanceEditModal = ({ config, birthDate = "", onSave, onClose }) => {
 
 const RB_DEFAULT_TRIGGER = { mode: "hybrid", calFreq: "annual", absDriftPp: 5, relDriftPct: 20 };
 
+// Normalizes an API preset (label_i18n / name_i18n) to the same shape as RB_PRESETS entries.
+const _normalizeApiPreset = (p) => {
+  const buckets = p.buckets ? p.buckets.map(b => ({
+    ...b,
+    get label() { return b.label_i18n ? I18N.t(b.label_i18n) : (b.label || ""); },
+  })) : null;
+  return {
+    ...p,
+    buckets,
+    get label()  { return I18N.t(p.name_i18n) || p.name_i18n || p.id; },
+    get author() { return p.author_i18n ? I18N.t(p.author_i18n) : (p.author || ""); },
+    get quote()  { return I18N.t(p.quote_i18n) || p.quote_i18n || ""; },
+  };
+};
+
 const rehydrateBuckets = (buckets, id, birthDate) => {
   const tpl = id === "age_rule"
     ? computeAgeRuleBuckets(computeAge(birthDate))
@@ -1519,11 +1534,21 @@ const rehydrateBuckets = (buckets, id, birthDate) => {
     : buckets;
 };
 
-const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) => {
+const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
+    accountId = null, accountConfig = null, onAccountConfigChange = null }) => {
   const [activeId, setActiveId] = React.useState("personal");
   const [perPreset, setPerPreset] = React.useState({});
   const [editOpen, setEditOpen] = React.useState(false);
   const [expandedBucket, setExpandedBucket] = React.useState(null);
+  const [systemPresets, setSystemPresets] = React.useState(RB_PRESETS);
+
+  React.useEffect(() => {
+    apiGetRebalanceDefaults()
+      .then(defaults => {
+        if (defaults && defaults.length > 0) setSystemPresets(defaults.map(_normalizeApiPreset));
+      })
+      .catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     fetch("/api/rebalance")
@@ -1555,7 +1580,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
   const activeData = perPreset[activeId] || {};
   const defaultBuckets = activeId === "age_rule"
     ? computeAgeRuleBuckets(computeAge(birthDate))
-    : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === activeId)?.buckets || []));
+    : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === activeId)?.buckets || []));
   const config = {
     presetId: activeId,
     buckets:   activeData.buckets || defaultBuckets,
@@ -1582,7 +1607,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
     const existing = perPreset[newId];
     const newBuckets = newId === "age_rule"
       ? computeAgeRuleBuckets(computeAge(birthDate))
-      : JSON.parse(JSON.stringify(RB_PRESETS.find(p => p.id === newId)?.buckets || []));
+      : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === newId)?.buckets || []));
     const newData = existing || { buckets: newBuckets, trigger: config.trigger };
     persist(newId, newData, { ...perPreset, [newId]: newData });
   };
@@ -1641,7 +1666,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
     Math.abs(b.drift) >= absDriftPp  // hybrid: absolute threshold
   );
 
-  const preset   = RB_PRESETS.find(p => p.id === config.presetId) || RB_PRESETS[0];
+  const preset   = systemPresets.find(p => p.id === config.presetId) || systemPresets[0] || RB_PRESETS[0];
   const calLabel = (RB_CAL_OPTIONS.find(o => o.value === calFreq) || {}).label || "";
 
   return (
@@ -1649,7 +1674,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
       {/* Header: preset chips + edit button */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {RB_PRESETS.map(p => (
+          {systemPresets.map(p => (
             <button key={p.id} onClick={() => switchPreset(p.id)}
               style={{
                 padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
@@ -1843,7 +1868,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "" }) 
       </div>
 
       {editOpen && (
-        <RebalanceEditModal config={config} birthDate={birthDate} onSave={next => {
+        <RebalanceEditModal config={config} birthDate={birthDate} presets={systemPresets} onSave={next => {
           saveConfig({ buckets: next.buckets });
           setEditOpen(false);
         }} onClose={() => setEditOpen(false)}/>

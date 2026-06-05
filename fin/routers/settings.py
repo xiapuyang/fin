@@ -9,7 +9,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
+from fin.config import APP_CONFIG_PATH, DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -81,6 +81,17 @@ def get_fx(db: Session = Depends(get_db)):
     except Exception as exc:
         logger.warning("FX fetch failed: %s", exc)
         return _FX_FALLBACK
+
+
+@router.get("/rebalance/defaults")
+def get_rebalance_defaults():
+    """Return the list of system default rebalance presets from config/app.json."""
+    try:
+        cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
+        return cfg.get("rebalance_defaults", [])
+    except Exception as exc:
+        logger.warning("Failed to load rebalance_defaults: %s", exc)
+        return []
 
 
 @router.get("/rebalance")
