@@ -48,7 +48,7 @@ class YFinanceProvider(QuoteProvider):
             ticker = yf.Ticker(symbol)
             fi = ticker.fast_info
 
-            hist = ticker.history(period="2d")
+            hist = ticker.history(period="10d")
             if hist.empty:
                 return {}
             regular_close = float(hist["Close"].iloc[-1])
