@@ -454,25 +454,36 @@ def compute(db: Session, account_id: int) -> dict:
         for alloc in scheme.get("allocations", []):
             all_symbols.add(alloc["symbol"])
 
+    # Fetch historical price series and live prices in parallel across symbols.
     price_cache: dict[str, list[dict]] = {}
-    for sym in sorted(all_symbols):
+    current_prices: dict[str, float] = {}
+    sym_list = sorted(all_symbols)
+
+    def _fetch_history(sym: str) -> tuple[str, list[dict]]:
         try:
-            price_cache[sym] = fetch_symbol(db, sym, earliest_date)
+            return sym, fetch_symbol(db, sym, earliest_date)
         except Exception as exc:
             logger.warning("Price fetch failed for %s: %s", sym, exc)
-            price_cache[sym] = []
+            return sym, []
 
-    # Always fetch live price for terminal value — price_history is only used
-    # for historical deposit-date prices in the XIRR simulation.
-    current_prices: dict[str, float] = {}
-    for sym in all_symbols:
-        live = _fetch_current_price(sym)
-        if live:
-            current_prices[sym] = live
-        else:
-            series = price_cache.get(sym, [])
-            if series:
-                current_prices[sym] = series[-1]["close"]
+    def _fetch_live(sym: str) -> tuple[str, Optional[float]]:
+        return sym, _fetch_current_price(sym)
+
+    n = max(1, len(sym_list))
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        hist_futs = {ex.submit(_fetch_history, s): s for s in sym_list}
+        live_futs = {ex.submit(_fetch_live, s): s for s in sym_list}
+        for f in as_completed(hist_futs):
+            sym, series = f.result()
+            price_cache[sym] = series
+        for f in as_completed(live_futs):
+            sym, live = f.result()
+            if live:
+                current_prices[sym] = live
+            else:
+                series = price_cache.get(sym, [])
+                if series:
+                    current_prices[sym] = series[-1]["close"]
 
     fx = _fetch_fx(db)
 
