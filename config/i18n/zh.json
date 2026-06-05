@@ -804,8 +804,6 @@
   "holdings.rb.acct.toggle": "再平衡分析",
   "holdings.rb.acct.toggleHint": "在持仓页面显示再平衡标签，展示账户资产配置分析",
   "holdings.rb.acct.tab": "再平衡",
-  "holdings.rb.acct.globalPin": "固定到",
-  "holdings.rb.acct.globalFollow": "跟随全局",
   "holdings.rb.acct.configType.label": "配置",
   "holdings.rb.acct.configType.global": "继承全局",
   "holdings.rb.acct.configType.preset": "系统预设",

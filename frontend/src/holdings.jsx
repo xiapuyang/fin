@@ -1564,8 +1564,6 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     accountConfig?.type === "personal" ? { buckets: accountConfig.buckets, trigger: accountConfig.trigger } : null
   );
   const [acctTrigger, setAcctTrigger] = React.useState(() => accountConfig?.trigger || RB_DEFAULT_TRIGGER);
-  // null = follow globally active; a config id = pin to that specific global config
-  const [acctGlobalConfigId, setAcctGlobalConfigId] = React.useState(() => accountConfig?.global_config_id || null);
 
   React.useEffect(() => {
     apiGetRebalanceDefaults()
@@ -1624,21 +1622,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
 
   // Resolve per-account config when accountId is set
   const acctEffectiveConfig = accountId ? (() => {
-    if (acctConfigType === "global") {
-      const gid = acctGlobalConfigId;
-      if (!gid) return globalConfig; // follow globally active
-      if (gid === "personal") {
-        const pd = perPreset["personal"];
-        return { presetId: "personal", buckets: pd?.buckets || globalConfig.buckets, trigger: pd?.trigger || globalConfig.trigger };
-      }
-      const sp = systemPresets.find(p => p.id === gid);
-      const customData = perPreset[gid];
-      return {
-        presetId: gid,
-        buckets: customData?.buckets || JSON.parse(JSON.stringify(sp?.buckets || globalConfig.buckets)),
-        trigger: customData?.trigger || RB_DEFAULT_TRIGGER,
-      };
-    }
+    if (acctConfigType === "global") return globalConfig;
     if (acctConfigType === "preset") {
       const sp = systemPresets.find(p => p.id === acctPresetId) || systemPresets[0];
       const buckets = JSON.parse(JSON.stringify(sp?.buckets || []));
@@ -1669,7 +1653,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const persistAccount = (typeOverride, update = {}) => {
     const type = typeOverride || acctConfigType;
     let cfg;
-    if (type === "global") cfg = { type: "global", global_config_id: acctGlobalConfigId };
+    if (type === "global") cfg = { type: "global" };
     else if (type === "preset") cfg = { type: "preset", preset_id: acctPresetId, trigger: acctTrigger, ...update };
     else cfg = { type: "personal", ...(acctPersonalData || {}), ...update };
     onAccountConfigChange && onAccountConfigChange(cfg);
@@ -1772,11 +1756,6 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const activeChipId = accountId ? (acctConfigType === "preset" ? acctPresetId : null) : activeId;
   const isReadOnly = accountId && acctConfigType === "global";
 
-  const setAcctGlobalPin = (gid) => {
-    setAcctGlobalConfigId(gid);
-    onAccountConfigChange && onAccountConfigChange({ type: "global", global_config_id: gid });
-  };
-
   const switchAcctConfigType = (newType) => {
     setAcctConfigType(newType);
     if (newType === "personal" && !acctPersonalData) {
@@ -1802,21 +1781,6 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
               background:  acctConfigType === t ? "var(--accent-soft)" : "transparent",
               color:       acctConfigType === t ? "var(--accent)" : "var(--ink-3)",
             }}>{I18N.t(key)}</button>
-          ))}
-        </div>
-      )}
-
-      {/* Per-account global: sub-selector to pin a specific global config */}
-      {accountId && acctConfigType === "global" && (
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-5)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 2 }}>{I18N.t("holdings.rb.acct.globalPin")}</span>
-          {[{ id: null, label: I18N.t("holdings.rb.acct.globalFollow") }, ...systemPresets, { id: "personal", label: I18N.t("holdings.rb.personal") }].map(p => (
-            <button key={p.id ?? "__follow__"} onClick={() => setAcctGlobalPin(p.id)} style={{
-              padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "1px solid",
-              borderColor: acctGlobalConfigId === p.id ? "var(--accent)" : "var(--line-2)",
-              background:  acctGlobalConfigId === p.id ? "var(--accent-soft)" : "transparent",
-              color:       acctGlobalConfigId === p.id ? "var(--accent)" : "var(--ink-3)",
-            }}>{p.label}</button>
           ))}
         </div>
       )}
