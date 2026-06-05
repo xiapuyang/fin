@@ -1564,6 +1564,8 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     accountConfig?.type === "personal" ? { buckets: accountConfig.buckets, trigger: accountConfig.trigger } : null
   );
   const [acctTrigger, setAcctTrigger] = React.useState(() => accountConfig?.trigger || RB_DEFAULT_TRIGGER);
+  // null = follow globally active; a config id = pin to that specific global config
+  const [acctGlobalConfigId, setAcctGlobalConfigId] = React.useState(() => accountConfig?.global_config_id || null);
 
   React.useEffect(() => {
     apiGetRebalanceDefaults()
@@ -1622,7 +1624,21 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
 
   // Resolve per-account config when accountId is set
   const acctEffectiveConfig = accountId ? (() => {
-    if (acctConfigType === "global") return globalConfig;
+    if (acctConfigType === "global") {
+      const gid = acctGlobalConfigId;
+      if (!gid) return globalConfig; // follow globally active
+      if (gid === "personal") {
+        const pd = perPreset["personal"];
+        return { presetId: "personal", buckets: pd?.buckets || globalConfig.buckets, trigger: pd?.trigger || globalConfig.trigger };
+      }
+      const sp = systemPresets.find(p => p.id === gid);
+      const customData = perPreset[gid];
+      return {
+        presetId: gid,
+        buckets: customData?.buckets || JSON.parse(JSON.stringify(sp?.buckets || globalConfig.buckets)),
+        trigger: customData?.trigger || RB_DEFAULT_TRIGGER,
+      };
+    }
     if (acctConfigType === "preset") {
       const sp = systemPresets.find(p => p.id === acctPresetId) || systemPresets[0];
       const buckets = JSON.parse(JSON.stringify(sp?.buckets || []));
@@ -1653,7 +1669,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const persistAccount = (typeOverride, update = {}) => {
     const type = typeOverride || acctConfigType;
     let cfg;
-    if (type === "global") cfg = { type: "global" };
+    if (type === "global") cfg = { type: "global", global_config_id: acctGlobalConfigId };
     else if (type === "preset") cfg = { type: "preset", preset_id: acctPresetId, trigger: acctTrigger, ...update };
     else cfg = { type: "personal", ...(acctPersonalData || {}), ...update };
     onAccountConfigChange && onAccountConfigChange(cfg);
@@ -1688,6 +1704,8 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
       const existing = perPreset[newId];
       const newBuckets = newId === "age_rule"
         ? computeAgeRuleBuckets(computeAge(birthDate))
+        : newId === "personal"
+        ? JSON.parse(JSON.stringify(globalConfig.buckets))
         : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === newId)?.buckets || []));
       const newData = existing || { buckets: newBuckets, trigger: globalConfig.trigger };
       persist(newId, newData, { ...perPreset, [newId]: newData });
@@ -1754,6 +1772,11 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const activeChipId = accountId ? (acctConfigType === "preset" ? acctPresetId : null) : activeId;
   const isReadOnly = accountId && acctConfigType === "global";
 
+  const setAcctGlobalPin = (gid) => {
+    setAcctGlobalConfigId(gid);
+    onAccountConfigChange && onAccountConfigChange({ type: "global", global_config_id: gid });
+  };
+
   const switchAcctConfigType = (newType) => {
     setAcctConfigType(newType);
     if (newType === "personal" && !acctPersonalData) {
@@ -1783,22 +1806,49 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
         </div>
       )}
 
+      {/* Per-account global: sub-selector to pin a specific global config */}
+      {accountId && acctConfigType === "global" && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-5)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 2 }}>{I18N.t("holdings.rb.acct.globalPin")}</span>
+          {[{ id: null, label: I18N.t("holdings.rb.acct.globalFollow") }, ...systemPresets, { id: "personal", label: I18N.t("holdings.rb.personal") }].map(p => (
+            <button key={p.id ?? "__follow__"} onClick={() => setAcctGlobalPin(p.id)} style={{
+              padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: acctGlobalConfigId === p.id ? "var(--accent)" : "var(--line-2)",
+              background:  acctGlobalConfigId === p.id ? "var(--accent-soft)" : "transparent",
+              color:       acctGlobalConfigId === p.id ? "var(--accent)" : "var(--ink-3)",
+            }}>{p.label}</button>
+          ))}
+        </div>
+      )}
+
       {/* Header: preset chips + edit button */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {(accountId ? acctConfigType !== "personal" : true) && systemPresets.map(p => (
-            <button key={p.id}
-              onClick={() => !isReadOnly && switchPreset(p.id)}
-              disabled={isReadOnly}
-              style={{
-                padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500,
-                cursor: isReadOnly ? "default" : "pointer", border: "1px solid",
-                borderColor: activeChipId === p.id ? "var(--accent)" : "var(--line-2)",
-                background:  activeChipId === p.id ? "var(--accent-soft)" : "transparent",
-                color:       activeChipId === p.id ? "var(--accent)" : "var(--ink-3)",
-                opacity: isReadOnly ? 0.6 : 1,
-              }}
-            >{p.label}</button>
+          {/* Global mode: system preset chips + personal chip */}
+          {!accountId && systemPresets.map(p => (
+            <button key={p.id} onClick={() => switchPreset(p.id)} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: activeId === p.id ? "var(--accent)" : "var(--line-2)",
+              background:  activeId === p.id ? "var(--accent-soft)" : "transparent",
+              color:       activeId === p.id ? "var(--accent)" : "var(--ink-3)",
+            }}>{p.label}</button>
+          ))}
+          {!accountId && (
+            <button onClick={() => switchPreset("personal")} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: activeId === "personal" ? "var(--accent)" : "var(--line-2)",
+              background:  activeId === "personal" ? "var(--accent-soft)" : "transparent",
+              color:       activeId === "personal" ? "var(--accent)" : "var(--ink-3)",
+            }}>{I18N.t("holdings.rb.personal")}</button>
+          )}
+          {/* Per-account preset mode: system preset chips */}
+          {accountId && acctConfigType === "preset" && systemPresets.map(p => (
+            <button key={p.id} onClick={() => switchPreset(p.id)} style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
+              borderColor: activeChipId === p.id ? "var(--accent)" : "var(--line-2)",
+              background:  activeChipId === p.id ? "var(--accent-soft)" : "transparent",
+              color:       activeChipId === p.id ? "var(--accent)" : "var(--ink-3)",
+            }}>{p.label}</button>
           ))}
         </div>
         {(!accountId || acctConfigType === "personal") && (

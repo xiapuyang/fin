@@ -804,6 +804,8 @@
   "holdings.rb.acct.toggle": "Rebalance Analysis",
   "holdings.rb.acct.toggleHint": "Shows a Rebalance tab with per-account portfolio allocation analysis",
   "holdings.rb.acct.tab": "Rebalance",
+  "holdings.rb.acct.globalPin": "Pin to",
+  "holdings.rb.acct.globalFollow": "Follow Active",
   "holdings.rb.acct.configType.label": "Config",
   "holdings.rb.acct.configType.global": "Inherit Global",
   "holdings.rb.acct.configType.preset": "System Preset",
