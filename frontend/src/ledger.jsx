@@ -897,18 +897,6 @@ const EndRecurringModal = ({ name, onClose, onConfirm }) => {
   );
 };
 
-const ConfirmModal = ({ message, onClose, onConfirm, confirmLabel, confirmVariant = "danger" }) => (
-  <Modal open title={I18N.t("ledger.confirm.title")} onClose={onClose} width={380}>
-    <div style={{ padding: 20 }}>
-      <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>{message}</div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
-        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
-        <Button variant={confirmVariant} onClick={onConfirm}>{confirmLabel || I18N.t("ledger.confirm.delete")}</Button>
-      </div>
-    </div>
-  </Modal>
-);
-
 // ── Entry Modal (add & edit) ──────────────────────────────────────────────────
 
 const EntryModal = ({ item, fxRates = {}, onClose, onDone }) => {

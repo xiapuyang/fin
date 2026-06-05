@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.exc import OperationalError
 from pydantic import Field
 from sqlalchemy.orm import Session
 
@@ -80,7 +81,13 @@ def get_market_states():
 
 @router.get("/quote/{symbol}")
 def get_quote(symbol: str, db: Session = Depends(get_db)):
-    result = QuoteService(db, build_default_providers()).get_quote(symbol)
+    try:
+        result = QuoteService(db, build_default_providers()).get_quote(symbol)
+    except OperationalError as exc:
+        logger.warning("DB unavailable for quote %s: %s", symbol, exc)
+        raise HTTPException(
+            status_code=503, detail="Price data temporarily unavailable"
+        )
     if result is None:
         raise HTTPException(status_code=503, detail="Price data unavailable")
     return result

@@ -185,6 +185,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   const [incomeAllowedCats, setIncomeAllowedCats] = React.useState(null);
   const [showAccountModal, setShowAccountModal] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState(null);
+  const [deleteAccountTarget, setDeleteAccountTarget] = React.useState(null);
   const [selectedSnapshot, setSelectedSnapshot] = React.useState(null);
   React.useEffect(() => {
     Promise.all([apiGetAccounts(), apiGetHoldings(), apiGetTransactions(), apiGetIncome()])
@@ -363,12 +364,29 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
     { label: I18N.t("holdings.cash"), value: acctCashValue, color: "#888" },
   ].filter(b => b.value > 0);
 
-  const deleteAccount = async (id, name) => {
-    if (!confirm(I18N.tf("holdings.accounts.deleteConfirm", { name }))) return;
-    await apiDeleteAccount(id);
-    const next = accounts.filter(a => a.id !== id);
-    setAccounts(next);
-    if (selectedAccountId === id) setSelectedAccountId(next[0]?.id || null);
+  const deleteAccount = (id, name) => {
+    const holdingCount  = holdings.filter(h => h.account === name).length;
+    const txnCount      = transactions.filter(t => t.account === name).length;
+    const incomeCount   = income.filter(i => i.account === name).length;
+    setDeleteAccountTarget({ id, name, holdingCount, txnCount, incomeCount });
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteAccountTarget) return;
+    const { id } = deleteAccountTarget;
+    try {
+      await apiDeleteAccount(id);
+      const next = accounts.filter(a => a.id !== id);
+      setAccounts(next);
+      setHoldings(prev => prev.filter(h => h.account !== deleteAccountTarget.name));
+      setTransactions(prev => prev.filter(t => t.account !== deleteAccountTarget.name));
+      setIncome(prev => prev.filter(i => i.account !== deleteAccountTarget.name));
+      if (selectedAccountId === id) setSelectedAccountId(next[0]?.id || null);
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+    } finally {
+      setDeleteAccountTarget(null);
+    }
   };
 
   if (loading) return (
@@ -644,8 +662,36 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
           onSaved={i => { setIncome(prev => editingIncome ? prev.map(x => x.id === i.id ? i : x) : [i, ...prev]); setShowIncomeModal(false); }}/>}
       {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)}
           onSaved={a => { setAccounts(prev => [...prev, a]); setSelectedAccountId(a.id); setShowAccountModal(false); }}/>}
+      {deleteAccountTarget && (
+        <TypeConfirmModal
+          title={I18N.t("holdings.acct.delete.title")}
+          confirmValue={deleteAccountTarget.name}
+          onClose={() => setDeleteAccountTarget(null)}
+          onConfirm={confirmDeleteAccount}
+          body={<>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
+              {I18N.t("holdings.acct.delete.body")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--ink-3)", paddingLeft: 8 }}>
+              <span>{I18N.t("holdings.acct.delete.holdings")} — {deleteAccountTarget.holdingCount}</span>
+              <span>{I18N.t("holdings.acct.delete.txns")} — {deleteAccountTarget.txnCount}</span>
+              <span>{I18N.t("holdings.acct.delete.income")} — {deleteAccountTarget.incomeCount}</span>
+            </div>
+          </>}
+        />
+      )}
       {editingAccount && <AccountEditModal account={editingAccount} onClose={() => setEditingAccount(null)}
-          onSaved={a => { setAccounts(prev => prev.map(x => x.id === a.id ? a : x)); setEditingAccount(null); }}/>}
+          onSaved={a => {
+            const nameChanged = a.name !== editingAccount.name;
+            setAccounts(prev => prev.map(x => x.id === a.id ? a : x));
+            setEditingAccount(null);
+            if (nameChanged) {
+              const old = editingAccount.name, next = a.name;
+              setHoldings(prev => prev.map(h => h.account === old ? { ...h, account: next } : h));
+              setTransactions(prev => prev.map(t => t.account === old ? { ...t, account: next } : t));
+              setIncome(prev => prev.map(i => i.account === old ? { ...i, account: next } : i));
+            }
+          }}/>}
 
       </>)}
     </div>
@@ -2353,7 +2399,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
                       series={visibleSeries}
                       currentMap={currentMap}
                       colorMap={sharedColorMap}
-                      width={560}/>
+                      width={640}/>
                   )}
                   {historyView === "diff" && (() => {
                     const { series: ds, ref: refS, options: refOpts } = _diffData;

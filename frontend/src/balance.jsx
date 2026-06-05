@@ -214,7 +214,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         snapSeries={snapSeries}
         onInjectHoldings={() => setShowInjectHoldings(true)}
         onEditSnap={() => setShowEditSnap(true)}
-        onDeleteSnap={(id) => setDeleteTarget({ type: "snapshot", id })}
+        onDeleteSnap={(id) => setDeleteTarget({ type: "snapshot", id, date: snap.snapshot_date, itemCount: items.length })}
       />
 
       {/* Summary tiles */}
@@ -391,17 +391,22 @@ const BalanceSheet = ({ currency = "CNY" }) => {
           onDone={async (updated) => { setAccounts(updated); if (updated.length < accounts.length) loadItems(snapId); }}
         />
       )}
-      {deleteTarget && (
-        <ConfirmDeleteModal
-          message={deleteTarget.type === "snapshot"
-            ? I18N.t("balance.items.deleteSnap")
-            : I18N.t("balance.items.deleteItem")}
+      {deleteTarget && deleteTarget.type === "snapshot" && (
+        <TypeConfirmModal
+          title={I18N.t("balance.snap.delete.title")}
+          confirmValue={deleteTarget.date}
           onClose={() => setDeleteTarget(null)}
-          onConfirm={() =>
-            deleteTarget.type === "snapshot"
-              ? handleDeleteSnapshot(deleteTarget.id)
-              : handleDeleteItem(deleteTarget.id)
-          }
+          onConfirm={() => handleDeleteSnapshot(deleteTarget.id)}
+          body={<div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+            {I18N.tf("balance.snap.delete.body", { count: deleteTarget.itemCount })}
+          </div>}
+        />
+      )}
+      {deleteTarget && deleteTarget.type === "item" && (
+        <ConfirmModal
+          message={I18N.t("balance.items.deleteItem")}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => handleDeleteItem(deleteTarget.id)}
         />
       )}
     </div>
@@ -1377,20 +1382,6 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
 
 // ── Import modal ──────────────────────────────────────────────────────────────
 
-// ── Confirm delete modal ──────────────────────────────────────────────────────
-
-const ConfirmDeleteModal = ({ message, onClose, onConfirm }) => (
-  <Modal open title={I18N.t("ledger.confirm.delete")} onClose={onClose} width={380}>
-    <div style={{ padding: "16px 20px 20px" }}>
-      <div style={{ fontSize: 13.5, color: "var(--ink)", marginBottom: 20 }}>{message}</div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
-        <Button variant="danger" onClick={onConfirm}>{I18N.t("base.btn.delete")}</Button>
-      </div>
-    </div>
-  </Modal>
-);
-
 // ── Balance account manager modal ────────────────────────────────────────────
 
 const NameForm = ({ label, value, onChange, onConfirm, onCancel, saving }) => (
@@ -1567,10 +1558,14 @@ const BalanceAccountManagerModal = ({ accounts: initialAccounts, onClose, onDone
       </div>
 
       {confirmDelete && (
-        <ConfirmDeleteModal
-          message={I18N.t("base.confirm.delete")}
+        <TypeConfirmModal
+          title={I18N.t("balance.acct.delete.title")}
+          confirmValue={confirmDelete.name}
           onClose={() => setConfirmDelete(null)}
           onConfirm={doDelete}
+          body={<div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+            {I18N.t("balance.acct.delete.body")}
+          </div>}
         />
       )}
     </Modal>

@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from fin.database import Base, import_all_models
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
 from fin.schemas.alert import AlertCreate
-from fin.services.alert_checker import check_condition, run_check
+from fin.services.alert_checker import _exclusive_lock, check_condition, run_check
 
 _MOD = "fin.services.alert_checker"
 
@@ -281,3 +281,28 @@ def test_scheduler_stops_cleanly():
     stop_event = start_alert_scheduler()
     stop_alert_scheduler(stop_event)
     assert stop_event.is_set()
+
+
+# ── _exclusive_lock ───────────────────────────────────────────────────────────
+
+
+def test_exclusive_lock_raises_runtime_error_on_contention(tmp_path):
+    pytest.importorskip("fcntl")
+    lock_path = tmp_path / "test.lock"
+    with (
+        patch(f"{_MOD}.ALERT_LOCK_PATH", lock_path),
+        patch("fcntl.flock", side_effect=OSError("already locked")),
+    ):
+        with pytest.raises(RuntimeError, match="lock held"):
+            with _exclusive_lock():
+                pass
+
+
+def test_run_check_skips_when_lock_held(db):
+    """Second caller returns immediately without invoking _run_check_inner."""
+    with (
+        patch(f"{_MOD}._exclusive_lock", side_effect=RuntimeError("lock held")),
+        patch(f"{_MOD}._run_check_inner") as mock_inner,
+    ):
+        run_check()
+        mock_inner.assert_not_called()

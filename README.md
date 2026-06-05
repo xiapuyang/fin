@@ -10,6 +10,46 @@ Personal and family finance dashboard. Manage your household finances like a com
 
 Everything feeds into a FIRE calculator that estimates your financial independence date from real historical data.
 
+## Screenshots
+
+> All screenshots use demo data unrelated to any real account.
+
+| Dashboard | Alerts |
+|---|---|
+| ![Dashboard](assets/screenshots/en/dashboard.png) | ![Alerts](assets/screenshots/en/alerts.png) |
+
+| Holdings | Ledger |
+|---|---|
+| ![Holdings](assets/screenshots/en/holdings.png) | ![Ledger](assets/screenshots/en/ledger.png) |
+
+| Balance Sheet | FIRE |
+|---|---|
+| ![Balance](assets/screenshots/en/balance.png) | ![FIRE](assets/screenshots/en/fire.png) |
+
+## Install (desktop app)
+
+| Platform | Chip | Requirement | Version | Download |
+|---|---|---|---|---|
+| macOS | Apple Silicon (M1+) | macOS 11+ | v0.2.2 | [Download .dmg](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-v0.2.2-arm64.dmg) |
+| Windows | x86\_64 | Windows 10+ | v0.2.2 | [Download .exe](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-Setup-v0.2.2.exe) |
+
+### macOS
+
+1. Download the `.dmg` (Apple Silicon only), open it, drag **Fin.app** to Applications.
+2. Before first launch, run in Terminal:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Fin.app
+```
+
+3. Double-click to launch. The Fin icon appears in the menu bar and a browser tab opens automatically.
+
+### Windows
+
+1. Download the `.exe` installer, run it, launch Fin from the Start menu.
+
+---
+
 ## Why fin
 
 **Consolidating all accounts into one view** is the core purpose. Most tools cover only one market or one function — stock tracking, or expense logging, or crypto. People with assets spread across US / HK / CN end up with N spreadsheets plus a manual summary. fin puts them into one database and one UI:
@@ -30,52 +70,12 @@ Everything feeds into a FIRE calculator that estimates your financial independen
 - **Balance Sheet** — Account hierarchy (parent / child), multi-currency snapshots, copy-from-prior-period, automatic FX to unified net worth
 - **FIRE Calculator** — Monte Carlo simulation + deterministic CAGR + inflation adjustment
 
-## Screenshots
-
-> All screenshots use demo data unrelated to any real account.
-
-| Dashboard | Alerts |
-|---|---|
-| ![Dashboard](assets/screenshots/en/dashboard.png) | ![Alerts](assets/screenshots/en/alerts.png) |
-
-| Holdings | Ledger |
-|---|---|
-| ![Holdings](assets/screenshots/en/holdings.png) | ![Ledger](assets/screenshots/en/ledger.png) |
-
-| Balance Sheet | FIRE |
-|---|---|
-| ![Balance](assets/screenshots/en/balance.png) | ![FIRE](assets/screenshots/en/fire.png) |
-
-## Install (desktop app)
-
-| Platform | Chip | Requirement | Version |
-|---|---|---|---|
-| macOS | Apple Silicon (M1+) | macOS 11+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-v0.2.2-arm64.dmg) |
-| Windows | x86\_64 | Windows 10+ | [v0.2.2](https://github.com/xiapuyang/fin/releases/download/v0.2.2/Fin-Setup-v0.2.2.exe) |
-
-### macOS
-
-1. Download the `.dmg` (Apple Silicon only), open it, drag **Fin.app** to Applications.
-2. Before first launch, run in Terminal:
-
-```bash
-xattr -d com.apple.quarantine /Applications/Fin.app
-```
-
-3. Double-click to launch. The Fin icon appears in the menu bar and a browser tab opens automatically.
-
-### Windows
-
-1. Download the `.exe` installer, run it, launch Fin from the Start menu.
-
-### Email alerts (optional)
+## Email alerts
 
 Price alerts can send email when triggered. Without configuration alerts still record to the DB — email is optional.
 
 1. Sign up at [agentmail.to](https://agentmail.to), get an API Key and Inbox ID.
 2. In the app **Settings**, enter the API Key, Inbox address, and **notification email**, then enable notifications.
-
----
 
 ## Claude Code Skills
 
@@ -118,13 +118,6 @@ Script mode (background, logs to `~/.fin/logs/fin.log`):
 ./run.sh      # start, wait for port bind, open browser
 ./stop.sh     # stop
 ./restart.sh  # restart
-```
-
-### Price alert cron (server mode)
-
-```bash
-# crontab -e
-*/20 * * * * cd /path/to/fin && /path/to/uv run python check_alerts.py
 ```
 
 ## Stack

@@ -1,16 +1,18 @@
 """Alert checking service: fetch prices and fire triggered alerts.
 
 This module exists so the core logic can be called from both the background
-scheduler (when running as a packaged app) and the standalone check_alerts.py
-cron script.
+scheduler (running inside serve.py) and the standalone check_alerts.py cron
+script. A file lock at ALERT_LOCK_PATH ensures at most one instance runs at
+a time, so both can coexist without duplicating work or double-firing alerts.
 """
 
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime
 
-from fin.config import LAST_CHECK_PATH
+from fin.config import ALERT_LOCK_PATH, LAST_CHECK_PATH
 from fin.database import SessionLocal, init_db
 from fin.repositories.alert_fire_sqlite import AlertFireSQLiteRepository
 from fin.repositories.alert_sqlite import AlertSQLiteRepository
@@ -21,6 +23,43 @@ from fin import settings as settings_store
 logger = logging.getLogger(__name__)
 
 VALID_CONDITIONS = {"price_gte", "price_lte", "change_gte", "change_lte"}
+
+
+@contextmanager
+def _exclusive_lock():
+    """Cross-platform exclusive file lock.
+
+    Yields if the lock is acquired. Raises RuntimeError if already held
+    by another process (cron job or scheduler instance).
+    """
+    lock_file = open(ALERT_LOCK_PATH, "a")
+    try:
+        import fcntl
+
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except ImportError:
+        import msvcrt
+
+        try:
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            lock_file.close()
+            raise RuntimeError("lock held")
+    except OSError:
+        lock_file.close()
+        raise RuntimeError("lock held")
+    try:
+        yield
+    finally:
+        try:
+            import fcntl
+
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+        except ImportError:
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        lock_file.close()
 
 
 def check_condition(
@@ -66,6 +105,10 @@ def _send_email(
 def run_check(force: bool = False) -> None:
     """Fetch enabled alerts, evaluate conditions, fire matches, send email.
 
+    Acquires an exclusive file lock before running so cron jobs and the
+    in-process scheduler cannot execute concurrently. The second caller
+    logs a skip message and returns immediately.
+
     Safe to call repeatedly — creates and closes its own DB session.
     Exceptions are caught per-symbol so one failure doesn't abort the run.
 
@@ -75,6 +118,59 @@ def run_check(force: bool = False) -> None:
     Args:
         force: Skip market-state REGULAR check (useful for testing).
     """
+    try:
+        with _exclusive_lock():
+            _run_check_inner(force=force)
+    except RuntimeError:
+        logger.info(
+            "Alert check already running (lock held by another process), skipping"
+        )
+
+
+def _fetch_prices(
+    quote_service: QuoteService, symbols: list[str], force: bool
+) -> dict[str, tuple[float | None, float | None]]:
+    """Fetch current price and change_pct for each symbol.
+
+    Returns a dict mapping symbol to (price, change_pct). Entries are
+    (None, None) on fetch failure or when market state is not REGULAR.
+    """
+    price_data: dict[str, tuple[float | None, float | None]] = {}
+    for symbol in symbols:
+        try:
+            quote = quote_service.get_quote(symbol)
+            if (
+                not quote
+                or quote.get("price") is None
+                or quote.get("change_pct") is None
+            ):
+                logger.warning("Missing price data for %s", symbol)
+                price_data[symbol] = (None, None)
+                continue
+            market_state = quote.get("market_state")
+            if not force and market_state is not None and market_state != "REGULAR":
+                logger.info(
+                    "Market not REGULAR for %s (state=%s), skipping",
+                    symbol,
+                    market_state,
+                )
+                price_data[symbol] = (None, None)
+                continue
+            price_data[symbol] = (quote["price"], quote["change_pct"])
+            logger.info(
+                "%s: price=%.4g change=%.2f%%",
+                symbol,
+                quote["price"],
+                quote["change_pct"],
+            )
+        except Exception:
+            logger.exception("Failed to fetch %s", symbol)
+            price_data[symbol] = (None, None)
+    return price_data
+
+
+def _run_check_inner(force: bool = False) -> None:
+    """Core alert check logic — called only when the exclusive lock is held."""
     if not os.environ.get("AGENTMAIL_API_KEY") or not os.environ.get(
         "FIN_AGENTMAIL_INBOX"
     ):
@@ -115,37 +211,7 @@ def run_check(force: bool = False) -> None:
         logger.info("Fetching data for %d symbols: %s", len(symbols), symbols)
 
         quote_service = QuoteService(db, build_default_providers())
-        price_data: dict[str, tuple[float, float]] = {}
-        for symbol in symbols:
-            try:
-                quote = quote_service.get_quote(symbol)
-                if (
-                    not quote
-                    or quote.get("price") is None
-                    or quote.get("change_pct") is None
-                ):
-                    logger.warning("Missing price data for %s", symbol)
-                    price_data[symbol] = (None, None)
-                    continue
-                market_state = quote.get("market_state")
-                if not force and market_state is not None and market_state != "REGULAR":
-                    logger.info(
-                        "Market not REGULAR for %s (state=%s), skipping",
-                        symbol,
-                        market_state,
-                    )
-                    price_data[symbol] = (None, None)
-                    continue
-                price_data[symbol] = (quote["price"], quote["change_pct"])
-                logger.info(
-                    "%s: price=%.4g change=%.2f%%",
-                    symbol,
-                    quote["price"],
-                    quote["change_pct"],
-                )
-            except Exception:
-                logger.exception("Failed to fetch %s", symbol)
-                price_data[symbol] = (None, None)
+        price_data = _fetch_prices(quote_service, symbols, force)
 
         fired: list[tuple] = []
         for alert in alerts:

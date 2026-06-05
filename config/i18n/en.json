@@ -847,5 +847,18 @@
   "benchmark.diff.beat": "Beat Rate",
   "benchmark.diff.maxOut": "Max Outperformance",
   "benchmark.diff.maxLag": "Max Underperformance",
-  "benchmark.diff.noData": "Not enough data to compute relative performance"
+  "benchmark.diff.noData": "Not enough data to compute relative performance",
+  "base.typeConfirm.label": "Type",
+  "base.typeConfirm.suffix": "to confirm:",
+  "holdings.acct.delete.title": "Delete account",
+  "holdings.acct.delete.body": "This will permanently delete the account and all associated records:",
+  "holdings.acct.delete.holdings": "Positions",
+  "holdings.acct.delete.txns": "Transactions",
+  "holdings.acct.delete.income": "Cash flows / Income",
+  "holdings.acct.delete.typeHint": "Type the account name to confirm",
+  "balance.snap.delete.title": "Delete snapshot",
+  "balance.snap.delete.body": "This will permanently delete the snapshot and all {count} items inside it.",
+  "balance.snap.delete.typeHint": "Type the snapshot date to confirm",
+  "balance.acct.delete.title": "Delete account",
+  "balance.acct.delete.body": "Balance item references will be unlinked. Broker/wallet accounts pointing to this account will also be unlinked."
 }

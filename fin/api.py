@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -51,11 +52,12 @@ async def lifespan(app: FastAPI):
     start_price_updater()
     _BENCHMARK_BACKFILL_STOP = start_benchmark_backfill()
     logger.info("Benchmark backfill thread started")
-    if getattr(sys, "frozen", False):
+    is_dev = bool(os.environ.get("FIN_DEV"))
+    if getattr(sys, "frozen", False) or not is_dev:
         _ALERT_SCHEDULER_STOP = start_alert_scheduler()
-        logger.info("Alert scheduler started (frozen mode)")
+        logger.info("Alert scheduler started")
         _BENCHMARK_SCHEDULER_STOP = start_benchmark_scheduler()
-        logger.info("Benchmark scheduler started (frozen mode)")
+        logger.info("Benchmark scheduler started")
     yield
     if _ALERT_SCHEDULER_STOP is not None:
         stop_alert_scheduler(_ALERT_SCHEDULER_STOP)
@@ -133,6 +135,11 @@ async def i18n_manager():
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, RuntimeError) and "Content-Length" in str(exc):
+        # Transport-layer error: headers were already committed and the body
+        # stream was cut short. There is nothing useful to send back — the
+        # connection is broken. Re-raise so uvicorn closes it cleanly.
+        raise exc
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 

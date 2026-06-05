@@ -183,6 +183,17 @@ cp ~/.fin/data/settings.json          ~/.fin/data/settings.json.bak-$(date +%Y%m
 
 This applies to any direct file write, Python script, or shell command that modifies these files. Never skip this step, even for "small" edits.
 
+## Cross-platform compatibility
+
+Client-side code (Electron shell, tray app, auto-updater, installer scripts, any code under `launcher/`) must work on both macOS and Windows. Concretely:
+
+- Use `path.join()` / `pathlib.Path` — never hardcode `/` separators.
+- Use `os.environ` / `platformdirs` for user data paths — never assume `~/.fin` (that path is macOS/Linux only; Windows uses `%APPDATA%`).
+- Shell commands in scripts must have a Windows equivalent or be guarded by a platform check.
+- Test any new launcher feature mentally against both platforms before committing.
+
+Pure backend code (`fin/`, `serve.py`, `check_alerts.py`) runs server-side and only needs to support the platforms the server is deployed on — this rule does not apply there.
+
 ## Key design constraints
 
 - SQLite DB lives at `data/fin.db`. The `data/` and `logs/` directories are created automatically at import time in `config.py`.

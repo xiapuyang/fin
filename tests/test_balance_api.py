@@ -108,6 +108,44 @@ def test_account_delete_nullifies_sub_account_id(client):
     assert items[0]["sub_account_name"] is None
 
 
+def _create_broker(client, name, balance_account_id=None, balance_sub_account_id=None):
+    broker_id = client.post(
+        "/api/accounts", json={"name": name, "currency": "CNY"}
+    ).json()["id"]
+    patch = {}
+    if balance_account_id is not None:
+        patch["balance_account_id"] = balance_account_id
+    if balance_sub_account_id is not None:
+        patch["balance_sub_account_id"] = balance_sub_account_id
+    if patch:
+        client.put(f"/api/accounts/{broker_id}", json=patch)
+    return broker_id
+
+
+def test_account_delete_nullifies_broker_balance_account_id(client):
+    bal_acc_id = _create_account(client, "招商银行").json()["id"]
+    broker_id = _create_broker(client, "CMB", balance_account_id=bal_acc_id)
+
+    client.delete(f"/api/balance/accounts/{bal_acc_id}")
+
+    broker = next(a for a in client.get("/api/accounts").json() if a["id"] == broker_id)
+    assert broker["balance_account_id"] is None
+
+
+def test_account_delete_nullifies_broker_sub_account_id(client):
+    parent_id = _create_account(client, "招商银行").json()["id"]
+    child_id = _create_account(client, "人民币", parent_id=parent_id).json()["id"]
+    broker_id = _create_broker(
+        client, "CMB", balance_account_id=parent_id, balance_sub_account_id=child_id
+    )
+
+    client.delete(f"/api/balance/accounts/{child_id}")
+
+    broker = next(a for a in client.get("/api/accounts").json() if a["id"] == broker_id)
+    assert broker["balance_sub_account_id"] is None
+    assert broker["balance_account_id"] == parent_id
+
+
 def test_account_delete_not_found(client):
     r = client.delete("/api/balance/accounts/9999")
     assert r.status_code == 404

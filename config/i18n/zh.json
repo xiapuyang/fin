@@ -847,5 +847,18 @@
   "benchmark.diff.beat": "跑赢概率",
   "benchmark.diff.maxOut": "最大超越",
   "benchmark.diff.maxLag": "最大落后",
-  "benchmark.diff.noData": "数据不足，无法计算相对收益"
+  "benchmark.diff.noData": "数据不足，无法计算相对收益",
+  "base.typeConfirm.label": "输入",
+  "base.typeConfirm.suffix": "以确认：",
+  "holdings.acct.delete.title": "删除账户",
+  "holdings.acct.delete.body": "将永久删除该账户及所有关联数据：",
+  "holdings.acct.delete.holdings": "持仓明细",
+  "holdings.acct.delete.txns": "交易记录",
+  "holdings.acct.delete.income": "出入金 / 分红",
+  "holdings.acct.delete.typeHint": "输入账户名称以确认",
+  "balance.snap.delete.title": "删除快照",
+  "balance.snap.delete.body": "将永久删除该快照及其中全部 {count} 条数据。",
+  "balance.snap.delete.typeHint": "输入快照日期以确认",
+  "balance.acct.delete.title": "删除资产负债账户",
+  "balance.acct.delete.body": "该账户的资产负债明细引用将被解除关联，指向此账户的券商/钱包账户关联也将被清除。"
 }

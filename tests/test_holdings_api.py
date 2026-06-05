@@ -359,6 +359,105 @@ def test_delete_account(client):
     assert client.get("/api/accounts").json() == []
 
 
+# ── Account cascade rename ────────────────────────────────────────────────────
+
+
+def _seed_account_with_children(client, name="IBKR"):
+    """Create account + one holding + one transaction + one income, all tagged with name."""
+    acct_id = client.post(
+        "/api/accounts", json={"name": name, "currency": "USD"}
+    ).json()["id"]
+    code = name[:4].upper()
+    client.post(
+        "/api/holdings",
+        json={
+            "code": code,
+            "market": "US",
+            "snapshot_name": "2024-01-01",
+            "shares": 10,
+            "avg_cost": 200,
+            "account": name,
+        },
+    )
+    client.post(
+        "/api/transactions",
+        json={
+            "date": "2024-01-01",
+            "code": code,
+            "side": "buy",
+            "shares": 10,
+            "price": 200,
+            "currency": "USD",
+            "account": name,
+        },
+    )
+    client.post(
+        "/api/income",
+        json={
+            "date": "2024-01-01",
+            "source": f"div-{name}",
+            "category": "dividend",
+            "amount": 50,
+            "currency": "USD",
+            "account": name,
+        },
+    )
+    return acct_id
+
+
+def test_rename_account_cascades_to_holdings_transactions_income(client):
+    acct_id = _seed_account_with_children(client, "IBKR")
+    r = client.put(f"/api/accounts/{acct_id}", json={"name": "IBKR-2024"})
+    assert r.status_code == 200
+
+    holdings = client.get("/api/holdings").json()
+    assert all(h["account"] == "IBKR-2024" for h in holdings)
+
+    txns = client.get("/api/transactions").json()
+    assert all(t["account"] == "IBKR-2024" for t in txns)
+
+    income = client.get("/api/income").json()
+    assert all(i["account"] == "IBKR-2024" for i in income)
+
+
+def test_rename_account_non_name_field_does_not_cascade(client):
+    acct_id = _seed_account_with_children(client, "TD")
+    client.put(f"/api/accounts/{acct_id}", json={"note": "updated note"})
+
+    holdings = client.get("/api/holdings").json()
+    assert all(h["account"] == "TD" for h in holdings if h["account"])
+
+    txns = client.get("/api/transactions").json()
+    assert all(t["account"] == "TD" for t in txns if t["account"])
+
+    income = client.get("/api/income").json()
+    assert all(i["account"] == "TD" for i in income if i["account"])
+
+
+# ── Account cascade delete ────────────────────────────────────────────────────
+
+
+def test_delete_account_cascades_to_holdings_transactions_income(client):
+    acct_id = _seed_account_with_children(client, "Futu")
+    r = client.delete(f"/api/accounts/{acct_id}")
+    assert r.status_code == 204
+
+    assert client.get("/api/holdings").json() == []
+    assert client.get("/api/transactions").json() == []
+    assert client.get("/api/income").json() == []
+
+
+def test_delete_account_only_removes_its_own_children(client):
+    acct_a = _seed_account_with_children(client, "Futu")
+    _seed_account_with_children(client, "Moomoo")
+
+    client.delete(f"/api/accounts/{acct_a}")
+
+    assert len(client.get("/api/holdings").json()) == 1
+    assert len(client.get("/api/transactions").json()) == 1
+    assert len(client.get("/api/income").json()) == 1
+
+
 # ── Validation edge cases ─────────────────────────────────────────────────────
 
 

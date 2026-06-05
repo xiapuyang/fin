@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from fin.models.account import AccountModel
+from fin.models.holding import HoldingModel
+from fin.models.income import IncomeModel
+from fin.models.transaction import TransactionModel
 from fin.schemas.account import AccountCreate, AccountUpdate
 
 
@@ -63,6 +66,7 @@ class AccountSQLiteRepository:
         account = self.get_by_id(id, user_id)
         if account is None:
             return None
+        old_name = account.name
         non_null_fields = {"name", "currency"}
         for field, val in data.model_dump(exclude_unset=True).items():
             if val is None and field in non_null_fields:
@@ -76,13 +80,26 @@ class AccountSQLiteRepository:
             else:
                 setattr(account, field, val)
         account.update_time = datetime.now(timezone.utc)
+        # Cascade name change to the three tables that store account name as a string.
+        new_name = account.name
+        if new_name != old_name:
+            for model in (HoldingModel, TransactionModel, IncomeModel):
+                self._db.query(model).filter(
+                    model.account == old_name, model.user_id == user_id
+                ).update({"account": new_name}, synchronize_session=False)
         self._db.commit()
         self._db.refresh(account)
         return account
 
     def delete(self, id: int, user_id: int) -> None:
-        """Delete an account by primary key scoped to user. No-op if not found."""
+        """Delete an account and cascade-delete all associated holdings, transactions,
+        and income records that reference it by name."""
         account = self.get_by_id(id, user_id)
         if account:
+            name = account.name
+            for model in (HoldingModel, TransactionModel, IncomeModel):
+                self._db.query(model).filter(
+                    model.account == name, model.user_id == user_id
+                ).delete(synchronize_session=False)
             self._db.delete(account)
             self._db.commit()
