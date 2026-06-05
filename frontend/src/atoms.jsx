@@ -397,6 +397,20 @@ const Modal = ({ open, onClose, children, width = 520, title }) => {
 };
 
 // Destructive-action modal requiring the user to type a specific value before
+// Simple confirm modal with Cancel + action button. Use for single-record
+// deletions that don't warrant a type-to-confirm guard.
+const ConfirmModal = ({ title, message, onClose, onConfirm, confirmLabel, confirmVariant = "danger" }) => (
+  <Modal open title={title || I18N.t("base.btn.confirmDelete")} onClose={onClose} width={380}>
+    <div style={{ padding: 20 }}>
+      <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>{message}</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
+        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+        <Button variant={confirmVariant} onClick={onConfirm}>{confirmLabel || I18N.t("base.btn.confirmDelete")}</Button>
+      </div>
+    </div>
+  </Modal>
+);
+
 // the Delete button activates. Use for irreversible operations that affect many
 // records (account delete, snapshot delete).
 const TypeConfirmModal = ({ title, body, confirmValue, onClose, onConfirm }) => {
@@ -426,6 +440,6 @@ const TypeConfirmModal = ({ title, body, confirmValue, onClose, onConfirm }) => 
 Object.assign(window, {
   fmtNum, fmtMoney, fmtPct, toCNY,
   MarketDot, MarketLabel, Badge, Button, Card, SectionHeader, Tabs,
-  Input, DateInput, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal, TypeConfirmModal,
+  Input, DateInput, Select, Toggle, SymbolChip, Sparkline, ChangeNum, Empty, Modal, ConfirmModal, TypeConfirmModal,
   PRIVACY, setPrivacyMasked, usePrivacyMasked, Private,
 });

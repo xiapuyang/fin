@@ -403,7 +403,7 @@ const BalanceSheet = ({ currency = "CNY" }) => {
         />
       )}
       {deleteTarget && deleteTarget.type === "item" && (
-        <ConfirmDeleteModal
+        <ConfirmModal
           message={I18N.t("balance.items.deleteItem")}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => handleDeleteItem(deleteTarget.id)}
@@ -1381,20 +1381,6 @@ const EditSnapModal = ({ snap, onClose, onDone }) => {
 };
 
 // ── Import modal ──────────────────────────────────────────────────────────────
-
-// ── Confirm delete modal ──────────────────────────────────────────────────────
-
-const ConfirmDeleteModal = ({ message, onClose, onConfirm }) => (
-  <Modal open title={I18N.t("ledger.confirm.delete")} onClose={onClose} width={380}>
-    <div style={{ padding: "16px 20px 20px" }}>
-      <div style={{ fontSize: 13.5, color: "var(--ink)", marginBottom: 20 }}>{message}</div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
-        <Button variant="danger" onClick={onConfirm}>{I18N.t("base.btn.delete")}</Button>
-      </div>
-    </div>
-  </Modal>
-);
 
 // ── Balance account manager modal ────────────────────────────────────────────
 
