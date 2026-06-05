@@ -2018,7 +2018,7 @@ const BenchmarkTab = ({ account, onAccountUpdated, currency = "CNY" }) => {
         customs.forEach(cs => { if (cs.enabled !== 0) enabledDefaultAndCustomIds.add(String(cs.id)); });
         const computedIds = new Set((res.schemes || []).map(s => s.id));
         const missingDefaultOrCustom = [...enabledDefaultAndCustomIds].some(id => !computedIds.has(id));
-        const missingPortfolio = !computedIds.has("__portfolio__");
+        const missingPortfolio = res.portfolio_xirr == null;
         const missingSnaps = snaps.some(s => s.enabled !== 0 && !computedIds.has(String(s.id)));
         const staleDate = !res.computed_date || res.computed_date !== today;
 
