@@ -2658,7 +2658,7 @@ const _getAdv = () => localStorage.getItem(_ADV_KEY) === "1";
 const _setAdv = (v) => localStorage.setItem(_ADV_KEY, v ? "1" : "0");
 
 const AccountModal = ({ onClose, onSaved }) => {
-  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "", benchmark_enabled: false });
+  const [form, set] = useForm({ name: "", currency: "CNY", note: "", cutoff_date: "", benchmark_enabled: false, rebalance_enabled: false });
   const [advOpen, setAdvOpen] = React.useState(_getAdv);
   const [err, setErr] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
@@ -2672,6 +2672,7 @@ const AccountModal = ({ onClose, onSaved }) => {
         note: form.note || null,
         cutoff_date: form.cutoff_date.trim() || null,
         benchmark_enabled: form.benchmark_enabled,
+        rebalance_enabled: form.rebalance_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -2707,6 +2708,13 @@ const AccountModal = ({ onClose, onSaved }) => {
                   <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
                 </div>
               </div>
+              <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.rebalance_enabled} onChange={v => set("rebalance_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("holdings.rb.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("holdings.rb.acct.toggleHint")}</div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2729,10 +2737,11 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
     balance_account_id: account.balance_account_id ? String(account.balance_account_id) : "",
     balance_sub_account_id: account.balance_sub_account_id ? String(account.balance_sub_account_id) : "",
     benchmark_enabled: !!account.benchmark_enabled,
+    rebalance_enabled: !!account.rebalance_enabled,
   });
   const [advOpen, setAdvOpen] = React.useState(() => {
     const stored = localStorage.getItem(_ADV_KEY);
-    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length || !!account.benchmark_enabled;
+    return stored !== null ? stored === "1" : !!account.cutoff_date || !!Object.keys(account.symbol_markets || {}).length || !!account.benchmark_enabled || !!account.rebalance_enabled;
   });
   // symbol_markets edited as [{code, market}] rows for convenience
   const [smRows, setSmRows] = React.useState(() =>
@@ -2767,6 +2776,7 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
         balance_sub_account_id: form.balance_sub_account_id ? Number(form.balance_sub_account_id) : null,
         symbol_markets: Object.keys(sm).length ? sm : null,
         benchmark_enabled: form.benchmark_enabled,
+        rebalance_enabled: form.rebalance_enabled,
       });
       onSaved(saved);
     } catch (ex) { setErr(ex.message); }
@@ -2845,6 +2855,13 @@ const AccountEditModal = ({ account, onClose, onSaved }) => {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("benchmark.acct.toggle")}</div>
                   <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("benchmark.acct.toggleHint")}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <Toggle value={form.rebalance_enabled} onChange={v => set("rebalance_enabled", v)} size="sm"/>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.3 }}>{I18N.t("holdings.rb.acct.toggle")}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.5 }}>{I18N.t("holdings.rb.acct.toggleHint")}</div>
                 </div>
               </div>
             </div>
