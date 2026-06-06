@@ -1719,18 +1719,6 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
           d.configs.forEach(c => { map[c.id] = c; });
           setActiveId(d.active_id || "personal");
           setPerPreset(map);
-        } else if (d.presets) {
-          // v2 format — migrate to v3 and save back
-          const presets = { ...d.presets };
-          if (presets["current"] && !presets["personal"]) {
-            presets["personal"] = presets["current"];
-            delete presets["current"];
-          }
-          const activeId = d.activeId === "current" ? "personal" : (d.activeId || "personal");
-          const configs = Object.entries(presets).map(([id, data]) => ({ id, ...data }));
-          fetch("/api/rebalance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active_id: activeId, configs }) }).catch(() => {});
-          setActiveId(activeId);
-          setPerPreset(presets);
         } else if (d.presetId) {
           // v1 flat format — migrate to v3 and save back
           const id = d.presetId;
