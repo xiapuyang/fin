@@ -306,3 +306,47 @@ def test_run_check_skips_when_lock_held(db):
     ):
         run_check()
         mock_inner.assert_not_called()
+
+
+# ── alert_scheduler ───────────────────────────────────────────────────────────
+
+
+def test_alert_scheduler_stop_event_halts_loop():
+    import threading
+    from fin.services.alert_scheduler import _scheduler_loop
+
+    stop = threading.Event()
+    stop.set()  # set immediately so loop exits right away
+    _scheduler_loop(stop)  # should return without calling run_check
+
+
+def test_alert_scheduler_run_check_called(monkeypatch):
+    import threading
+    from fin.services import alert_scheduler
+
+    calls = []
+    monkeypatch.setattr(alert_scheduler, "run_check", lambda: calls.append(1))
+    monkeypatch.setattr(alert_scheduler, "ALERT_INTERVAL_SECONDS", 0)
+
+    stop = threading.Event()
+    t = threading.Thread(
+        target=alert_scheduler._scheduler_loop, args=(stop,), daemon=True
+    )
+    t.start()
+    import time
+
+    time.sleep(0.05)
+    stop.set()
+    t.join(timeout=1)
+    assert len(calls) >= 1
+
+
+def test_start_and_stop_alert_scheduler():
+    from fin.services.alert_scheduler import start_alert_scheduler, stop_alert_scheduler
+    from unittest.mock import patch
+
+    with patch("fin.services.alert_scheduler.run_check"):
+        stop_event = start_alert_scheduler()
+        assert not stop_event.is_set()
+        stop_alert_scheduler(stop_event)
+        assert stop_event.is_set()

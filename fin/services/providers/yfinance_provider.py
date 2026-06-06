@@ -1,20 +1,71 @@
+import json
 import logging
 import math
+import re
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 import yfinance as yf
 
+from fin.config import APP_CONFIG
 from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
 _EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ", ".TO", ".V", ".NE")
 
-_FX_TTL = 60  # seconds
+# EastMoney JSONP endpoint — same as ChinaFundProvider, but also covers exchange-listed ETFs
+_EM_FUND_URL = "https://fundgz.1234567.com.cn/js/{code}.js"
+
+# ETF names are stable; cache for 24h to avoid repeated blocking HTTP in ThreadPoolExecutor.
+_cn_etf_name_cache: dict[str, tuple[str | None, float]] = {}
+_CN_ETF_NAME_TTL = 86400
+
+
+def _cn_etf_name(symbol: str) -> str | None:
+    """Return EastMoney name for a .SS/.SZ ETF symbol, or None for anything else."""
+    if not symbol.endswith((".SS", ".SZ")):
+        return None
+    bare = symbol[:-3]
+    if len(bare) != 6 or not bare.isdigit():
+        return None
+    return _fetch_cn_etf_name(bare)
+
+
+def _fetch_cn_etf_name(bare_code: str) -> str | None:
+    """Try EastMoney JSONP for the Chinese product name of an exchange-listed ETF.
+
+    yfinance returns the fund company name for .SS/.SZ ETFs (e.g. "HARVEST FUND
+    MANAGEMENT"), which is useless. EastMoney returns the actual product name
+    (e.g. "纳指ETF嘉实"). Returns None on any failure so the caller can fall back.
+    """
+    now = time.monotonic()
+    cached = _cn_etf_name_cache.get(bare_code)
+    if cached and now < cached[1]:
+        return cached[0]
+    name: str | None = None
+    url = _EM_FUND_URL.format(code=bare_code)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            text = resp.read(2048).decode("utf-8")
+        m = re.search(r"jsonpgz\((.+?)\)\;?", text)
+        if m:
+            d = json.loads(m.group(1))
+            name = d.get("name") or None
+    except Exception as exc:
+        logger.debug("EastMoney name fetch failed for %s: %s", bare_code, exc)
+    _cn_etf_name_cache[bare_code] = (name, now + _CN_ETF_NAME_TTL)
+    return name
+
+
+_FX_TTL: int = APP_CONFIG.get("fx_cache_ttl_seconds", 60)
 _HISTORY_TIMEOUT_SECONDS = 30
 
-_ASSET_TYPES = frozenset({"equity", "etf", "bond", "mutualfund", "index"})
+_ASSET_TYPES = frozenset(
+    {"equity", "etf", "bond", "mutualfund", "index", "cryptocurrency", "reit"}
+)
 
 
 class YFinanceProvider(QuoteProvider):
@@ -87,7 +138,7 @@ class YFinanceProvider(QuoteProvider):
                         "extended-hours info fetch failed for %s: %s", symbol, e
                     )
 
-            return {
+            result: dict = {
                 "price": price,
                 "regular_close": regular_close,
                 "prev_close": prev_close,
@@ -97,6 +148,10 @@ class YFinanceProvider(QuoteProvider):
                 "currency": getattr(fi, "currency", "USD") or "USD",
                 "market_state": market_state,
             }
+            name = _cn_etf_name(symbol)
+            if name:
+                result["name"] = name
+            return result
         except Exception as e:
             logger.warning("live fetch failed for %s: %s", symbol, e)
             return {}
@@ -140,16 +195,31 @@ class YFinanceProvider(QuoteProvider):
             float_shares = info.get("floatShares")
             dividend_yield = info.get("dividendYield")
             category = info.get("category") or ""
+            sector = info.get("sector") or ""
+            industry = info.get("industry") or ""
             quote_type = (info.get("quoteType") or "equity").lower()
-            if "bond" in category.lower():
+            cat_lower = category.lower()
+            if "bond" in cat_lower or "fixed income" in cat_lower:
                 asset_type = "bond"
+            elif (
+                "real estate" in cat_lower
+                or "real estate" in sector.lower()
+                or "reit" in industry.lower()
+            ):
+                asset_type = "reit"
             elif quote_type in _ASSET_TYPES:
                 asset_type = quote_type
             else:
                 asset_type = "equity"
 
+            # For CN exchange-listed ETFs, yfinance returns the fund company name
+            # instead of the product name. EastMoney gives the actual ETF name.
+            yf_name = (
+                _cn_etf_name(symbol) or info.get("shortName") or info.get("longName")
+            )
+
             return {
-                "name": info.get("shortName") or info.get("longName"),
+                "name": yf_name,
                 "currency": info.get("currency", "USD"),
                 "asset_type": asset_type,
                 "price": price,

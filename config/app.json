@@ -1,5 +1,22 @@
 {
   "_note": "benchmark_defaults[].id is immutable once stored in the database as bench_id. Never rename or remove a used id — add a new entry instead. name/description/allocations/cash_pct are safe to change. If you modify allocations or cash_pct of an existing default, delete the corresponding benchmark_results rows manually (DELETE FROM benchmark_results WHERE bench_id = '<id>') to avoid stale history in the chart.",
+
+  "_services_note": "Operational tuning values — change here to apply globally without touching source code.",
+  "fx_fallback_rates": {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0},
+  "quote_stale_seconds": 60,
+  "market_states_ttl_seconds": 5.0,
+  "fx_cache_ttl_seconds": 60,
+  "price_update_interval_seconds": 300,
+  "price_update_batch_size": 20,
+  "price_update_batch_pause_seconds": 0.5,
+  "alert_check_interval_seconds": 1200,
+  "market_state_update_interval_seconds": 300,
+  "dividend_info_ttl_hours": 24,
+  "dividend_hist_years": 2,
+  "dividend_max_symbols": 50,
+  "benchmark_default_since_years": 10,
+  "upload_max_bytes": 10485760,
+
   "benchmark_recompute_interval_minutes": 10,
   "benchmark_snapshot_interval_days": 30,
   "benchmark_defaults": [
@@ -64,12 +81,98 @@
     "default_lang": "en",
     "supported_langs": ["en", "zh"]
   },
+  "_rebalance_note": "rebalance_defaults[].id is immutable once stored in user configs. Never rename or remove a used id — add a new entry instead.",
+  "rebalance_defaults": [
+    {
+      "id": "classic_60_40",
+      "name_i18n": "holdings.rb.6040.label",
+      "author": "John Bogle",
+      "quote_i18n": "holdings.rb.6040.quote",
+      "is_age_rule": false,
+      "buckets": [
+        { "label_i18n": "holdings.rb.equity",     "pct": 60, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.bonds_cash", "pct": 40, "color": "#5C6270", "codes": [], "categories": ["bond_us_long","bond_us_mid","bond_us_short","bond_global_long","bond_global_mid","bond_global_short"], "isCash": true }
+      ],
+      "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
+    },
+    {
+      "id": "aggressive_70_30",
+      "name_i18n": "holdings.rb.7030.label",
+      "author": "Vanguard",
+      "quote_i18n": "holdings.rb.7030.quote",
+      "is_age_rule": false,
+      "buckets": [
+        { "label_i18n": "holdings.rb.equity",     "pct": 70, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.bonds_cash", "pct": 30, "color": "#5C6270", "codes": [], "categories": ["bond_us_long","bond_us_mid","bond_us_short","bond_global_long","bond_global_mid","bond_global_short"], "isCash": true }
+      ],
+      "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
+    },
+    {
+      "id": "all_weather",
+      "name_i18n": "holdings.rb.allweather.label",
+      "author": "Ray Dalio",
+      "quote_i18n": "holdings.rb.allweather.quote",
+      "is_age_rule": false,
+      "buckets": [
+        { "label_i18n": "holdings.rb.equity",      "pct": 30,  "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.lt.bonds",    "pct": 40,  "color": "#5C8AE6", "codes": [], "categories": ["bond_us_long","bond_global_long"], "isCash": false },
+        { "label_i18n": "holdings.rb.mt.bonds",    "pct": 15,  "color": "#B8447B", "codes": [], "categories": ["bond_us_mid","bond_us_short","bond_global_mid","bond_global_short"], "isCash": true },
+        { "label_i18n": "holdings.rb.gold",        "pct": 7.5, "color": "#C8460F", "codes": [], "categories": ["gold"], "isCash": false },
+        { "label_i18n": "holdings.rb.commodities", "pct": 7.5, "color": "#9C6E3A", "codes": [], "categories": ["commodity"], "isCash": false }
+      ],
+      "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
+    },
+    {
+      "id": "permanent",
+      "name_i18n": "holdings.rb.permanent.label",
+      "author": "Harry Browne",
+      "quote_i18n": "holdings.rb.permanent.quote",
+      "is_age_rule": false,
+      "buckets": [
+        { "label_i18n": "holdings.rb.equity",   "pct": 25, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.lt.bonds", "pct": 25, "color": "#5C8AE6", "codes": [], "categories": ["bond_us_long","bond_global_long","bond_us_mid","bond_global_mid"], "isCash": false },
+        { "label_i18n": "holdings.rb.st.bonds",  "pct": 25, "color": "#5C6270", "codes": [], "categories": ["bond_us_short","bond_global_short"], "isCash": true },
+        { "label_i18n": "holdings.rb.gold",     "pct": 25, "color": "#C8460F", "codes": [], "categories": ["gold"], "isCash": false }
+      ],
+      "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
+    },
+    {
+      "id": "age_rule",
+      "name_i18n": "holdings.rb.lifecycle.label",
+      "author_i18n": "holdings.rb.lifecycle.author",
+      "quote_i18n": "holdings.rb.lifecycle.quote",
+      "is_age_rule": true,
+      "buckets": null,
+      "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
+    }
+  ],
+  "_rebalance_categories_note": "matcher DSL: asset_types (required), markets (whitelist), markets_exclude (blacklist), or_markets (market-only OR match). IDs are immutable — add new entries, never rename.",
+  "rebalance_categories": [
+    { "id": "equity_us",         "matcher": { "asset_types": ["equity"],          "markets": ["US"] } },
+    { "id": "equity_hk",         "matcher": { "asset_types": ["equity"],          "markets": ["HK"] } },
+    { "id": "equity_cn",         "matcher": { "asset_types": ["equity"],          "markets": ["CN"] } },
+    { "id": "index_fund_us",     "matcher": { "asset_types": ["etf"],             "markets": ["US"] } },
+    { "id": "index_fund_hk",     "matcher": { "asset_types": ["etf"],             "markets": ["HK"] } },
+    { "id": "index_fund_cn",     "matcher": { "asset_types": ["etf","mutualfund"],"markets": ["CN"] } },
+    { "id": "etf_global",        "matcher": { "asset_types": ["etf"],             "markets_exclude": ["US","HK","CN"] } },
+    { "id": "gold",              "matcher": null },
+    { "id": "commodity",         "matcher": null },
+    { "id": "bond_us_long",      "matcher": null },
+    { "id": "bond_us_mid",       "matcher": null },
+    { "id": "bond_us_short",     "matcher": null },
+    { "id": "bond_global_long",  "matcher": null },
+    { "id": "bond_global_mid",   "matcher": null },
+    { "id": "bond_global_short", "matcher": null },
+    { "id": "crypto",            "matcher": { "asset_types": ["cryptocurrency"],  "or_markets": ["CRYPTO"] } },
+    { "id": "reit",              "matcher": { "asset_types": ["reit"] } }
+  ],
   "settings_defaults": {
     "notify_email": "",
     "notify_enabled": true,
     "timezone": "",
     "display_name": "",
     "rebalance": null,
+    "rebalance_v3": null,
     "birth_date": "",
     "fire_monthly_exp": null,
     "fire_cagr": null,

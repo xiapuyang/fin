@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     symbol_markets          TEXT,      -- JSON: {"013308": "HK"} — per-symbol market classification overrides
     benchmark_enabled       TEXT     DEFAULT '0',  -- '1' = include in benchmark compute
     benchmark_schemes       TEXT,                  -- JSON: [scheme_id, ...] (null = use defaults)
+    rebalance_enabled       TEXT     DEFAULT '0',  -- '1' = show per-account rebalance tab
+    rebalance_config        TEXT,                  -- JSON: {type, ...} per-account rebalance config
     create_time  DATETIME NOT NULL,
     update_time  DATETIME NOT NULL
 );

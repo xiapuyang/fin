@@ -23,6 +23,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
   const [search, setSearch] = React.useState("");
   const [showImport, setShowImport] = React.useState(false);
   const [notifyEmail, setNotifyEmail] = React.useState("");
+  const [enabledMarkets, setEnabledMarkets] = React.useState([]);
 
   const [liveQuotes, setLiveQuotes] = React.useState({});
   const [lastCheck, setLastCheck] = React.useState(null);
@@ -39,6 +40,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
     fetch("/api/history").then(r => r.json()).then(setHistory).catch(console.error);
     fetch("/api/settings").then(r => r.json()).then(s => {
       if (s.notify_email) setNotifyEmail(s.notify_email);
+      if (s.enabled_markets) setEnabledMarkets(s.enabled_markets);
     }).catch(console.error);
     fetch("/api/watchlist").then(r => r.json()).then(setWatchlist).catch(console.error);
   }, []);
@@ -293,7 +295,7 @@ const Alerts = ({ alerts, setAlerts, history, setHistory, initialCategory }) => 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 18 }}>
         <StatTile label={I18N.t("alerts.stat.active")} value={counts.active} accent="var(--up)" hint={I18N.t("alerts.stat.active.hint")}/>
         <StatTile label={I18N.t("alerts.stat.triggered")} value={counts.triggered} accent="var(--ink)" hint={I18N.t("alerts.stat.triggered.hint")}/>
-        <StatTile label={I18N.t("alerts.stat.markets")} value="3" accent="var(--info)" hint={I18N.t("alerts.stat.markets.hint")}/>
+        <StatTile label={I18N.t("alerts.stat.markets")} value={enabledMarkets.length || "—"} accent="var(--info)" hint={enabledMarkets.map(m => m.toUpperCase()).join(" · ") || "—"}/>
         <StatTile label={I18N.t("alerts.stat.lastCheck")} value={(() => {
           if (!lastCheck) return "—";
           const s = Math.floor((Date.now() - lastCheck) / 1000);

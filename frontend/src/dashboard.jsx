@@ -1,7 +1,5 @@
 /* Dashboard — overview of all 5 modules + market summary */
 
-const STATE_LABEL = new Proxy({}, { get: (_, k) => I18N.t(`base.state.${k.toLowerCase()}`) });
-
 // Compute CNY value of a balance item
 const _bsCNY = (it) => it.amount * (FX[it.currency] || 1);
 

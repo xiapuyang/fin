@@ -139,9 +139,15 @@ async function apiCreateBalanceItem(data)            { return _apiFetch("/api/ba
 async function apiCreateBalanceItemsBulk(items)      { return _apiFetch("/api/balance/items/bulk", _JSON(items)); }
 async function apiUpdateBalanceItem(id, data)        { return _apiFetch(`/api/balance/items/${id}`, _PUT(data)); }
 async function apiDeleteBalanceItem(id)              { return _apiFetch(`/api/balance/items/${id}`, _DEL()); }
+async function apiGetRebalanceDefaults()       { return _apiFetch("/api/rebalance/defaults"); }
+async function apiGetRebalanceCategories()     { return _apiFetch("/api/rebalance/categories"); }
+async function apiGetSymbolOverrides()         { return _apiFetch("/api/rebalance/symbol-overrides"); }
+async function apiSaveSymbolOverrides(overrides) { return _apiFetch("/api/rebalance/symbol-overrides", _PUT(overrides)); }
+
 Object.assign(window, {
   SYMBOLS, SYMBOL_INDEX, FX, BS_CAT_COLORS,
   apiGetPrices, apiGetDividends,
+  apiGetRebalanceDefaults, apiGetRebalanceCategories, apiGetSymbolOverrides, apiSaveSymbolOverrides,
   apiGetHoldings, apiCreateHolding, apiUpdateHolding, apiDeleteHolding,
   apiGetTransactions, apiGetTransactionsPaged, apiCreateTransaction, apiUpdateTransaction, apiDeleteTransaction, apiImportTransactions,
   apiGetIncome, apiCreateIncome, apiUpdateIncome, apiDeleteIncome, apiImportIncome,

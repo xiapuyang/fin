@@ -9,7 +9,13 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
+from fin.config import (
+    APP_CONFIG,
+    ENV_PATH,
+    LAST_CHECK_PATH,
+    SUPPORTED_CURRENCIES,
+    SYMBOL_OVERRIDES_PATH,
+)
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -18,7 +24,9 @@ router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
-_FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
+_FX_FALLBACK: dict[str, float] = APP_CONFIG.get(
+    "fx_fallback_rates", {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
+)
 
 _VALID_MARKETS = {"us", "hk", "cn", "ca"}
 
@@ -83,16 +91,57 @@ def get_fx(db: Session = Depends(get_db)):
         return _FX_FALLBACK
 
 
+@router.get("/rebalance/defaults")
+def get_rebalance_defaults():
+    """Return the list of system default rebalance presets from config/app.json."""
+    return APP_CONFIG.get("rebalance_defaults", [])
+
+
+@router.get("/rebalance/categories")
+def get_rebalance_categories():
+    """Return asset category definitions with matcher DSL from config/app.json."""
+    return APP_CONFIG.get("rebalance_categories", [])
+
+
 @router.get("/rebalance")
 def get_rebalance():
-    """Return the stored rebalance configuration."""
-    return settings_store.load().get("rebalance") or {}
+    """Return the stored rebalance configuration.
+
+    Reads rebalance_v3 first (v3 format); falls back to rebalance (v1/v2 legacy)
+    so the frontend migration can detect the old format and write v3.
+    """
+    s = settings_store.load()
+    return s.get("rebalance_v3") or s.get("rebalance") or {}
 
 
 @router.put("/rebalance")
 def put_rebalance(data: Any = Body(...)):
-    """Persist rebalance configuration and return it."""
-    settings_store.save({"rebalance": data})
+    """Persist rebalance configuration to rebalance_v3; legacy rebalance key is untouched."""
+    settings_store.save({"rebalance_v3": data})
+    return data
+
+
+@router.get("/rebalance/symbol-overrides")
+def get_symbol_overrides():
+    """Return global symbol-to-category overrides from symbol_overrides.json."""
+    try:
+        if SYMBOL_OVERRIDES_PATH.exists():
+            return json.loads(SYMBOL_OVERRIDES_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to load symbol_overrides.json: %s", exc)
+    return {}
+
+
+@router.put("/rebalance/symbol-overrides")
+def put_symbol_overrides(data: dict[str, str] = Body(...)):
+    """Persist global symbol-to-category overrides to symbol_overrides.json."""
+    try:
+        SYMBOL_OVERRIDES_PATH.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        logger.warning("Failed to write symbol_overrides.json: %s", exc)
+        raise
     return data
 
 
@@ -131,14 +180,12 @@ def get_credentials():
 
 @router.put("/settings/credentials")
 def put_credentials(data: CredentialsPayload):
-    """Write AgentMail credentials to DATA_DIR/.env and update os.environ in place."""
-    env_path = DATA_DIR / ".env"
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env_path.touch(exist_ok=True)
+    """Write AgentMail credentials to ENV_PATH and update os.environ in place."""
+    ENV_PATH.touch(exist_ok=True)
     if data.agentmail_api_key is not None:
-        set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+        set_key(str(ENV_PATH), "AGENTMAIL_API_KEY", data.agentmail_api_key)
         os.environ["AGENTMAIL_API_KEY"] = data.agentmail_api_key
     if data.agentmail_inbox is not None:
-        set_key(str(env_path), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
+        set_key(str(ENV_PATH), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
         os.environ["FIN_AGENTMAIL_INBOX"] = data.agentmail_inbox
     return {"saved": True, "restart_required": False}

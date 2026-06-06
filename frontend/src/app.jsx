@@ -1,5 +1,7 @@
 /* Main app — sidebar nav + module router */
 
+const STATE_LABEL = new Proxy({}, { get: (_, k) => I18N.t(`base.state.${k.toLowerCase()}`) });
+
 // Fallback used only when the backend's /api/market-states is stale or unavailable.
 // Backend (exchange_calendars) is authoritative — it handles holidays correctly.
 const MARKET_HOURS = (now = new Date()) => {
@@ -41,6 +43,7 @@ const AppInner = () => {
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
+  // Placeholder until /api/fx resolves; values must match app.json["fx_fallback_rates"]
   const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
   const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "", display_name: "" });

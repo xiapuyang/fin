@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from fin.config import APP_CONFIG
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/benchmark")
 
-_DEFAULT_SINCE_YEARS = 10
+_DEFAULT_SINCE_YEARS: int = APP_CONFIG.get("benchmark_default_since_years", 10)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
