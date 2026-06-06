@@ -12,7 +12,7 @@ from fin import settings as settings_store
 from fin.config import (
     APP_CONFIG,
     APP_CONFIG_PATH,
-    DATA_DIR,
+    ENV_PATH,
     LAST_CHECK_PATH,
     SUPPORTED_CURRENCIES,
     SYMBOL_OVERRIDES_PATH,
@@ -191,14 +191,12 @@ def get_credentials():
 
 @router.put("/settings/credentials")
 def put_credentials(data: CredentialsPayload):
-    """Write AgentMail credentials to DATA_DIR/.env and update os.environ in place."""
-    env_path = DATA_DIR / ".env"
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env_path.touch(exist_ok=True)
+    """Write AgentMail credentials to ENV_PATH and update os.environ in place."""
+    ENV_PATH.touch(exist_ok=True)
     if data.agentmail_api_key is not None:
-        set_key(str(env_path), "AGENTMAIL_API_KEY", data.agentmail_api_key)
+        set_key(str(ENV_PATH), "AGENTMAIL_API_KEY", data.agentmail_api_key)
         os.environ["AGENTMAIL_API_KEY"] = data.agentmail_api_key
     if data.agentmail_inbox is not None:
-        set_key(str(env_path), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
+        set_key(str(ENV_PATH), "FIN_AGENTMAIL_INBOX", data.agentmail_inbox)
         os.environ["FIN_AGENTMAIL_INBOX"] = data.agentmail_inbox
     return {"saved": True, "restart_required": False}
