@@ -200,7 +200,7 @@ class QuoteService:
     def upsert_quote(self, symbol: str, data: dict) -> None:
         """Persist a quote data dict for symbol, ignoring non-DB fields."""
         safe = {k: v for k, v in data.items() if k not in _NON_DB_FIELDS}
-        self._repo.upsert(symbol, safe)
+        self._repo.upsert(normalize_symbol(symbol), safe)
 
     def get_full_quote(self, symbol: str) -> dict:
         """Fetch comprehensive quote via the appropriate provider.

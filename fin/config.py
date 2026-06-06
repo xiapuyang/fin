@@ -62,6 +62,7 @@ SETTINGS_PATH = DATA_DIR / "settings.json"
 LEDGER_CATEGORIES_PATH = DATA_DIR / "ledger_categories.json"
 LAST_CHECK_PATH = DATA_DIR / "last_check.json"
 MARKET_STATE_PATH = DATA_DIR / "market_state.json"
+SYMBOL_OVERRIDES_PATH = DATA_DIR / "symbol_overrides.json"
 ALERT_LOCK_PATH = DATA_DIR / "alert_check.lock"
 
 API_HOST = os.environ.get("FIN_HOST", "127.0.0.1")

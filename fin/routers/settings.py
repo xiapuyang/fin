@@ -9,7 +9,13 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
-from fin.config import APP_CONFIG_PATH, DATA_DIR, LAST_CHECK_PATH, SUPPORTED_CURRENCIES
+from fin.config import (
+    APP_CONFIG_PATH,
+    DATA_DIR,
+    LAST_CHECK_PATH,
+    SUPPORTED_CURRENCIES,
+    SYMBOL_OVERRIDES_PATH,
+)
 from fin.database import get_db
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService
@@ -94,6 +100,17 @@ def get_rebalance_defaults():
         return []
 
 
+@router.get("/rebalance/categories")
+def get_rebalance_categories():
+    """Return asset category definitions with matcher DSL from config/app.json."""
+    try:
+        cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
+        return cfg.get("rebalance_categories", [])
+    except Exception as exc:
+        logger.warning("Failed to load rebalance_categories: %s", exc)
+        return []
+
+
 @router.get("/rebalance")
 def get_rebalance():
     """Return the stored rebalance configuration.
@@ -109,6 +126,30 @@ def get_rebalance():
 def put_rebalance(data: Any = Body(...)):
     """Persist rebalance configuration to rebalance_v3; legacy rebalance key is untouched."""
     settings_store.save({"rebalance_v3": data})
+    return data
+
+
+@router.get("/rebalance/symbol-overrides")
+def get_symbol_overrides():
+    """Return global symbol-to-category overrides from symbol_overrides.json."""
+    try:
+        if SYMBOL_OVERRIDES_PATH.exists():
+            return json.loads(SYMBOL_OVERRIDES_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to load symbol_overrides.json: %s", exc)
+    return {}
+
+
+@router.put("/rebalance/symbol-overrides")
+def put_symbol_overrides(data: Any = Body(...)):
+    """Persist global symbol-to-category overrides to symbol_overrides.json."""
+    try:
+        SYMBOL_OVERRIDES_PATH.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        logger.warning("Failed to write symbol_overrides.json: %s", exc)
+        raise
     return data
 
 
