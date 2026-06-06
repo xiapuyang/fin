@@ -15,10 +15,10 @@ from fin.config import (
     API_PORT,
     APP_CONFIG_PATH,
     CONFIG_DIR,
+    DATA_DIR,
     FRONTEND_DIR,
     HOME_FIN,
     PROJECT_ROOT,
-    DATA_DIR,
 )
 from fin.data_migration import migrate_data_dir
 from fin.database import init_db

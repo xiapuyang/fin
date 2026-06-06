@@ -5,15 +5,17 @@ to %LOCALAPPDATA%\\Fin\\Fin), this module detects stale legacy data and copies i
 to the new location so users don't lose their database on first launch.
 
 Migration criteria (all must be true):
-  1. Current DATA_DIR has no fin.db.
-  2. A legacy directory exists that contains fin.db.
-  3. The legacy directory is different from DATA_DIR.
+  1. FIN_DATA_DIR is not explicitly set (user-specified paths are never auto-filled).
+  2. Current DATA_DIR has no fin.db.
+  3. A legacy directory exists that contains fin.db.
+  4. The legacy directory is different from DATA_DIR.
 
 Only flat files are copied (no subdirectories). The legacy directory is left
 intact as a backup — the user can delete it manually.
 """
 
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -32,8 +34,14 @@ def _legacy_candidates(home_fin: Path, project_root: Path) -> list[Path]:
 def migrate_data_dir(data_dir: Path, home_fin: Path, project_root: Path) -> bool:
     """Copy legacy data files to data_dir if data_dir has no fin.db.
 
+    Skipped when FIN_DATA_DIR is explicitly set — the user chose that path
+    intentionally, so auto-filling it would prevent starting with an empty dir.
+
     Returns True if a migration was performed, False otherwise.
     """
+    if os.environ.get("FIN_DATA_DIR"):
+        return False
+
     if (data_dir / "fin.db").exists():
         return False
 
