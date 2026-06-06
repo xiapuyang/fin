@@ -52,6 +52,17 @@ else:
     _default_data_dir = HOME_FIN / "data"
     _default_log_dir = HOME_FIN / "logs"
 
+# Migrate old data/.env → ENV_PATH before computing DATA_DIR so that
+# FIN_DATA_DIR stored in the old .env is visible when constants are bound.
+_old_env = _default_data_dir / ".env"
+if _old_env.exists() and not ENV_PATH.exists():
+    try:
+        shutil.move(str(_old_env), ENV_PATH)
+        _logger.info("Moved .env from %s to %s.", _old_env, ENV_PATH)
+        load_dotenv(ENV_PATH, override=True)
+    except OSError as e:
+        _logger.warning("Could not move .env from %s to %s: %s", _old_env, ENV_PATH, e)
+
 # Compute DATA_DIR after loading .env so FIN_DATA_DIR override takes effect.
 # FIN_DATA_DIR always wins — even over FIN_DEV — when explicitly set.
 if FIN_DEV:
@@ -71,14 +82,6 @@ DB_PATH = (
     if (_FROZEN or FIN_DEV)
     else Path(os.environ.get("FIN_DB_PATH") or (DATA_DIR / "fin.db"))
 )
-
-# Migrate old data/.env → ENV_PATH on first run after upgrade.
-# Uses the production default path (not DATA_DIR) so it works in dev mode too.
-_old_env = _default_data_dir / ".env"
-if _old_env.exists() and not ENV_PATH.exists():
-    shutil.move(str(_old_env), ENV_PATH)
-    _logger.info("Moved .env from %s to %s.", _old_env, ENV_PATH)
-    load_dotenv(ENV_PATH, override=True)
 
 # Personal/mutable state — lives under DATA_DIR.
 SETTINGS_PATH = DATA_DIR / "settings.json"

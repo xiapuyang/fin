@@ -55,7 +55,10 @@ _BENCHMARK_BACKFILL_STOP = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP, _BENCHMARK_BACKFILL_STOP
-    migrate_data_dir(DATA_DIR, HOME_FIN, PROJECT_ROOT)
+    try:
+        migrate_data_dir(DATA_DIR, HOME_FIN, PROJECT_ROOT)
+    except Exception as exc:
+        logger.warning("Data directory migration failed (continuing): %s", exc)
     init_db()
     logger.info("Database initialized")
     warn_orphaned_bench_ids()

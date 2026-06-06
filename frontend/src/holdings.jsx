@@ -1344,7 +1344,7 @@ const RB_PRESETS = [
     ],
   },
   {
-    id: "60_40",
+    id: "classic_60_40",
     get label() { return I18N.t("holdings.rb.6040.label"); },
     author: "John Bogle",
     get quote() { return I18N.t("holdings.rb.6040.quote"); },
@@ -1354,7 +1354,7 @@ const RB_PRESETS = [
     ],
   },
   {
-    id: "70_30",
+    id: "aggressive_70_30",
     get label() { return I18N.t("holdings.rb.7030.label"); },
     author: "Vanguard",
     get quote() { return I18N.t("holdings.rb.7030.quote"); },
@@ -1444,7 +1444,7 @@ const CategoryCodeInput = ({ catId, symOverrides, onChange }) => {
         .then(q => setHint({ loading: false, name: q?.name || null }))
         .catch(err => { if (err?.name !== "AbortError") setHint({ loading: false, name: null }); });
     }, 400);
-    return () => { clearTimeout(timer); ctrl.abort(); };
+    return () => { ctrl.abort(); clearTimeout(timer); };
   }, [input]);
 
   const addCode = () => {
@@ -1721,10 +1721,11 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
           setPerPreset(map);
         } else if (d.presetId) {
           // v1 flat format — migrate to v3 and save back
-          const id = d.presetId;
+          const _V1_ID_MAP = { "60_40": "classic_60_40", "70_30": "aggressive_70_30" };
+          const id = _V1_ID_MAP[d.presetId] || d.presetId;
           const buckets = rehydrateBuckets(d.buckets, id, d.birthDate);
           const data = { buckets, trigger: d.trigger, birthDate: d.birthDate || "" };
-          fetch("/api/rebalance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active_id: id, configs: [{ id, ...data }] }) }).catch(() => {});
+          fetch("/api/rebalance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active_id: id, configs: [{ id, ...data }] }) }).catch(err => console.error("Rebalance v1→v3 migration failed:", err));
           setActiveId(id);
           setPerPreset({ [id]: data });
         }

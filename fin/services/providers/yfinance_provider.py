@@ -18,6 +18,20 @@ _EXCHANGE_SUFFIXES = (".HK", ".SS", ".SZ", ".TO", ".V", ".NE")
 # EastMoney JSONP endpoint — same as ChinaFundProvider, but also covers exchange-listed ETFs
 _EM_FUND_URL = "https://fundgz.1234567.com.cn/js/{code}.js"
 
+# ETF names are stable; cache for 24h to avoid repeated blocking HTTP in ThreadPoolExecutor.
+_cn_etf_name_cache: dict[str, tuple[str | None, float]] = {}
+_CN_ETF_NAME_TTL = 86400
+
+
+def _cn_etf_name(symbol: str) -> str | None:
+    """Return EastMoney name for a .SS/.SZ ETF symbol, or None for anything else."""
+    if not symbol.endswith((".SS", ".SZ")):
+        return None
+    bare = symbol[:-3]
+    if len(bare) != 6 or not bare.isdigit():
+        return None
+    return _fetch_cn_etf_name(bare)
+
 
 def _fetch_cn_etf_name(bare_code: str) -> str | None:
     """Try EastMoney JSONP for the Chinese product name of an exchange-listed ETF.
@@ -26,6 +40,11 @@ def _fetch_cn_etf_name(bare_code: str) -> str | None:
     MANAGEMENT"), which is useless. EastMoney returns the actual product name
     (e.g. "纳指ETF嘉实"). Returns None on any failure so the caller can fall back.
     """
+    now = time.monotonic()
+    cached = _cn_etf_name_cache.get(bare_code)
+    if cached and now < cached[1]:
+        return cached[0]
+    name: str | None = None
     url = _EM_FUND_URL.format(code=bare_code)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -34,10 +53,11 @@ def _fetch_cn_etf_name(bare_code: str) -> str | None:
         m = re.search(r"jsonpgz\((.+?)\)\;?", text)
         if m:
             d = json.loads(m.group(1))
-            return d.get("name") or None
+            name = d.get("name") or None
     except Exception as exc:
         logger.debug("EastMoney name fetch failed for %s: %s", bare_code, exc)
-    return None
+    _cn_etf_name_cache[bare_code] = (name, now + _CN_ETF_NAME_TTL)
+    return name
 
 
 _FX_TTL: int = APP_CONFIG.get("fx_cache_ttl_seconds", 60)
@@ -128,12 +148,9 @@ class YFinanceProvider(QuoteProvider):
                 "currency": getattr(fi, "currency", "USD") or "USD",
                 "market_state": market_state,
             }
-            if symbol.endswith((".SS", ".SZ")):
-                bare = symbol[:-3]
-                if len(bare) == 6 and bare.isdigit():
-                    name = _fetch_cn_etf_name(bare)
-                    if name:
-                        result["name"] = name
+            name = _cn_etf_name(symbol)
+            if name:
+                result["name"] = name
             return result
         except Exception as e:
             logger.warning("live fetch failed for %s: %s", symbol, e)
@@ -197,11 +214,9 @@ class YFinanceProvider(QuoteProvider):
 
             # For CN exchange-listed ETFs, yfinance returns the fund company name
             # instead of the product name. EastMoney gives the actual ETF name.
-            yf_name = info.get("shortName") or info.get("longName")
-            if symbol.endswith((".SS", ".SZ")):
-                bare = symbol[:-3]
-                if len(bare) == 6 and bare.isdigit():
-                    yf_name = _fetch_cn_etf_name(bare) or yf_name
+            yf_name = (
+                _cn_etf_name(symbol) or info.get("shortName") or info.get("longName")
+            )
 
             return {
                 "name": yf_name,

@@ -130,3 +130,47 @@ def test_get_fx_falls_back_on_error(client):
     assert data["CAD"] == 5.30
     assert data["CNY"] == 1.0
     assert "EUR" not in data
+
+
+# ── settings.py internals ─────────────────────────────────────────────────────
+
+
+def test_load_returns_defaults_on_corrupt_json(tmp_path, monkeypatch):
+    import fin.settings as s
+
+    path = tmp_path / "settings.json"
+    path.write_text("{ not valid json", encoding="utf-8")
+    monkeypatch.setattr(s, "SETTINGS_PATH", path)
+    result = s.load()
+    assert "language" in result  # defaults returned
+
+
+def test_detect_os_locale_falls_back_to_env_when_getlocale_raises(monkeypatch):
+    import locale
+    import fin.settings as s
+
+    monkeypatch.setattr(
+        locale, "getlocale", lambda: (_ for _ in ()).throw(Exception("no locale"))
+    )
+    monkeypatch.setenv("LANG", "zh_CN.UTF-8")
+    result = s._detect_os_locale()
+    assert result == "zh"
+
+
+def test_detect_os_locale_win32_ctypes_chinese(monkeypatch):
+    import sys
+    import fin.settings as s
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    monkeypatch.delenv("LANG", raising=False)
+
+    import unittest.mock as m
+
+    fake_ctypes = m.MagicMock()
+    fake_ctypes.windll.kernel32.GetUserDefaultUILanguage.return_value = 0x0804  # zh-CN
+    with m.patch.dict("sys.modules", {"ctypes": fake_ctypes}):
+        with m.patch("locale.getlocale", return_value=(None, None)):
+            result = s._detect_os_locale()
+    assert result == "zh"

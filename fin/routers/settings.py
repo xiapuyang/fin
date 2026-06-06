@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from fin import settings as settings_store
 from fin.config import (
     APP_CONFIG,
-    APP_CONFIG_PATH,
     ENV_PATH,
     LAST_CHECK_PATH,
     SUPPORTED_CURRENCIES,
@@ -95,23 +94,13 @@ def get_fx(db: Session = Depends(get_db)):
 @router.get("/rebalance/defaults")
 def get_rebalance_defaults():
     """Return the list of system default rebalance presets from config/app.json."""
-    try:
-        cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
-        return cfg.get("rebalance_defaults", [])
-    except Exception as exc:
-        logger.warning("Failed to load rebalance_defaults: %s", exc)
-        return []
+    return APP_CONFIG.get("rebalance_defaults", [])
 
 
 @router.get("/rebalance/categories")
 def get_rebalance_categories():
     """Return asset category definitions with matcher DSL from config/app.json."""
-    try:
-        cfg = json.loads(APP_CONFIG_PATH.read_text(encoding="utf-8"))
-        return cfg.get("rebalance_categories", [])
-    except Exception as exc:
-        logger.warning("Failed to load rebalance_categories: %s", exc)
-        return []
+    return APP_CONFIG.get("rebalance_categories", [])
 
 
 @router.get("/rebalance")
@@ -144,7 +133,7 @@ def get_symbol_overrides():
 
 
 @router.put("/rebalance/symbol-overrides")
-def put_symbol_overrides(data: Any = Body(...)):
+def put_symbol_overrides(data: dict[str, str] = Body(...)):
     """Persist global symbol-to-category overrides to symbol_overrides.json."""
     try:
         SYMBOL_OVERRIDES_PATH.write_text(
