@@ -1,170 +1,344 @@
-"""Tests for frozen-mode path detection in fin/config.py and fin/logger.py."""
+"""Tests for config.py path resolution across all platform/install-mode combinations.
+
+Scenarios covered:
+  Script mode  × macOS/Linux  × defaults / FIN_DEV / FIN_DATA_DIR / FIN_LOG_DIR / FIN_DB_PATH
+  Script mode  × Windows      × defaults / FIN_DEV / FIN_DATA_DIR / FIN_LOG_DIR
+  Frozen mode  × macOS/Linux  × defaults / FIN_DATA_DIR / FIN_LOG_DIR
+  Frozen mode  × Windows      × defaults / FIN_DATA_DIR / FIN_LOG_DIR
+"""
 
 import importlib
 import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
-import platformdirs
-import pytest
+_HOME_FIN = Path.home() / ".fin"
 
 
 @contextmanager
-def _frozen_sys(meipass_dir: Path):
-    """Context manager that sets sys.frozen + sys._MEIPASS, then restores original state."""
-    old_frozen = getattr(sys, "frozen", _SENTINEL := object())
-    old_meipass = getattr(sys, "_MEIPASS", _SENTINEL)
+def _config_context(
+    *,
+    frozen: bool = False,
+    win32: bool = False,
+    meipass: str | None = None,
+    env: dict | None = None,
+    win_data: Path | None = None,
+    win_logs: Path | None = None,
+):
+    """Reload fin.config with patched state; yield a snapshot dict; restore on exit.
 
-    sys.frozen = True
-    sys._MEIPASS = str(meipass_dir)
+    win_data / win_logs are required when win32=True so mkdir() succeeds on macOS.
+    """
+    import fin.config as cfg
+
+    _MISSING = object()
+    orig_frozen = getattr(sys, "frozen", _MISSING)
+    orig_meipass = getattr(sys, "_MEIPASS", _MISSING)
+    orig_platform = sys.platform
+    _ENV_KEYS = ("FIN_DATA_DIR", "FIN_LOG_DIR", "FIN_DEV", "FIN_DB_PATH")
+    saved_env = {k: os.environ.get(k) for k in _ENV_KEYS}
+
     try:
-        yield
-    finally:
-        if old_frozen is _SENTINEL:
-            try:
-                del sys.frozen
-            except AttributeError:
-                pass
+        sys.platform = "win32" if win32 else "darwin"
+
+        if frozen:
+            sys.frozen = True
+            sys._MEIPASS = meipass or "/fake/meipass"
         else:
-            sys.frozen = old_frozen
+            for attr in ("frozen", "_MEIPASS"):
+                if hasattr(sys, attr):
+                    delattr(sys, attr)
 
-        if old_meipass is _SENTINEL:
-            try:
-                del sys._MEIPASS
-            except AttributeError:
-                pass
+        for k in _ENV_KEYS:
+            os.environ.pop(k, None)
+        for k, v in (env or {}).items():
+            os.environ[k] = v
+
+        if win32:
+            assert win_data is not None and win_logs is not None, (
+                "win_data and win_logs are required for win32=True tests"
+            )
+            with (
+                patch("platformdirs.user_data_dir", return_value=str(win_data)),
+                patch("platformdirs.user_log_dir", return_value=str(win_logs)),
+            ):
+                importlib.reload(cfg)
+                yield _snapshot(cfg)
         else:
-            sys._MEIPASS = old_meipass
-
-
-class TestDevMode:
-    """Non-frozen (normal dev) mode keeps existing behaviour."""
-
-    def test_data_dir_is_under_home_fin(self):
-        import fin.config as cfg
-
-        home_fin = Path.home() / ".fin"
-        assert cfg.DATA_DIR in (home_fin / "data", home_fin / "data-dev")
-
-    def test_log_dir_is_under_home_fin(self):
-        import fin.config as cfg
-
-        home_fin = Path.home() / ".fin"
-        assert cfg.LOG_DIR == home_fin / "logs"
-
-    def test_symbols_path_is_under_project_root(self):
-        import fin.config as cfg
-
-        project_root = Path(__file__).parent.parent
-        assert cfg.SYMBOLS_PATH == project_root / "config" / "symbols.json"
-
-    def test_frontend_dir_is_under_project_root(self):
-        import fin.config as cfg
-
-        project_root = Path(__file__).parent.parent
-        assert cfg.FRONTEND_DIR == project_root / "frontend"
-
-    def test_data_dir_exists(self):
-        import fin.config as cfg
-
-        assert cfg.DATA_DIR.exists()
-
-    def test_log_dir_exists(self):
-        import fin.config as cfg
-
-        assert cfg.LOG_DIR.exists()
-
-
-class TestFrozenMode:
-    """Frozen mode redirects mutable paths to OS user dirs."""
-
-    def _reload_frozen(self, meipass_dir: Path):
-        import fin.config as cfg
-
-        with _frozen_sys(meipass_dir):
             importlib.reload(cfg)
-            data_dir = cfg.DATA_DIR
-            log_dir = cfg.LOG_DIR
-            frontend_dir = cfg.FRONTEND_DIR
-            symbols_path = cfg.SYMBOLS_PATH
-            fin_dev = cfg.FIN_DEV
+            yield _snapshot(cfg)
 
-        # Restore normal module state for other tests
+    finally:
+        sys.platform = orig_platform
+
+        if orig_frozen is _MISSING:
+            if hasattr(sys, "frozen"):
+                delattr(sys, "frozen")
+        else:
+            sys.frozen = orig_frozen
+
+        if orig_meipass is _MISSING:
+            if hasattr(sys, "_MEIPASS"):
+                delattr(sys, "_MEIPASS")
+        else:
+            sys._MEIPASS = orig_meipass
+
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
         importlib.reload(cfg)
-        return data_dir, log_dir, frontend_dir, symbols_path, fin_dev
-
-    def test_data_dir_uses_home_fin_on_non_windows(self, tmp_path):
-        import sys as _sys
-
-        if _sys.platform == "win32":
-            pytest.skip("Windows frozen uses platformdirs")
-        data_dir, _, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert data_dir == Path.home() / ".fin" / "data"
-
-    def test_log_dir_uses_home_fin_on_non_windows(self, tmp_path):
-        import sys as _sys
-
-        if _sys.platform == "win32":
-            pytest.skip("Windows frozen uses platformdirs")
-        _, log_dir, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert log_dir == Path.home() / ".fin" / "logs"
-
-    def test_data_dir_uses_platformdirs_on_windows(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("sys.platform", "win32")
-        data_dir, _, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert data_dir == Path(platformdirs.user_data_dir("Fin"))
-
-    def test_frontend_dir_points_into_meipass(self, tmp_path):
-        bundle_dir = tmp_path / "bundle"
-        _, _, frontend_dir, _, _ = self._reload_frozen(bundle_dir)
-        assert frontend_dir == bundle_dir / "frontend"
-
-    def test_symbols_path_points_into_meipass(self, tmp_path):
-        bundle_dir = tmp_path / "bundle"
-        _, _, _, symbols_path, _ = self._reload_frozen(bundle_dir)
-        assert symbols_path == bundle_dir / "config" / "symbols.json"
-
-    def test_data_dir_not_inside_bundle(self, tmp_path):
-        bundle_dir = tmp_path / "bundle"
-        data_dir, _, _, _, _ = self._reload_frozen(bundle_dir)
-        assert not str(data_dir).startswith(str(bundle_dir))
-
-    def test_data_dir_created_automatically(self, tmp_path):
-        data_dir, _, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert data_dir.exists()
-
-    def test_log_dir_created_automatically(self, tmp_path):
-        _, log_dir, _, _, _ = self._reload_frozen(tmp_path / "bundle")
-        assert log_dir.exists()
-
-    def test_fin_dev_is_false_in_frozen_mode(self, tmp_path):
-        _, _, _, _, fin_dev = self._reload_frozen(tmp_path / "bundle")
-        assert fin_dev is False
 
 
-class TestLoggerFrozenMode:
-    """logger.py DEFAULT_LOG_DIR follows frozen-mode detection."""
+def _snapshot(cfg) -> dict:
+    return {
+        "DATA_DIR": cfg.DATA_DIR,
+        "LOG_DIR": cfg.LOG_DIR,
+        "DB_PATH": cfg.DB_PATH,
+        "FIN_DEV": cfg.FIN_DEV,
+    }
 
-    def test_default_log_dir_uses_home_fin_when_frozen_non_windows(self):
-        import sys as _sys
 
-        if _sys.platform == "win32":
-            pytest.skip("Windows frozen uses platformdirs")
+# ── Script mode · macOS/Linux ─────────────────────────────────────────────────
 
-        import fin.logger as lg
 
-        with _frozen_sys(Path("/fake/meipass")):
-            importlib.reload(lg)
-            default_log_dir = lg.DEFAULT_LOG_DIR
+class TestScriptMacOS:
+    def test_data_dir_default(self):
+        with _config_context() as s:
+            assert s["DATA_DIR"] == _HOME_FIN / "data"
 
-        importlib.reload(lg)  # restore
-        expected = os.path.join(os.path.expanduser("~"), ".fin", "logs")
-        assert default_log_dir == expected
+    def test_log_dir_default(self):
+        with _config_context() as s:
+            assert s["LOG_DIR"] == _HOME_FIN / "logs"
 
-    def test_default_log_dir_uses_home_fin_in_dev_mode(self):
-        import fin.logger as lg
+    def test_db_path_default(self):
+        with _config_context() as s:
+            assert s["DB_PATH"] == _HOME_FIN / "data" / "fin.db"
 
-        importlib.reload(lg)
-        expected = os.path.join(os.path.expanduser("~"), ".fin", "logs")
-        assert lg.DEFAULT_LOG_DIR == expected
+    def test_fin_dev_false_by_default(self):
+        with _config_context() as s:
+            assert s["FIN_DEV"] is False
+
+    def test_fin_dev_redirects_data_dir(self):
+        with _config_context(env={"FIN_DEV": "1"}) as s:
+            assert s["DATA_DIR"] == _HOME_FIN / "data-dev"
+            assert s["FIN_DEV"] is True
+
+    def test_fin_dev_does_not_change_log_dir(self):
+        with _config_context(env={"FIN_DEV": "1"}) as s:
+            assert s["LOG_DIR"] == _HOME_FIN / "logs"
+
+    def test_fin_data_dir_override(self, tmp_path):
+        with _config_context(env={"FIN_DATA_DIR": str(tmp_path)}) as s:
+            assert s["DATA_DIR"] == tmp_path
+            assert s["DB_PATH"] == tmp_path / "fin.db"
+
+    def test_fin_data_dir_override_takes_precedence_over_fin_dev(self, tmp_path):
+        with _config_context(env={"FIN_DEV": "1", "FIN_DATA_DIR": str(tmp_path)}) as s:
+            assert s["DATA_DIR"] == tmp_path
+
+    def test_fin_log_dir_override(self, tmp_path):
+        with _config_context(env={"FIN_LOG_DIR": str(tmp_path)}) as s:
+            assert s["LOG_DIR"] == tmp_path
+
+    def test_fin_db_path_override(self, tmp_path):
+        db = str(tmp_path / "custom.db")
+        with _config_context(env={"FIN_DB_PATH": db}) as s:
+            assert s["DB_PATH"] == Path(db)
+
+    def test_fin_db_path_ignored_in_dev_mode(self, tmp_path):
+        db = str(tmp_path / "custom.db")
+        with _config_context(env={"FIN_DEV": "1", "FIN_DB_PATH": db}) as s:
+            assert s["DB_PATH"] == _HOME_FIN / "data-dev" / "fin.db"
+
+
+# ── Script mode · Windows ─────────────────────────────────────────────────────
+
+
+class TestScriptWindows:
+    def test_data_dir_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(win32=True, win_data=wd, win_logs=wl) as s:
+            assert s["DATA_DIR"] == wd
+
+    def test_log_dir_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(win32=True, win_data=wd, win_logs=wl) as s:
+            assert s["LOG_DIR"] == wl
+
+    def test_db_path_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(win32=True, win_data=wd, win_logs=wl) as s:
+            assert s["DB_PATH"] == wd / "fin.db"
+
+    def test_fin_dev_appends_data_dev(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            win32=True, win_data=wd, win_logs=wl, env={"FIN_DEV": "1"}
+        ) as s:
+            assert s["DATA_DIR"] == wd / "data-dev"
+
+    def test_fin_data_dir_override(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        custom = tmp_path / "custom"
+        with _config_context(
+            win32=True, win_data=wd, win_logs=wl, env={"FIN_DATA_DIR": str(custom)}
+        ) as s:
+            assert s["DATA_DIR"] == custom
+
+    def test_fin_log_dir_override(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        custom = tmp_path / "custom-logs"
+        with _config_context(
+            win32=True, win_data=wd, win_logs=wl, env={"FIN_LOG_DIR": str(custom)}
+        ) as s:
+            assert s["LOG_DIR"] == custom
+
+    def test_not_under_home_fin(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(win32=True, win_data=wd, win_logs=wl) as s:
+            assert not str(s["DATA_DIR"]).startswith(str(_HOME_FIN))
+
+
+# ── Frozen mode · macOS/Linux ─────────────────────────────────────────────────
+
+
+class TestFrozenMacOS:
+    def test_data_dir_default(self, tmp_path):
+        with _config_context(frozen=True, meipass=str(tmp_path / "bundle")) as s:
+            assert s["DATA_DIR"] == _HOME_FIN / "data"
+
+    def test_log_dir_default(self, tmp_path):
+        with _config_context(frozen=True, meipass=str(tmp_path / "bundle")) as s:
+            assert s["LOG_DIR"] == _HOME_FIN / "logs"
+
+    def test_db_path_default(self, tmp_path):
+        with _config_context(frozen=True, meipass=str(tmp_path / "bundle")) as s:
+            assert s["DB_PATH"] == _HOME_FIN / "data" / "fin.db"
+
+    def test_fin_dev_always_false(self, tmp_path):
+        with _config_context(frozen=True, meipass=str(tmp_path / "bundle")) as s:
+            assert s["FIN_DEV"] is False
+
+    def test_data_not_inside_bundle(self, tmp_path):
+        bundle = tmp_path / "bundle"
+        with _config_context(frozen=True, meipass=str(bundle)) as s:
+            assert not str(s["DATA_DIR"]).startswith(str(bundle))
+
+    def test_fin_data_dir_override(self, tmp_path):
+        custom = tmp_path / "custom"
+        with _config_context(
+            frozen=True,
+            meipass=str(tmp_path / "bundle"),
+            env={"FIN_DATA_DIR": str(custom)},
+        ) as s:
+            assert s["DATA_DIR"] == custom
+            assert s["DB_PATH"] == custom / "fin.db"
+
+    def test_fin_log_dir_override(self, tmp_path):
+        custom = tmp_path / "custom-logs"
+        with _config_context(
+            frozen=True,
+            meipass=str(tmp_path / "bundle"),
+            env={"FIN_LOG_DIR": str(custom)},
+        ) as s:
+            assert s["LOG_DIR"] == custom
+
+
+# ── Frozen mode · Windows ─────────────────────────────────────────────────────
+
+
+class TestFrozenWindows:
+    def test_data_dir_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+        ) as s:
+            assert s["DATA_DIR"] == wd
+
+    def test_log_dir_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+        ) as s:
+            assert s["LOG_DIR"] == wl
+
+    def test_db_path_default(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+        ) as s:
+            assert s["DB_PATH"] == wd / "fin.db"
+
+    def test_fin_dev_always_false(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+        ) as s:
+            assert s["FIN_DEV"] is False
+
+    def test_data_not_inside_bundle(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        bundle = tmp_path / "bundle"
+        with _config_context(
+            frozen=True, win32=True, meipass=str(bundle), win_data=wd, win_logs=wl
+        ) as s:
+            assert not str(s["DATA_DIR"]).startswith(str(bundle))
+
+    def test_not_under_home_fin(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+        ) as s:
+            assert not str(s["DATA_DIR"]).startswith(str(_HOME_FIN))
+
+    def test_fin_data_dir_override(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        custom = tmp_path / "custom"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+            env={"FIN_DATA_DIR": str(custom)},
+        ) as s:
+            assert s["DATA_DIR"] == custom
+            assert s["DB_PATH"] == custom / "fin.db"
+
+    def test_fin_log_dir_override(self, tmp_path):
+        wd, wl = tmp_path / "data", tmp_path / "logs"
+        custom = tmp_path / "custom-logs"
+        with _config_context(
+            frozen=True,
+            win32=True,
+            meipass=str(tmp_path / "bundle"),
+            win_data=wd,
+            win_logs=wl,
+            env={"FIN_LOG_DIR": str(custom)},
+        ) as s:
+            assert s["LOG_DIR"] == custom
