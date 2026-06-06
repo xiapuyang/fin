@@ -429,7 +429,7 @@
   "holdings.rb.commodities": "Commodities",
   "holdings.rb.cat.equity_us": "US Individual Stocks",
   "holdings.rb.cat.equity_hk": "HK Individual Stocks",
-  "holdings.rb.cat.equity_cn": "A-Share Individual Stocks",
+  "holdings.rb.cat.equity_cn": "CN Individual Stocks",
   "holdings.rb.cat.index_fund_us": "US Index Funds",
   "holdings.rb.cat.index_fund_hk": "HK Index Funds",
   "holdings.rb.cat.index_fund_cn": "CN Index Funds",
