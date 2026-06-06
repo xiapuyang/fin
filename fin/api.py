@@ -10,7 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fin.config import API_HOST, API_PORT, APP_CONFIG_PATH, CONFIG_DIR, FRONTEND_DIR
+from fin.config import (
+    API_HOST,
+    API_PORT,
+    APP_CONFIG_PATH,
+    CONFIG_DIR,
+    FRONTEND_DIR,
+    HOME_FIN,
+    PROJECT_ROOT,
+    DATA_DIR,
+)
+from fin.data_migration import migrate_data_dir
 from fin.database import init_db
 from fin.logger import setup_logging
 from fin.middleware import LoggingMiddleware
@@ -45,6 +55,7 @@ _BENCHMARK_BACKFILL_STOP = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _ALERT_SCHEDULER_STOP, _BENCHMARK_SCHEDULER_STOP, _BENCHMARK_BACKFILL_STOP
+    migrate_data_dir(DATA_DIR, HOME_FIN, PROJECT_ROOT)
     init_db()
     logger.info("Database initialized")
     warn_orphaned_bench_ids()
