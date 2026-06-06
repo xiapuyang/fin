@@ -1,23 +1,10 @@
 import logging
 import os
-import sys
 from logging.handlers import RotatingFileHandler
 
-import platformdirs
+from fin.config import LOG_DIR as _CONFIG_LOG_DIR
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_HOME_FIN = os.path.join(os.path.expanduser("~"), ".fin")
-if getattr(sys, "frozen", False) and sys.platform == "win32":
-    DEFAULT_LOG_DIR = platformdirs.user_log_dir("Fin")
-else:
-    DEFAULT_LOG_DIR = os.path.join(_HOME_FIN, "logs")
-
-
-def get_log_dir() -> str:
-    log_dir = os.environ.get("FIN_LOG_DIR")
-    if log_dir:
-        return os.path.abspath(log_dir)
-    return DEFAULT_LOG_DIR
 
 
 class RelativePathFormatter(logging.Formatter):
@@ -43,7 +30,7 @@ def setup_logging(
     log_filename: str = "fin.log",
     console_level: int | None = logging.INFO,
 ) -> logging.Logger:
-    log_dir = get_log_dir()
+    log_dir = str(_CONFIG_LOG_DIR)
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, log_filename)
 
@@ -93,7 +80,7 @@ def setup_logging(
 
 
 def get_access_logger(log_filename: str = "access.log") -> logging.Logger:
-    log_dir = get_log_dir()
+    log_dir = str(_CONFIG_LOG_DIR)
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, log_filename)
 
