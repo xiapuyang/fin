@@ -1264,49 +1264,30 @@ const DividendCalendar = ({ incomeItems, positions = [], acctCcy = "CNY", acctFx
 const RB_EQUITY_TYPES = ["equity", "etf", "mutualfund", "cryptocurrency"];
 
 // Stable asset category identifiers — IDs are immutable once stored in user configs
-const ASSET_CATEGORIES = [
-  { id: "equity_us",      get label() { return I18N.t("holdings.rb.cat.equity_us"); } },
-  { id: "equity_hk",      get label() { return I18N.t("holdings.rb.cat.equity_hk"); } },
-  { id: "equity_cn",      get label() { return I18N.t("holdings.rb.cat.equity_cn"); } },
-  { id: "index_fund_us",  get label() { return I18N.t("holdings.rb.cat.index_fund_us"); } },
-  { id: "index_fund_hk",  get label() { return I18N.t("holdings.rb.cat.index_fund_hk"); } },
-  { id: "index_fund_cn",  get label() { return I18N.t("holdings.rb.cat.index_fund_cn"); } },
-  { id: "etf_global",     get label() { return I18N.t("holdings.rb.cat.etf_global"); } },
-  { id: "bond_us",        get label() { return I18N.t("holdings.rb.cat.bond_us"); } },
-  { id: "bond_global",    get label() { return I18N.t("holdings.rb.cat.bond_global"); } },
-  { id: "crypto",         get label() { return I18N.t("holdings.rb.cat.crypto"); } },
-  { id: "reit",           get label() { return I18N.t("holdings.rb.cat.reit"); } },
-];
+// Loaded from /api/rebalance/categories; populated once on RebalancePanel mount.
+// Using a module-level variable so RebalanceEditModal can access it synchronously.
+let _globalCategories = [];
 
-const CATEGORY_COLORS = {
-  equity_us:      "#1F4FE0",
-  equity_hk:      "#B8447B",
-  equity_cn:      "#C8460F",
-  index_fund_us:  "#4A7FF0",
-  index_fund_hk:  "#D060A0",
-  index_fund_cn:  "#E07040",
-  etf_global:     "#00A8B0",
-  bond_us:        "#5C8AE6",
-  bond_global:    "#7EA0D0",
-  crypto:         "#8B5CF6",
-  reit:           "#B07848",
+const _CAT_PALETTE = ["#1F4FE0","#B8447B","#C8460F","#4A7FF0","#D060A0","#E07040","#00A8B0","#5C8AE6","#7EA0D0","#8B5CF6","#B07848","#C8A000","#9C6E3A","#5C6270"];
+const hashColor = (id) => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0x7FFFFFFF;
+  return _CAT_PALETTE[h % _CAT_PALETTE.length];
 };
 
-// Maps each category ID to a predicate that tests whether a position belongs to it.
-// etf_global excludes US/HK/CN to prevent double-counting with index_fund_* categories.
-// bond_global excludes US to prevent double-counting with bond_us.
-const CATEGORY_MATCHERS = {
-  equity_us:     (p, market) => p.sym?.asset_type === "equity" && market === "US",
-  equity_hk:     (p, market) => p.sym?.asset_type === "equity" && market === "HK",
-  equity_cn:     (p, market) => p.sym?.asset_type === "equity" && market === "CN",
-  index_fund_us: (p, market) => p.sym?.asset_type === "etf" && market === "US",
-  index_fund_hk: (p, market) => p.sym?.asset_type === "etf" && market === "HK",
-  index_fund_cn: (p, market) => ["etf", "mutualfund"].includes(p.sym?.asset_type) && market === "CN",
-  etf_global:    (p, market) => p.sym?.asset_type === "etf" && !["US", "HK", "CN"].includes(market),
-  bond_us:       (p, market) => p.sym?.asset_type === "bond" && market === "US",
-  bond_global:   (p, market) => p.sym?.asset_type === "bond" && market !== "US",
-  crypto:        (p, market) => p.sym?.asset_type === "cryptocurrency" || market === "CRYPTO",
-  reit:          (p, market) => p.sym?.asset_type === "reit",
+// Evaluates a matcher DSL object from app.json against a position + market string.
+// DSL fields: asset_types (required type match), markets (whitelist), markets_exclude (blacklist),
+// or_markets (market-only OR path — matches regardless of asset_type).
+const matchCategoryDSL = (p, market, matcher) => {
+  if (!matcher) return false;
+  if (matcher.or_markets?.includes(market)) return true;
+  const pType = p.sym?.asset_type ?? null;
+  // Only reject on asset_type mismatch if we actually have type data — unknown type falls
+  // through to market matching so positions still classify before prices finish loading.
+  if (matcher.asset_types?.length > 0 && pType !== null && !matcher.asset_types.includes(pType)) return false;
+  if (matcher.markets?.length > 0 && !matcher.markets.includes(market)) return false;
+  if (matcher.markets_exclude?.length > 0 && matcher.markets_exclude.includes(market)) return false;
+  return (matcher.asset_types?.length ?? 0) > 0 || (matcher.markets?.length ?? 0) > 0;
 };
 
 const computeAge = (birthDate) => {
@@ -1329,11 +1310,17 @@ const _RB_LABEL_KEYS = {
   "Commodities": "holdings.rb.commodities", "大宗": "holdings.rb.commodities", "大宗 Commodities": "holdings.rb.commodities",
 };
 const _rbLabel = (b) => {
-  if (b.categories?.length > 0)
-    return b.categories.map(c => ASSET_CATEGORIES.find(a => a.id === c)?.label || c).join(" + ");
   if (_RB_LABEL_KEYS[b.label]) return I18N.t(_RB_LABEL_KEYS[b.label]);
   if (b.label_i18n) return I18N.t(b.label_i18n);
-  return b.label || "";
+  if (b.label) return b.label;
+  // Fallback: join category names (used only when bucket has no label at all)
+  if (b.categories?.length > 0)
+    return b.categories.map(c => {
+      const key = "holdings.rb.cat." + c;
+      const t = I18N.t(key);
+      return t !== key ? t : c;
+    }).join(" + ");
+  return "";
 };
 
 const computeAgeRuleBuckets = (age) => [
@@ -1353,7 +1340,7 @@ const RB_PRESETS = [
       { get label() { return I18N.t("holdings.rb.cn"); },    pct: 10, color: "#C8460F", codes: [], assetTypes: ["equity","etf"], markets: ["CN"],            isCash: false },
       { get label() { return I18N.t("holdings.rb.bonds"); }, pct:  5, color: "#5C8AE6", codes: [], assetTypes: ["bond"],         markets: [],               isCash: false },
       { get label() { return I18N.t("holdings.rb.gold"); },  pct:  5, color: "#C8A000", codes: ["GLD","IAU","SGOL","2840.HK"],   assetTypes: [],            markets: [], isCash: false },
-      { get label() { return I18N.t("holdings.rb.cash"); },  pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
+      { get label() { return I18N.t("holdings.rb.st.bonds"); },  pct: 15, color: "#5C6270", codes: [],                               assetTypes: [], markets: [], isCash: true  },
     ],
   },
   {
@@ -1397,7 +1384,7 @@ const RB_PRESETS = [
     buckets: [
       { get label() { return I18N.t("holdings.rb.equity"); },   pct: 25, color: "#1F4FE0", codes: [], assetTypes: RB_EQUITY_TYPES, isCash: false },
       { get label() { return I18N.t("holdings.rb.lt.bonds"); }, pct: 25, color: "#5C8AE6", codes: [], assetTypes: ["bond"],        isCash: false },
-      { get label() { return I18N.t("holdings.rb.cash"); },     pct: 25, color: "#5C6270", codes: [], assetTypes: [],              isCash: true  },
+      { get label() { return I18N.t("holdings.rb.st.bonds"); }, pct: 25, color: "#5C6270", codes: [], assetTypes: [],              isCash: true  },
       { get label() { return I18N.t("holdings.rb.gold"); },     pct: 25, color: "#C8460F", codes: [], assetTypes: [],               isCash: false },
     ],
   },
@@ -1440,44 +1427,147 @@ const RB_DEFAULT_CONFIG = {
 
 // ── Rebalance edit modal ────────────────────────────────────────────────────────
 
-const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, onSave, onClose }) => {
-  // Filter legacy assetTypes/markets buckets — only show new categories-based buckets
-  const cleanBuckets = (config.buckets || []).filter(b => b.categories?.length > 0);
+// Chip-based code-override input for one category row. Reads/writes the global symbolOverrides map.
+const CategoryCodeInput = ({ catId, symOverrides, onChange }) => {
+  const chips = Object.entries(symOverrides).filter(([, cat]) => cat === catId).map(([code]) => code);
+  const [input, setInput] = React.useState("");
+  const [hint, setHint] = React.useState(null); // null | { loading: true } | { name: string|null }
+
+  React.useEffect(() => {
+    const upper = input.trim().toUpperCase();
+    if (!upper) { setHint(null); return; }
+    setHint({ loading: true });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/quote/${encodeURIComponent(upper)}`, { signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => setHint({ loading: false, name: q?.name || null }))
+        .catch(err => { if (err?.name !== "AbortError") setHint({ loading: false, name: null }); });
+    }, 400);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [input]);
+
+  const addCode = () => {
+    const code = input.trim().toUpperCase();
+    if (!code) return;
+    onChange({ ...symOverrides, [code]: catId });
+    setInput(""); setHint(null);
+  };
+  const removeCode = (code) => {
+    const next = { ...symOverrides };
+    delete next[code];
+    onChange(next);
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
+      {chips.map(code => (
+        <span key={code} style={{
+          display: "inline-flex", alignItems: "center", gap: 3,
+          padding: "2px 5px 2px 8px", borderRadius: 12,
+          background: "var(--bg-deep)", border: "1px solid var(--line-2)",
+          fontSize: 11.5, fontWeight: 600, color: "var(--ink-2)",
+        }} className="mono">
+          {code}
+          <button onClick={() => removeCode(code)} style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--ink-4)", padding: "0 1px", lineHeight: 1, fontSize: 14,
+            display: "flex", alignItems: "center",
+          }}>×</button>
+        </span>
+      ))}
+      <div style={{ position: "relative" }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCode(); } }}
+          placeholder="+ CODE"
+          autoComplete="off"
+          style={{
+            width: 74, fontSize: 11.5, borderRadius: 10, padding: "2px 8px", outline: "none",
+            border: "1px dashed var(--line-2)", background: "transparent",
+            color: "var(--ink)", textTransform: "uppercase",
+          }}
+        />
+        {hint && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 3px)", left: 0, zIndex: 20,
+            padding: "5px 10px", background: "var(--paper)", border: "1px solid var(--line-2)",
+            borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 3px 10px rgba(0,0,0,0.1)",
+            minWidth: 140,
+          }}>
+            {hint.loading
+              ? <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("base.loading")}</span>
+              : (
+                <button onClick={addCode} style={{
+                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                }}>
+                  <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{input.trim().toUpperCase()}</span>
+                  {hint.name && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{hint.name}</span>}
+                </button>
+              )
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SymbolOverrideModal = ({ categories, symbolOverrides, onSave, onClose }) => {
+  const [draft, setDraft] = React.useState(() => ({ ...symbolOverrides }));
+  return (
+    <Modal open={true} onClose={onClose} title={I18N.t("holdings.rebalance.symOverride.title")} width={560}>
+      <div style={{ padding: "16px 20px", maxHeight: "72vh", overflowY: "auto" }}>
+        {categories.map(cat => {
+          const catName = (() => { const k = "holdings.rb.cat." + cat.id; const t = I18N.t(k); return t !== k ? t : cat.id; })();
+          return (
+            <div key={cat.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)", width: 120, flexShrink: 0, paddingTop: 3 }}>{catName}</span>
+              <CategoryCodeInput catId={cat.id} symOverrides={draft} onChange={setDraft} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 20px", borderTop: "1px solid var(--line)" }}>
+        <Button variant="secondary" onClick={onClose}>{I18N.t("base.btn.cancel")}</Button>
+        <Button onClick={() => onSave(draft)}>{I18N.t("base.btn.save")}</Button>
+      </div>
+    </Modal>
+  );
+};
+
+const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, categories = [],
+    onSave, onClose }) => {
+  const cats = categories.length > 0 ? categories : _globalCategories;
+  const cleanBuckets = (config.buckets || []);
   const [draft, setDraft] = React.useState({ ...JSON.parse(JSON.stringify(config)), buckets: cleanBuckets });
-  const [codesTexts, setCodesTexts] = React.useState(cleanBuckets.map(b => (b.codes || []).join(", ")));
   const [addCatId, setAddCatId] = React.useState(() => {
     const used = new Set(config.buckets.flatMap(b => b.categories || []));
-    return ASSET_CATEGORIES.find(c => !used.has(c.id))?.id || null;
+    return cats.find(c => !used.has(c.id))?.id || null;
   });
   const [addPct, setAddPct] = React.useState("0");
 
   const usedCatIds = new Set(draft.buckets.flatMap(b => b.categories || []));
-  const availableCats = ASSET_CATEGORIES.filter(c => !usedCatIds.has(c.id));
+  const availableCats = cats.filter(c => !usedCatIds.has(c.id));
 
   const updateBucket = (i, key, val) => setDraft(d => ({
     ...d, buckets: d.buckets.map((b, j) => j === i ? { ...b, [key]: val } : b),
   }));
-  const removeBucket = (i) => {
-    setDraft(d => ({ ...d, buckets: d.buckets.filter((_, j) => j !== i) }));
-    setCodesTexts(t => t.filter((_, j) => j !== i));
-  };
+  const removeBucket = (i) => setDraft(d => ({ ...d, buckets: d.buckets.filter((_, j) => j !== i) }));
   const addBucket = () => {
     if (!addCatId) return;
     const pct = parseFloat(addPct) || 0;
-    const newBucket = { categories: [addCatId], pct, codes: [], color: CATEGORY_COLORS[addCatId] || "#888", isCash: false };
+    const newBucket = { categories: [addCatId], pct, codes: [], color: hashColor(addCatId), isCash: false };
     setDraft(d => ({ ...d, buckets: [...d.buckets, newBucket] }));
-    setCodesTexts(t => [...t, ""]);
     const nextAvail = availableCats.find(c => c.id !== addCatId);
     setAddCatId(nextAvail?.id || null);
     setAddPct("0");
   };
 
   const handleSave = () => {
-    const finalBuckets = draft.buckets.map((b, i) => ({
-      ...b,
-      codes: codesTexts[i].split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
-    }));
-    onSave({ ...draft, buckets: finalBuckets });
+    onSave({ ...draft, buckets: draft.buckets });
   };
   const sumPct = draft.buckets.reduce((s, b) => s + (parseFloat(b.pct) || 0), 0);
   const valid = Math.abs(sumPct - 100) < 0.5;
@@ -1507,21 +1597,6 @@ const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, onSav
                 }}>×</button>
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 18 }}>
-              <span style={{ fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, width: 52 }}>{I18N.t("holdings.rebalance.codeOverride")}</span>
-              <input
-                value={codesTexts[i]}
-                onChange={e => setCodesTexts(t => t.map((v, j) => j === i ? e.target.value : v))}
-                placeholder="013308, TEC.TO"
-                autoComplete="off"
-                style={{
-                  flex: 1, fontSize: 12, borderRadius: 6, padding: "4px 10px", outline: "none",
-                  border: `1px solid ${codesTexts[i] ? "var(--line-2)" : "var(--line)"}`,
-                  background: codesTexts[i] ? "var(--paper)" : "var(--bg-deep)",
-                  color: "var(--ink)",
-                }}
-              />
-            </div>
           </div>
         ))}
 
@@ -1540,7 +1615,7 @@ const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, onSav
             <select value={addCatId || ""} onChange={e => setAddCatId(e.target.value)} autoComplete="off"
               style={{ flex: 1, fontSize: 12, border: "1px solid var(--line-2)", borderRadius: 6, padding: "5px 8px", background: "var(--paper)", color: "var(--ink)", cursor: "pointer" }}>
               <option value="" disabled>{I18N.t("holdings.rebalance.selectCat")}</option>
-              {availableCats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              {availableCats.map(c => <option key={c.id} value={c.id}>{I18N.t("holdings.rb.cat." + c.id)}</option>)}
             </select>
             <Input value={addPct} onChange={setAddPct} inputMode="decimal" style={{ width: 56, textAlign: "right" }}/>
             <span style={{ fontSize: 12, color: "var(--ink-4)" }}>%</span>
@@ -1560,6 +1635,10 @@ const RebalanceEditModal = ({ config, birthDate = "", pctReadOnly = false, onSav
 // ── Rebalance panel ────────────────────────────────────────────────────────────
 
 const RB_DEFAULT_TRIGGER = { mode: "hybrid", calFreq: "annual", absDriftPp: 5, relDriftPct: 20 };
+
+// Fallback category IDs when /api/rebalance/categories hasn't loaded yet (e.g. cold open).
+// Provides enough for the modal add-row to function; matcher is null until API loads.
+const _DEFAULT_CAT_IDS = ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","gold","commodity","bond_us_long","bond_us_mid","bond_us_short","bond_global_long","bond_global_mid","bond_global_short","crypto","reit"];
 
 // Normalizes an API preset (label_i18n / name_i18n) to the same shape as RB_PRESETS entries.
 const _normalizeApiPreset = (p) => {
@@ -1590,8 +1669,13 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const [activeId, setActiveId] = React.useState("personal");
   const [perPreset, setPerPreset] = React.useState({});
   const [editOpen, setEditOpen] = React.useState(false);
+  const [overrideOpen, setOverrideOpen] = React.useState(false);
   const [expandedBucket, setExpandedBucket] = React.useState(null);
-  const [systemPresets, setSystemPresets] = React.useState(RB_PRESETS);
+  const [systemPresets, setSystemPresets] = React.useState(() => RB_PRESETS.filter(p => p.id !== "personal"));
+  const [apiCategories, setApiCategories] = React.useState(() =>
+    _globalCategories.length > 0 ? _globalCategories : _DEFAULT_CAT_IDS.map(id => ({ id }))
+  );
+  const [symbolOverrides, setSymbolOverrides] = React.useState({});
 
   // Per-account mode state (type: "global"|"personal"; "preset" is legacy, migrated to "global"+pin)
   const [acctConfigType, setAcctConfigType] = React.useState(() => {
@@ -1602,16 +1686,26 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
     if (accountConfig?.type === "preset") return accountConfig?.preset_id || null;
     return accountConfig?.pin || null;
   });
-  const [acctPersonalData, setAcctPersonalData] = React.useState(() =>
-    accountConfig?.type === "personal" ? { buckets: accountConfig.buckets, trigger: accountConfig.trigger } : null
-  );
+  const [acctPersonalData, setAcctPersonalData] = React.useState(() => {
+    if (accountConfig?.type === "personal") return { buckets: accountConfig.buckets, trigger: accountConfig.trigger };
+    if (accountConfig?.personal_data) return accountConfig.personal_data;
+    return null;
+  });
 
   React.useEffect(() => {
     apiGetRebalanceDefaults()
       .then(defaults => {
-        if (defaults && defaults.length > 0) setSystemPresets(defaults.map(_normalizeApiPreset));
+        if (defaults?.length > 0)
+          setSystemPresets(defaults.map(_normalizeApiPreset).filter(p => p.id !== "personal"));
       })
       .catch(() => {});
+    const _applyCategories = (cats) => {
+      const resolved = cats?.length > 0 ? cats : _DEFAULT_CAT_IDS.map(id => ({ id }));
+      _globalCategories = resolved;
+      setApiCategories(resolved);
+    };
+    apiGetRebalanceCategories().then(_applyCategories).catch(() => _applyCategories([]));
+    apiGetSymbolOverrides().then(d => { if (d && typeof d === "object") setSymbolOverrides(d); }).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -1655,9 +1749,23 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const defaultBuckets = activeId === "age_rule"
     ? computeAgeRuleBuckets(computeAge(birthDate))
     : JSON.parse(JSON.stringify(systemPresets.find(p => p.id === activeId)?.buckets || []));
+  // Stored buckets saved before the categories redesign have assetTypes but no categories.
+  // Inject categories from the current system preset so overrides route correctly.
+  const _activeBuckets = (() => {
+    const stored = activeData.buckets;
+    if (!stored) return defaultBuckets;
+    const sp = systemPresets.find(p => p.id === activeId);
+    if (!sp?.buckets?.some(b => b.categories?.length > 0)) return stored; // preset has no categories
+    if (stored.some(b => b.categories?.length > 0)) return stored; // already migrated
+    return stored.map((b, i) => ({
+      ...b,
+      categories: sp.buckets[i]?.categories,
+      isCash: sp.buckets[i]?.isCash ?? b.isCash,
+    }));
+  })();
   const globalConfig = {
     presetId: activeId,
-    buckets:   activeData.buckets || defaultBuckets,
+    buckets:   _activeBuckets,
     trigger:   activeData.trigger || RB_DEFAULT_TRIGGER,
   };
 
@@ -1665,6 +1773,10 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const acctEffectiveConfig = accountId ? (() => {
     if (acctConfigType === "global") {
       if (!acctGlobalPin) return globalConfig; // follow global active
+      if (acctGlobalPin === "personal") {
+        const pd = perPreset["personal"] || {};
+        return { presetId: "personal", buckets: pd.buckets || [], trigger: pd.trigger || RB_DEFAULT_TRIGGER };
+      }
       const sp = systemPresets.find(p => p.id === acctGlobalPin);
       const buckets = acctGlobalPin === "age_rule"
         ? computeAgeRuleBuckets(computeAge(birthDate))
@@ -1694,7 +1806,7 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const persistAccount = (typeOverride, update = {}) => {
     const type = typeOverride || acctConfigType;
     let cfg;
-    if (type === "global") cfg = { type: "global", pin: acctGlobalPin };
+    if (type === "global") cfg = { type: "global", pin: acctGlobalPin, ...(acctPersonalData ? { personal_data: acctPersonalData } : {}) };
     else cfg = { type: "personal", ...(acctPersonalData || {}), ...update };
     onAccountConfigChange && onAccountConfigChange(cfg);
   };
@@ -1742,30 +1854,61 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   // Allocate positions to buckets; isCash bucket absorbs unallocated remainder
   const matchesBucket = (p, b) => {
     if (p.code === "CASH") return false; // CASH always falls to isCash remainder
+    // Override only applies when the bucket uses the categories system.
+    // Legacy assetTypes buckets (e.g. age_rule) fall through to their own matching so an
+    // override set for a categories-based scheme doesn't break the legacy view.
+    const overrideCat = symbolOverrides[p.code];
+    if (overrideCat && b.categories?.length > 0) return b.categories.includes(overrideCat);
     if (b.codes?.includes(p.code)) return true;
-    // New categories-first path
+    // New categories-first path (DSL from app.json)
     if (b.categories?.length > 0) {
       const market = _guessMarket(p.code);
-      return b.categories.some(cat => CATEGORY_MATCHERS[cat]?.(p, market) ?? false);
+      return b.categories.some(cat => {
+        const catDef = apiCategories.find(c => c.id === cat);
+        return matchCategoryDSL(p, market, catDef?.matcher);
+      });
     }
     // Legacy assetTypes + markets path (backward compat for old bucket data)
     const hasType = b.assetTypes?.length > 0;
     const hasMkt  = b.markets?.length > 0;
     if (!hasType && !hasMkt) return false;
-    const typeOk = !hasType || b.assetTypes.includes(p.sym?.asset_type);
+    const pType   = p.sym?.asset_type ?? null;
+    // Unknown asset_type (null) skips the type filter — same behaviour as matchCategoryDSL.
+    // Positions with no price data yet still get classified by market.
+    const typeOk = !hasType || pType === null || b.assetTypes.includes(pType);
     const mktOk  = !hasMkt  || b.markets.includes(_guessMarket(p.code));
     return typeOk && mktOk;
   };
 
-  // Build per-bucket matched position sets so cash bucket = unallocated remainder
+  // Build per-bucket matched position sets; first-match-wins prevents double-counting.
+  // Once a position is claimed by a bucket it is excluded from all subsequent buckets.
   const codedPositionSet = new Set();
   const codedValues = config.buckets.map(b => {
     if (b.isCash) return { matched: [], value: 0 };
-    const matched = positions.filter(p => matchesBucket(p, b));
+    const matched = positions.filter(p => !codedPositionSet.has(p) && matchesBucket(p, b));
     matched.forEach(p => codedPositionSet.add(p));
     return { matched, value: matched.reduce((s, p) => s + p.value, 0) };
   });
   const codedAllocated = codedValues.reduce((s, c) => s + c.value, 0);
+
+  // Positions not claimed by any bucket and not intentionally placed in an isCash bucket.
+  // isCash buckets are skipped in the first pass above, so we check them separately here.
+  // Override + no categories falls through to legacy assetTypes matching so age_rule buckets
+  // (which have no categories) correctly suppress the "uncovered" warning for bond positions.
+  const uncoveredPositions = positions.filter(p => {
+    if (p.code === "CASH" || codedPositionSet.has(p)) return false;
+    const overrideCat = symbolOverrides[p.code];
+    return !config.buckets.some(b => {
+      if (!b.isCash) return false;
+      if (overrideCat) {
+        return b.categories?.length > 0
+          ? b.categories.includes(overrideCat)
+          : (b.assetTypes?.length > 0 && b.assetTypes.includes(p.sym?.asset_type));
+      }
+      return matchesBucket(p, b);
+    });
+  });
+  const uncoveredValue = uncoveredPositions.reduce((s, p) => s + p.value, 0);
 
   const buckets = config.buckets.map((b, i) => {
     const bPositions = b.isCash
@@ -1782,16 +1925,31 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   const triggered = mode === "calendar" ? [] : buckets.filter(b =>
     mode === "absolute" ? Math.abs(b.drift) >= absDriftPp :
     mode === "relative" ? b.relDrift >= relDriftPct :
-    Math.abs(b.drift) >= absDriftPp  // hybrid: absolute threshold
+    Math.abs(b.drift) >= absDriftPp || b.relDrift >= relDriftPct
   );
+  const approaching = mode === "calendar" ? [] : buckets.filter(b => {
+    if (triggered.includes(b)) return false;
+    return mode === "absolute" ? Math.abs(b.drift) >= 0.7 * absDriftPp :
+      mode === "relative" ? b.relDrift >= 0.7 * relDriftPct :
+      Math.abs(b.drift) >= 0.7 * absDriftPp || b.relDrift >= 0.7 * relDriftPct;
+  });
 
-  const preset   = systemPresets.find(p => p.id === config.presetId) || systemPresets[0] || RB_PRESETS[0];
+  const _personalPreset = RB_PRESETS.find(p => p.id === "personal");
+  const preset = config.presetId === "personal"
+    ? _personalPreset
+    : (systemPresets.find(p => p.id === config.presetId) || _personalPreset);
   const calLabel = (RB_CAL_OPTIONS.find(o => o.value === calFreq) || {}).label || "";
 
   const activeChipId = accountId
     ? (acctConfigType === "global" && acctGlobalPin ? acctGlobalPin : null)
     : activeId;
   const isReadOnly = accountId && acctConfigType === "global";
+
+  // personal pin option only shown when the global personal config has actual buckets
+  const hasPersonalConfig = (perPreset["personal"]?.buckets?.length ?? 0) > 0;
+
+  // Color the UI accent by the active preset id
+  const _presetColor = hashColor(config.presetId || "personal");
 
   const switchAcctConfigType = (newType) => {
     setAcctConfigType(newType);
@@ -1805,106 +1963,70 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
   };
 
   return (
-    <Card padding={20}>
-      {/* Per-account: config type selector (global vs personal) */}
+    <Card padding={20} style={{ position: "relative" }}>
+      {!accountId && (
+        <div style={{ position: "absolute", top: 16, right: 20 }}>
+          <Button variant="secondary" icon="filter" onClick={() => setOverrideOpen(true)} style={{ fontSize: 12 }}>{I18N.t("holdings.rebalance.symOverride.title")}</Button>
+        </div>
+      )}
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.strategyTitle")}</div>
+      {/* Per-account: config type + global sub-selector as dropdowns */}
       {accountId && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: acctConfigType === "global" ? 10 : 0 }}>
-            {[
-              ["global",   "holdings.rb.acct.configType.global",   "holdings.rb.acct.configType.globalDesc"],
-              ["personal", "holdings.rb.acct.configType.personal", "holdings.rb.acct.configType.personalDesc"],
-            ].map(([t, labelKey, descKey]) => {
-              const active = acctConfigType === t;
-              return (
-                <button key={t} onClick={() => switchAcctConfigType(t)} style={{
-                  padding: "10px 12px", borderRadius: 8, border: "1.5px solid", textAlign: "left", cursor: "pointer",
-                  borderColor: active ? "var(--accent)" : "var(--line-2)",
-                  background:  active ? "var(--accent-soft)" : "var(--bg-deep)",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <span style={{
-                      width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
-                      border: `2px solid ${active ? "var(--accent)" : "var(--ink-4)"}`,
-                      background: active ? "var(--accent)" : "transparent",
-                      display: "inline-block",
-                    }}/>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: active ? "var(--accent)" : "var(--ink-2)" }}>{I18N.t(labelKey)}</span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: active ? "var(--accent-muted, var(--ink-3))" : "var(--ink-4)", lineHeight: 1.4, paddingLeft: 18 }}>{I18N.t(descKey)}</div>
-                </button>
-              );
-            })}
-          </div>
-          {/* Global sub-selector: follow active vs pin to specific scheme */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
+          <Select
+            value={acctConfigType}
+            onChange={switchAcctConfigType}
+            options={[
+              { value: "global",   get label() { return I18N.t("holdings.rb.acct.configType.global"); } },
+              { value: "personal", get label() { return I18N.t("holdings.rb.acct.configType.personal"); } },
+            ]}
+            style={{ width: 130 }}
+          />
           {acctConfigType === "global" && (
-            <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px" }}>
-              {[
-                [null,  "holdings.rb.acct.configType.globalFollow"],
-                ["pin", "holdings.rb.acct.configType.globalPin"],
-              ].map(([val, labelKey]) => {
-                const isPinRow = val === "pin";
-                const checked = isPinRow ? (acctGlobalPin !== null) : (acctGlobalPin === null);
-                return (
-                  <div key={labelKey} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: isPinRow ? 0 : 8 }}>
-                    <button onClick={() => switchAcctGlobalPin(isPinRow ? (systemPresets[0]?.id || null) : null)} style={{
-                      width: 14, height: 14, borderRadius: "50%", flexShrink: 0, marginTop: 2,
-                      border: `2px solid ${checked ? "var(--accent)" : "var(--ink-4)"}`,
-                      background: checked ? "var(--accent)" : "transparent",
-                      cursor: "pointer", padding: 0,
-                    }}/>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 12, color: checked ? "var(--ink)" : "var(--ink-3)", fontWeight: checked ? 500 : 400 }}>{I18N.t(labelKey)}</span>
-                      {/* Pin scheme chips */}
-                      {isPinRow && acctGlobalPin !== null && (
-                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
-                          {systemPresets.map(p => (
-                            <button key={p.id} onClick={() => switchAcctGlobalPin(p.id)} style={{
-                              padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "1px solid",
-                              borderColor: acctGlobalPin === p.id ? "var(--accent)" : "var(--line-2)",
-                              background:  acctGlobalPin === p.id ? "var(--accent-soft)" : "transparent",
-                              color:       acctGlobalPin === p.id ? "var(--accent)" : "var(--ink-3)",
-                            }}>{p.label}</button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <Select
+              value={acctGlobalPin ?? "__follow__"}
+              onChange={v => switchAcctGlobalPin(v === "__follow__" ? null : v)}
+              options={[
+                { value: "__follow__", get label() { return I18N.t("holdings.rb.acct.configType.globalFollow"); } },
+                ...systemPresets.map(p => ({ value: p.id, get label() { return p.label; } })),
+                ...(hasPersonalConfig ? [{ value: "personal", get label() { return I18N.t("holdings.rb.personal"); } }] : []),
+              ]}
+              style={{ minWidth: 160, maxWidth: 260 }}
+            />
+          )}
+          {acctConfigType === "personal" && (
+            <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
           )}
         </div>
       )}
 
-      {/* Header: preset chips + edit button */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-start" }}>
-          {/* Global mode: system preset chips + personal chip */}
-          {!accountId && [...systemPresets, { id: "personal", get label() { return I18N.t("holdings.rb.personal"); } }].map(p => {
-            const isActive = activeId === p.id;
-            return (
-              <div key={p.id} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <button onClick={() => switchPreset(p.id)} style={{
-                  padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid",
-                  borderColor: isActive ? "var(--accent)" : "var(--line-2)",
-                  background:  isActive ? "var(--accent-soft)" : "transparent",
-                  color:       isActive ? "var(--accent)" : "var(--ink-3)",
-                }}>{p.label}</button>
-                {isActive && <span style={{ fontSize: 9, color: "var(--accent)", marginTop: 2 }}>{I18N.t("holdings.rb.active")}</span>}
-              </div>
-            );
-          })}
+      {/* Global mode: scheme selector dropdown with color swatch + edit button */}
+      {!accountId && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ width: 4, height: 26, borderRadius: 2, background: _presetColor, flexShrink: 0 }}/>
+          <Select
+            value={activeId}
+            onChange={switchPreset}
+            options={[
+              ...systemPresets.map(p => ({ value: p.id, get label() { return p.label; } })),
+              { value: "personal", get label() { return I18N.t("holdings.rb.personal"); } },
+            ]}
+            style={{ flex: 1, minWidth: 160, maxWidth: 260 }}
+          />
+          <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>
+            {activeId === "personal" ? I18N.t("holdings.rebalance.editTarget") : I18N.t("holdings.rebalance.viewConfig")}
+          </Button>
         </div>
-        {!isReadOnly && (
-          <Button variant="secondary" icon="settings" onClick={() => setEditOpen(true)}>{I18N.t("holdings.rebalance.editTarget")}</Button>
-        )}
-      </div>
+      )}
+
 
       {/* Strategy quote */}
-      <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, borderLeft: "3px solid var(--accent)" }}>
+      <div style={{ background: "var(--bg-deep)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, borderLeft: `3px solid ${_presetColor}` }}>
         <div style={{ fontSize: 13, color: "var(--ink-2)", fontStyle: "italic" }}>"{preset.quote}"</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
-          <div style={{ fontSize: 11, color: "var(--ink-4)" }}>— {preset.author}</div>
+          {config.presetId !== "personal" && preset?.author && (
+            <div style={{ fontSize: 11, color: "var(--ink-4)" }}>— {preset.author}</div>
+          )}
           {config.presetId === "age_rule" && (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {birthDate ? (
@@ -1920,60 +2042,63 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
+      {config.buckets.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic", padding: "12px 0 4px" }}>
+          {I18N.t("holdings.rebalance.noBuckets")}
+        </div>
+      ) : null}
+
+      <div style={{ display: config.buckets.length === 0 ? "none" : "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28 }}>
         {/* Left: drift bars */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.driftVs")} {I18N.t("holdings.rebalance.target")}</div>
           {[...buckets].sort((a, b) => b.curPct - a.curPct).map((b, i) => {
+            const _bColor = b.color || hashColor(b.categories?.[0] || b.label || "default");
             const fires = triggered.includes(b);
             const isExpanded = expandedBucket === i;
             return (
               <div key={i} style={{ marginBottom: 18 }}>
-                {/* Header: label (clickable) + amount + pct */}
+                {/* Header: label (clickable) + 当前amount + 建议 */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <button onClick={() => setExpandedBucket(isExpanded ? null : i)} style={{
                     display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 500,
                     background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--ink)",
                   }}>
-                    <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2 }}/>
+                    <span style={{ width: 8, height: 8, background: _bColor, borderRadius: 2 }}/>
                     {_rbLabel(b)}
                     <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
                   </button>
                   <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
                     <Private>{dispSym}{fmtNum(b.current / dispFx / 1000, 1)}k</Private>
-                    <span style={{ color: "var(--ink-5)", margin: "0 5px" }}>·</span>
-                    <span style={{ color: b.drift > 0 ? "var(--up)" : b.drift < 0 ? "var(--down)" : "var(--ink-3)", fontWeight: 600 }}>{b.curPct.toFixed(1)}%</span>
-                    <span style={{ color: "var(--ink-4)" }}> → {b.pct}%</span>
+                    <span style={{ color: "var(--ink-5)", margin: "0 6px" }}>·</span>
+                    {I18N.t("holdings.rebalance.suggest")} {b.delta >= 0 ? I18N.t("holdings.rebalance.buy") : I18N.t("holdings.rebalance.sell")} <Private>{dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k</Private>
                   </span>
                 </div>
 
-                {/* Current bar */}
+                {/* Current bar — no gray track, pct label on right */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                   <span style={{ fontSize: 9, color: "var(--ink-4)", width: 22, textAlign: "right" }}>{I18N.t("base.label.current")}</span>
-                  <div style={{ position: "relative", flex: 1, height: 7, background: "var(--bg-deep)", borderRadius: 3 }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(b.curPct, 100)}%`, height: "100%", background: b.color, borderRadius: 3 }}/>
-                    <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 13, background: "var(--ink-3)", borderRadius: 1 }}/>
+                  <div style={{ position: "relative", flex: 1, height: 7, borderRadius: 3 }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, width: `${Math.min(b.curPct, 100)}%`, height: "100%", background: _bColor, borderRadius: 3 }}/>
                   </div>
+                  <span className="mono" style={{ fontSize: 10, color: b.drift > 0 ? "var(--up)" : b.drift < 0 ? "var(--down)" : "var(--ink-3)", width: 36, textAlign: "left", fontWeight: 600 }}>{b.curPct.toFixed(1)}%</span>
                 </div>
 
-                {/* Target bar */}
+                {/* Target bar — no gray track, pct label on right */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
                   <span style={{ fontSize: 9, color: "var(--ink-5)", width: 22, textAlign: "right" }}>{I18N.t("holdings.rebalance.target")}</span>
-                  <div style={{ position: "relative", flex: 1, height: 5, background: "var(--bg-deep)", borderRadius: 3 }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, width: `${b.pct}%`, height: "100%", background: b.color, opacity: 0.25, borderRadius: 3 }}/>
-                    <div style={{ position: "absolute", left: `${b.pct}%`, top: -3, width: 2, height: 11, background: "var(--ink-3)", borderRadius: 1 }}/>
+                  <div style={{ position: "relative", flex: 1, height: 5, borderRadius: 3 }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, width: `${b.pct}%`, height: "100%", background: _bColor, opacity: 0.25, borderRadius: 3 }}/>
                   </div>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", width: 36, textAlign: "left" }}>{b.pct}%</span>
                 </div>
 
                 {/* Drift row */}
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, paddingLeft: 28 }}>
+                <div style={{ display: "flex", fontSize: 11, paddingLeft: 28 }}>
                   <span className="mono" style={{ color: fires ? "var(--up)" : "var(--ink-4)", fontWeight: fires ? 600 : 400 }}>
                     {I18N.t("holdings.rebalance.drift")} {b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")}
                     {mode !== "calendar" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")}</span>}
                     {fires && " ⚠"}
-                  </span>
-                  <span className="mono" style={{ color: "var(--ink-4)" }}>
-                    {I18N.t("holdings.rebalance.suggest")} {b.delta >= 0 ? I18N.t("holdings.rebalance.buy") : I18N.t("holdings.rebalance.sell")} <Private>{dispSym}{fmtNum(Math.abs(b.delta) / dispFx / 1000, 1)}k</Private>
                   </span>
                 </div>
 
@@ -1986,12 +2111,18 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "2px 12px", fontSize: 10, color: "var(--ink-5)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
-                          <span>{I18N.t("holdings.txn.symbol").replace(" *","")}</span><span>{I18N.t("holdings.holding.account")}</span><span style={{ textAlign: "right" }}>{I18N.t("holdings.income.amount").replace(" *","")}</span><span style={{ textAlign: "right" }}>%</span>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 72px 44px", gap: "2px 0", fontSize: 10, color: "var(--ink-5)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
+                          <span>{I18N.t("holdings.txn.symbol").replace(" *","")}</span>
+                          <span>{I18N.t("holdings.holding.account")}</span>
+                          <span style={{ textAlign: "right" }}>{I18N.t("holdings.income.amount").replace(" *","")}</span>
+                          <span style={{ textAlign: "right" }}>%</span>
                         </div>
                         {b.bPositions.map((p, j) => (
-                          <div key={j} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "3px 12px", fontSize: 11.5, padding: "3px 0", borderTop: j > 0 ? "1px solid var(--line)" : "none", alignItems: "center" }}>
-                            <span style={{ fontWeight: 600, color: "var(--ink-2)" }}>{p.code}</span>
+                          <div key={j} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 72px 44px", gap: "3px 0", fontSize: 11.5, padding: "3px 0", borderTop: j > 0 ? "1px solid var(--line)" : "none", alignItems: "center" }}>
+                            <span>
+                              <span style={{ fontWeight: 600, color: "var(--ink-2)" }}>{p.code}</span>
+                              {p.sym?.name && p.sym.name !== p.code && <span style={{ fontSize: 10.5, color: "var(--ink-4)", marginLeft: 5 }}>{p.sym.name}</span>}
+                            </span>
                             <span style={{ color: "var(--ink-4)", fontSize: 11 }}>{p.account}</span>
                             <span className="mono" style={{ color: "var(--ink-2)", textAlign: "right" }}><Private>{dispSym}{fmtNum(p.value / dispFx / 1000, 1)}k</Private></span>
                             <span className="mono" style={{ color: "var(--ink-4)", textAlign: "right" }}>{totalCNY ? (p.value / totalCNY * 100).toFixed(1) : 0}%</span>
@@ -2008,29 +2139,22 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
 
         {/* Right: trigger config */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 10 }}>{I18N.t("holdings.rebalance.triggers")}</div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14, opacity: isReadOnly ? 0.5 : 1 }}>
-            {RB_TRIGGER_MODES.map(m => (
-              <button key={m.id} onClick={() => !isReadOnly && setTrigger("mode", m.id)} style={{
-                padding: "8px 10px", borderRadius: 8, border: "1px solid", textAlign: "left",
-                cursor: isReadOnly ? "default" : "pointer",
-                borderColor: mode === m.id ? "var(--accent)" : "var(--line-2)",
-                background:  mode === m.id ? "var(--accent-soft)" : "var(--bg-deep)",
-              }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: mode === m.id ? "var(--accent)" : "var(--ink-2)" }}>{m.label}</div>
-                <div style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 2, lineHeight: 1.35 }}>{m.desc}</div>
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, opacity: isReadOnly ? 0.5 : 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".12em", color: "var(--ink-4)", textTransform: "uppercase" }}>{I18N.t("holdings.rebalance.triggers")}</div>
+            <Select
+              value={mode}
+              onChange={v => !isReadOnly && setTrigger("mode", v)}
+              options={RB_TRIGGER_MODES.map(m => ({ value: m.id, get label() { return m.label; } }))}
+              disabled={isReadOnly}
+              style={{ minWidth: 140, maxWidth: 240 }}
+            />
           </div>
 
           <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, opacity: isReadOnly ? 0.5 : 1 }}>
-            {(mode === "calendar" || mode === "hybrid") && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.freq")}</span>
-                <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }} disabled={isReadOnly}/>
-              </div>
-            )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.freq")}</span>
+              <Select value={calFreq} onChange={v => setTrigger("calFreq", v)} options={RB_CAL_OPTIONS} style={{ width: 96 }} disabled={isReadOnly}/>
+            </div>
             {(mode === "absolute" || mode === "hybrid") && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{I18N.t("holdings.rebalance.absThreshold")}</span>
@@ -2051,44 +2175,119 @@ const RebalancePanel = ({ positions, total, currency = "CNY", birthDate = "",
             )}
           </div>
 
-          {/* Trigger status */}
-          <div style={{
-            marginTop: 14, padding: "10px 12px", borderRadius: 8,
-            background: triggered.length > 0 ? "var(--warn-soft)" : "var(--bg-deep)",
-            border: `1px solid ${triggered.length > 0 ? "#E8C06080" : "var(--line-2)"}`,
-          }}>
-            {mode === "calendar" ? (
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>📅 {calLabel} · {I18N.t("holdings.rebalance.trigger.calendar")}</div>
-            ) : triggered.length > 0 ? (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#7A4D0E", marginBottom: 4 }}>⚠ {triggered.length} {I18N.t("holdings.rebalance.triggered")}</div>
-                {triggered.map((b, i) => (
-                  <div key={i} style={{ fontSize: 11, color: "#7A4D0E" }}>
-                    {_rbLabel(b)}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")} ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
+          {/* Trigger status — three tiers: red=violated, yellow=approaching, green=ok */}
+          {(() => {
+            const isViolated = triggered.length > 0;
+            const isApproaching = !isViolated && approaching.length > 0;
+            const bg = isViolated ? "rgba(200,70,15,0.08)" : isApproaching ? "var(--warn-soft)" : "rgba(31,138,76,0.08)";
+            const borderColor = isViolated ? "rgba(200,70,15,0.35)" : isApproaching ? "#E8C06080" : "rgba(31,138,76,0.3)";
+            const textColor = isViolated ? "#C8460F" : isApproaching ? "#7A4D0E" : "#1F8A4C";
+            return (
+              <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: bg, border: `1px solid ${borderColor}` }}>
+                {mode === "calendar" ? (
+                  <div style={{ fontSize: 12, color: "var(--ink-3)" }}>📅 {calLabel} · {I18N.t("holdings.rebalance.trigger.calendar")}</div>
+                ) : isViolated ? (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: textColor, marginBottom: 4 }}>⚠ {triggered.length} {I18N.t("holdings.rebalance.triggered")}</div>
+                    {triggered.map((b, i) => (
+                      <div key={i} style={{ fontSize: 11, color: textColor }}>
+                        {_rbLabel(b)}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")} ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : isApproaching ? (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: textColor, marginBottom: 4 }}>~ {approaching.length} {I18N.t("holdings.rebalance.approaching")}</div>
+                    {approaching.map((b, i) => (
+                      <div key={i} style={{ fontSize: 11, color: textColor }}>
+                        {_rbLabel(b)}：{b.drift >= 0 ? "+" : ""}{b.drift.toFixed(1)}{I18N.t("holdings.rebalance.pp")} ({b.relDrift.toFixed(0)}% {I18N.t("holdings.rebalance.trigger.relative")})
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: textColor }}>✓ {I18N.t("holdings.rebalance.allOk")}</div>
+                )}
+                {mode === "hybrid" && (
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: (isViolated || isApproaching) ? 6 : 0 }}>
+                    {calLabel} · &gt;{absDriftPp}pp {I18N.t("holdings.rebalance.trigger.hybrid")}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>✓ {I18N.t("holdings.rebalance.allOk")}</div>
-            )}
-            {mode === "hybrid" && (
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: triggered.length > 0 ? 6 : 0 }}>
-                {calLabel} · &gt;{absDriftPp}pp {I18N.t("holdings.rebalance.trigger.hybrid")}
-              </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
       </div>
+
+      {/* Coverage summary footer */}
+      <div style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 600 }}>{I18N.t("holdings.rebalance.coverage.total")}</span>
+          <span className="mono" style={{ fontSize: 13, fontWeight: 700 }}><Private>{dispSym}{fmtNum(totalCNY / dispFx / 1000, 1)}k</Private></span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 8, height: 8, background: "var(--up)", borderRadius: 2 }}/>
+          <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{I18N.t("holdings.rebalance.coverage.covered")}</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}><Private>{dispSym}{fmtNum(codedAllocated / dispFx / 1000, 1)}k</Private></span>
+          <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{totalCNY ? (codedAllocated / totalCNY * 100).toFixed(1) : 0}%</span>
+        </div>
+        {uncoveredValue > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, background: "#C8460F", borderRadius: 2 }}/>
+            <span style={{ fontSize: 11, color: "#C8460F", fontWeight: 600 }}>{I18N.t("holdings.rebalance.coverage.uncovered")}</span>
+            <span className="mono" style={{ fontSize: 12, color: "#C8460F", fontWeight: 600 }}><Private>{dispSym}{fmtNum(uncoveredValue / dispFx / 1000, 1)}k</Private></span>
+            <span style={{ fontSize: 11, color: "#C8460F" }}>{totalCNY ? (uncoveredValue / totalCNY * 100).toFixed(1) : 0}%</span>
+          </div>
+        )}
+        {uncoveredValue === 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 11, color: "#1F8A4C" }}>✓</span>
+            <span style={{ fontSize: 11, color: "#1F8A4C" }}>{I18N.t("holdings.rebalance.coverage.complete")}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Uncovered positions detail */}
+      {uncoveredPositions.length > 0 && (
+        <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(200,70,15,0.05)", border: "1px solid rgba(200,70,15,0.2)", borderRadius: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#C8460F", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".1em" }}>{I18N.t("holdings.rebalance.coverage.uncoveredTitle")}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {[...uncoveredPositions].sort((a, b) => b.value - a.value).map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "var(--paper)", border: "1px solid rgba(200,70,15,0.25)", borderRadius: 6 }}>
+                <MarketDot market={p.market}/>
+                <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{p.code}</span>
+                <span style={{ fontSize: 11, color: "var(--ink-4)" }}>{p.sym?.asset_type || "?"}</span>
+                <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}><Private>{dispSym}{fmtNum(p.value / dispFx / 1000, 1)}k</Private></span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 8 }}>{I18N.t("holdings.rebalance.coverage.hint")}</div>
+        </div>
+      )}
 
       {editOpen && (() => {
         const pctReadOnly = !accountId ? activeId !== "personal" : acctConfigType !== "personal";
         return (
-          <RebalanceEditModal config={config} birthDate={birthDate} pctReadOnly={pctReadOnly} onSave={next => {
-            saveConfig({ buckets: next.buckets });
-            setEditOpen(false);
-          }} onClose={() => setEditOpen(false)}/>
+          <RebalanceEditModal
+            config={config} birthDate={birthDate} pctReadOnly={pctReadOnly} categories={apiCategories}
+            onSave={next => { saveConfig({ buckets: next.buckets }); setEditOpen(false); }}
+            onClose={() => setEditOpen(false)}
+          />
         );
       })()}
+
+      {overrideOpen && (
+        <SymbolOverrideModal
+          categories={apiCategories}
+          symbolOverrides={symbolOverrides}
+          onSave={next => {
+            apiSaveSymbolOverrides(next).catch(() => {});
+            setSymbolOverrides(next);
+            setOverrideOpen(false);
+          }}
+          onClose={() => setOverrideOpen(false)}
+        />
+      )}
+
     </Card>
   );
 };
@@ -2100,8 +2299,10 @@ const MARKET_CCY = { US: "USD", HK: "HKD", CN: "CNY", CA: "CAD", CRYPTO: "USD" }
 const _guessMarket = (code) => {
   if (code.endsWith(".HK") || code.startsWith("^HSI") || code.startsWith("^HSCE") || code.startsWith("^HSTECH")) return "HK";
   if (code.endsWith(".SS") || code.endsWith(".SZ")) return "CN";
-  if (code.endsWith(".TO") || code.endsWith(".V")) return "CA";
+  if (code.endsWith(".TO") || code.endsWith(".V") || code.endsWith(".NE") || code.endsWith(".CF")) return "CA";
   if (/^\d{6}$/.test(code)) return "CN"; // bare 6-digit = CN stock / fund code
+  // Common non-US/HK/CN exchange suffixes → "OTHER" so etf_global/bond_global DSL rules match them
+  if (/\.(L|PA|DE|F|AX|NS|BO|SI|KL|TW|SW|AS|OL|ST|CO|HE|BR|MX|SA)$/.test(code)) return "OTHER";
   return "US";
 };
 

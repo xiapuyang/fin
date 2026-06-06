@@ -73,8 +73,8 @@
       "quote_i18n": "holdings.rb.6040.quote",
       "is_age_rule": false,
       "buckets": [
-        { "label_i18n": "holdings.rb.equity",     "pct": 60, "color": "#1F4FE0", "codes": [], "assetTypes": ["equity","etf","mutualfund","cryptocurrency"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.bonds_cash", "pct": 40, "color": "#5C6270", "codes": [], "assetTypes": ["bond"], "markets": [], "isCash": true }
+        { "label_i18n": "holdings.rb.equity",     "pct": 60, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.bonds_cash", "pct": 40, "color": "#5C6270", "codes": [], "categories": ["bond_us_long","bond_us_mid","bond_us_short","bond_global_long","bond_global_mid","bond_global_short"], "isCash": true }
       ],
       "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
     },
@@ -85,8 +85,8 @@
       "quote_i18n": "holdings.rb.7030.quote",
       "is_age_rule": false,
       "buckets": [
-        { "label_i18n": "holdings.rb.equity",     "pct": 70, "color": "#1F4FE0", "codes": [], "assetTypes": ["equity","etf","mutualfund","cryptocurrency"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.bonds_cash", "pct": 30, "color": "#5C6270", "codes": [], "assetTypes": ["bond"], "markets": [], "isCash": true }
+        { "label_i18n": "holdings.rb.equity",     "pct": 70, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.bonds_cash", "pct": 30, "color": "#5C6270", "codes": [], "categories": ["bond_us_long","bond_us_mid","bond_us_short","bond_global_long","bond_global_mid","bond_global_short"], "isCash": true }
       ],
       "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
     },
@@ -97,11 +97,11 @@
       "quote_i18n": "holdings.rb.allweather.quote",
       "is_age_rule": false,
       "buckets": [
-        { "label_i18n": "holdings.rb.equity",      "pct": 30,  "color": "#1F4FE0", "codes": [], "assetTypes": ["equity","etf","mutualfund","cryptocurrency"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.lt.bonds",    "pct": 40,  "color": "#5C8AE6", "codes": [], "assetTypes": ["bond"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.mt.bonds",    "pct": 15,  "color": "#B8447B", "codes": [], "assetTypes": [], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.gold",        "pct": 7.5, "color": "#C8460F", "codes": [], "assetTypes": [], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.commodities", "pct": 7.5, "color": "#9C6E3A", "codes": [], "assetTypes": [], "markets": [], "isCash": true }
+        { "label_i18n": "holdings.rb.equity",      "pct": 30,  "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.lt.bonds",    "pct": 40,  "color": "#5C8AE6", "codes": [], "categories": ["bond_us_long","bond_global_long"], "isCash": false },
+        { "label_i18n": "holdings.rb.mt.bonds",    "pct": 15,  "color": "#B8447B", "codes": [], "categories": ["bond_us_mid","bond_us_short","bond_global_mid","bond_global_short"], "isCash": true },
+        { "label_i18n": "holdings.rb.gold",        "pct": 7.5, "color": "#C8460F", "codes": [], "categories": ["gold"], "isCash": false },
+        { "label_i18n": "holdings.rb.commodities", "pct": 7.5, "color": "#9C6E3A", "codes": [], "categories": ["commodity"], "isCash": false }
       ],
       "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
     },
@@ -112,10 +112,10 @@
       "quote_i18n": "holdings.rb.permanent.quote",
       "is_age_rule": false,
       "buckets": [
-        { "label_i18n": "holdings.rb.equity",   "pct": 25, "color": "#1F4FE0", "codes": [], "assetTypes": ["equity","etf","mutualfund","cryptocurrency"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.lt.bonds", "pct": 25, "color": "#5C8AE6", "codes": [], "assetTypes": ["bond"], "markets": [], "isCash": false },
-        { "label_i18n": "holdings.rb.cash",     "pct": 25, "color": "#5C6270", "codes": [], "assetTypes": [], "markets": [], "isCash": true },
-        { "label_i18n": "holdings.rb.gold",     "pct": 25, "color": "#C8460F", "codes": [], "assetTypes": [], "markets": [], "isCash": false }
+        { "label_i18n": "holdings.rb.equity",   "pct": 25, "color": "#1F4FE0", "codes": [], "categories": ["equity_us","equity_hk","equity_cn","index_fund_us","index_fund_hk","index_fund_cn","etf_global","crypto"], "isCash": false },
+        { "label_i18n": "holdings.rb.lt.bonds", "pct": 25, "color": "#5C8AE6", "codes": [], "categories": ["bond_us_long","bond_global_long","bond_us_mid","bond_global_mid"], "isCash": false },
+        { "label_i18n": "holdings.rb.st.bonds",  "pct": 25, "color": "#5C6270", "codes": [], "categories": ["bond_us_short","bond_global_short"], "isCash": true },
+        { "label_i18n": "holdings.rb.gold",     "pct": 25, "color": "#C8460F", "codes": [], "categories": ["gold"], "isCash": false }
       ],
       "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
     },
@@ -128,6 +128,26 @@
       "buckets": null,
       "trigger": { "mode": "hybrid", "calFreq": "annual", "absDriftPp": 5, "relDriftPct": 20 }
     }
+  ],
+  "_rebalance_categories_note": "matcher DSL: asset_types (required), markets (whitelist), markets_exclude (blacklist), or_markets (market-only OR match). IDs are immutable — add new entries, never rename.",
+  "rebalance_categories": [
+    { "id": "equity_us",         "matcher": { "asset_types": ["equity"],          "markets": ["US"] } },
+    { "id": "equity_hk",         "matcher": { "asset_types": ["equity"],          "markets": ["HK"] } },
+    { "id": "equity_cn",         "matcher": { "asset_types": ["equity"],          "markets": ["CN"] } },
+    { "id": "index_fund_us",     "matcher": { "asset_types": ["etf"],             "markets": ["US"] } },
+    { "id": "index_fund_hk",     "matcher": { "asset_types": ["etf"],             "markets": ["HK"] } },
+    { "id": "index_fund_cn",     "matcher": { "asset_types": ["etf","mutualfund"],"markets": ["CN"] } },
+    { "id": "etf_global",        "matcher": { "asset_types": ["etf"],             "markets_exclude": ["US","HK","CN"] } },
+    { "id": "gold",              "matcher": null },
+    { "id": "commodity",         "matcher": null },
+    { "id": "bond_us_long",      "matcher": null },
+    { "id": "bond_us_mid",       "matcher": null },
+    { "id": "bond_us_short",     "matcher": null },
+    { "id": "bond_global_long",  "matcher": null },
+    { "id": "bond_global_mid",   "matcher": null },
+    { "id": "bond_global_short", "matcher": null },
+    { "id": "crypto",            "matcher": { "asset_types": ["cryptocurrency"],  "or_markets": ["CRYPTO"] } },
+    { "id": "reit",              "matcher": { "asset_types": ["reit"] } }
   ],
   "settings_defaults": {
     "notify_email": "",
