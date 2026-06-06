@@ -43,6 +43,7 @@ const AppInner = () => {
   const [alertsCategory, setAlertsCategory] = React.useState(null);
   const [alerts, setAlerts] = React.useState([]);
   const [history, setHistory] = React.useState([]);
+  // Placeholder until /api/fx resolves; values must match app.json["fx_fallback_rates"]
   const [fxRates, setFxRates] = React.useState({ USD: 7.24, HKD: 0.93, CNY: 1, CAD: 5.3 });
   const [currency, setCurrency] = React.useState("CNY");
   const [settings, setSettings] = React.useState({ timezone: "", display_name: "" });

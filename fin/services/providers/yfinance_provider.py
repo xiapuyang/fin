@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 import yfinance as yf
 
+from fin.config import APP_CONFIG
 from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def _fetch_cn_etf_name(bare_code: str) -> str | None:
     return None
 
 
-_FX_TTL = 60  # seconds
+_FX_TTL: int = APP_CONFIG.get("fx_cache_ttl_seconds", 60)
 _HISTORY_TIMEOUT_SECONDS = 30
 
 _ASSET_TYPES = frozenset(

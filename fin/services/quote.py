@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from fin.config import MARKET_STATE_PATH
+from fin.config import APP_CONFIG, MARKET_STATE_PATH
 from fin.models.stock import StockModel
 from fin.repositories.stock_sqlite import StockSQLiteRepository
 from fin.services.providers.base import CN_FUND_PATTERN, QuoteProvider
 
 logger = logging.getLogger(__name__)
 
-STALE_SECONDS = 60
+STALE_SECONDS: int = APP_CONFIG.get("quote_stale_seconds", 60)
 
 # When True, /api/prices never blocks on live yfinance fetches — stale cache
 # entries are returned as-is and the background price_updater is the sole
@@ -50,7 +50,7 @@ def _market_for_symbol(symbol: str) -> str:
     return "US"
 
 
-_MARKET_STATES_TTL = 5.0  # seconds
+_MARKET_STATES_TTL: float = APP_CONFIG.get("market_states_ttl_seconds", 5.0)
 _market_states_cache: tuple[float, dict] = (0.0, {})
 
 

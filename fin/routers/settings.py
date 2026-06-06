@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from fin import settings as settings_store
 from fin.config import (
+    APP_CONFIG,
     APP_CONFIG_PATH,
     DATA_DIR,
     LAST_CHECK_PATH,
@@ -24,7 +25,9 @@ router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
 _FX_PAIRS = {"USD": "USDCNY=X", "HKD": "HKDCNY=X", "CAD": "CADCNY=X"}
-_FX_FALLBACK = {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
+_FX_FALLBACK: dict[str, float] = APP_CONFIG.get(
+    "fx_fallback_rates", {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0}
+)
 
 _VALID_MARKETS = {"us", "hk", "cn", "ca"}
 

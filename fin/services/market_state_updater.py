@@ -13,11 +13,11 @@ import threading
 import time
 from datetime import timedelta
 
-from fin.config import MARKET_STATE_PATH
+from fin.config import APP_CONFIG, MARKET_STATE_PATH
 
 logger = logging.getLogger(__name__)
 
-UPDATE_INTERVAL: int = 300  # 5 minutes
+UPDATE_INTERVAL: int = APP_CONFIG.get("market_state_update_interval_seconds", 300)
 
 _CALENDARS: dict | None = None
 _write_lock = threading.Lock()

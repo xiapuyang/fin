@@ -1,5 +1,22 @@
 {
   "_note": "benchmark_defaults[].id is immutable once stored in the database as bench_id. Never rename or remove a used id — add a new entry instead. name/description/allocations/cash_pct are safe to change. If you modify allocations or cash_pct of an existing default, delete the corresponding benchmark_results rows manually (DELETE FROM benchmark_results WHERE bench_id = '<id>') to avoid stale history in the chart.",
+
+  "_services_note": "Operational tuning values — change here to apply globally without touching source code.",
+  "fx_fallback_rates": {"USD": 7.24, "HKD": 0.93, "CAD": 5.30, "CNY": 1.0},
+  "quote_stale_seconds": 60,
+  "market_states_ttl_seconds": 5.0,
+  "fx_cache_ttl_seconds": 60,
+  "price_update_interval_seconds": 300,
+  "price_update_batch_size": 20,
+  "price_update_batch_pause_seconds": 0.5,
+  "alert_check_interval_seconds": 1200,
+  "market_state_update_interval_seconds": 300,
+  "dividend_info_ttl_hours": 24,
+  "dividend_hist_years": 2,
+  "dividend_max_symbols": 50,
+  "benchmark_default_since_years": 10,
+  "upload_max_bytes": 10485760,
+
   "benchmark_recompute_interval_minutes": 10,
   "benchmark_snapshot_interval_days": 30,
   "benchmark_defaults": [

@@ -13,7 +13,7 @@ from pydantic import Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from fin.config import BULK_MAX_ITEMS, TS_FMT
+from fin.config import APP_CONFIG, BULK_MAX_ITEMS, TS_FMT
 from fin.database import get_db
 from fin.models.account import AccountModel
 from fin.models.holding import HoldingModel
@@ -40,9 +40,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-_DIVIDEND_INFO_TTL_HOURS = 24  # ex_date / annual_rate refresh cadence
-_DIVIDEND_HIST_YEARS = 2  # how far back to pull on first fetch
-_DIVIDEND_MAX_SYMBOLS = 50
+_DIVIDEND_INFO_TTL_HOURS: int = APP_CONFIG.get("dividend_info_ttl_hours", 24)
+_DIVIDEND_HIST_YEARS: int = APP_CONFIG.get("dividend_hist_years", 2)
+_DIVIDEND_MAX_SYMBOLS: int = APP_CONFIG.get("dividend_max_symbols", 50)
+_UPLOAD_MAX_BYTES: int = APP_CONFIG.get("upload_max_bytes", 10 * 1024 * 1024)
 _VALID_SYMBOL = re.compile(r"^[A-Z0-9.\-\^]{1,10}$")
 
 
@@ -317,8 +318,11 @@ def delete_holding(holding_id: int, db: Session = Depends(get_db)):
 @router.post("/transactions/import")
 async def import_transactions(file: UploadFile, db: Session = Depends(get_db)):
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+    if len(content) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {_UPLOAD_MAX_BYTES // (1024 * 1024)} MB)",
+        )
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -480,8 +484,11 @@ async def import_income(
         Dict with imported count, skipped rows with reasons, and full income list.
     """
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+    if len(content) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {_UPLOAD_MAX_BYTES // (1024 * 1024)} MB)",
+        )
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:

@@ -7,11 +7,12 @@ sys.frozen is True — script-based users continue using cron.
 import logging
 import threading
 
+from fin.config import APP_CONFIG
 from fin.services.alert_checker import run_check
 
 logger = logging.getLogger(__name__)
 
-ALERT_INTERVAL_SECONDS: int = 20 * 60  # 20 minutes
+ALERT_INTERVAL_SECONDS: int = APP_CONFIG.get("alert_check_interval_seconds", 1200)
 
 
 def _scheduler_loop(stop_event: threading.Event) -> None:

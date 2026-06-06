@@ -4,15 +4,15 @@ import time
 
 from sqlalchemy.orm import Session
 
-from fin.config import SYMBOLS_PATH
+from fin.config import APP_CONFIG, SYMBOLS_PATH
 from fin.services.providers import build_default_providers
 from fin.services.quote import QuoteService, normalize_symbol
 
 logger = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = 300  # 5 minutes
-BATCH_SIZE = 20
-BATCH_PAUSE = 0.5  # seconds between batches
+UPDATE_INTERVAL: int = APP_CONFIG.get("price_update_interval_seconds", 300)
+BATCH_SIZE: int = APP_CONFIG.get("price_update_batch_size", 20)
+BATCH_PAUSE: float = APP_CONFIG.get("price_update_batch_pause_seconds", 0.5)
 
 
 def _alert_symbols() -> set[str]:
