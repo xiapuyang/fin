@@ -449,67 +449,73 @@ def _simulate_schemes(
     return scheme_results, total_excluded
 
 
-def _compute_portfolio_snap_result(
+def _compute_portfolio_snap_results(
     db: Session,
     account_id: int,
     income_plain: list[dict],
     price_cache: dict[str, list[dict]],
     current_prices: dict[str, float],
     fx: dict[str, float],
-) -> Optional[dict]:
-    """Compute today's XIRR for the most recent portfolio composition snapshot.
+) -> list[dict]:
+    """Compute today's XIRR for all enabled portfolio composition snapshots.
 
-    The backfill only runs to yesterday; this provides today's live data point.
-    Returns a scheme_result dict, or None if no snapshot exists.
+    The backfill only runs to yesterday; this provides today's live data point
+    for every enabled snapshot, not just the most recent one.
+    Returns a list of scheme_result dicts (may be empty).
     """
-    latest_snap = (
+    snaps = (
         db.query(BenchmarkCustomSchemeModel)
         .filter(
             BenchmarkCustomSchemeModel.account_id == account_id,
             BenchmarkCustomSchemeModel.is_portfolio_snapshot == 1,
+            BenchmarkCustomSchemeModel.enabled != 0,
         )
-        .order_by(BenchmarkCustomSchemeModel.id.desc())
-        .first()
+        .order_by(BenchmarkCustomSchemeModel.id)
+        .all()
     )
-    if latest_snap is None:
-        return None
+    if not snaps:
+        return []
 
-    snap_scheme = {
-        "id": str(latest_snap.id),
-        "name": latest_snap.name,
-        "allocations": json.loads(latest_snap.allocations_json),
-        "cash_pct": latest_snap.cash_pct,
-    }
     earliest = income_plain[0]["date"] if income_plain else None
-    for a in snap_scheme["allocations"]:
-        sym = a["symbol"]
-        if sym not in price_cache:
-            try:
-                price_cache[sym] = fetch_symbol(db, sym, earliest) if earliest else []
-            except Exception:
-                price_cache[sym] = []
-        if sym not in current_prices:
-            live = _fetch_current_price(sym)
-            if live:
-                current_prices[sym] = live
-            elif price_cache.get(sym):
-                current_prices[sym] = price_cache[sym][-1]["close"]
-
-    try:
-        snap_xirr, _, snap_value = simulate_scheme(
-            snap_scheme, income_plain, price_cache, current_prices, fx
-        )
-        return {
-            "id": str(latest_snap.id),
-            "name": latest_snap.name,
-            "xirr": snap_xirr,
-            "current_value_usd": snap_value,
+    results = []
+    for snap in snaps:
+        snap_scheme = {
+            "id": str(snap.id),
+            "name": snap.name,
+            "allocations": json.loads(snap.allocations_json),
+            "cash_pct": snap.cash_pct,
         }
-    except Exception as exc:
-        logger.warning(
-            "Portfolio snapshot compute failed for %s: %s", latest_snap.id, exc
-        )
-        return None
+        for a in snap_scheme["allocations"]:
+            sym = a["symbol"]
+            if sym not in price_cache:
+                try:
+                    price_cache[sym] = (
+                        fetch_symbol(db, sym, earliest) if earliest else []
+                    )
+                except Exception:
+                    price_cache[sym] = []
+            if sym not in current_prices:
+                live = _fetch_current_price(sym)
+                if live:
+                    current_prices[sym] = live
+                elif price_cache.get(sym):
+                    current_prices[sym] = price_cache[sym][-1]["close"]
+
+        try:
+            snap_xirr, _, snap_value = simulate_scheme(
+                snap_scheme, income_plain, price_cache, current_prices, fx
+            )
+            results.append(
+                {
+                    "id": str(snap.id),
+                    "name": snap.name,
+                    "xirr": snap_xirr,
+                    "current_value_usd": snap_value,
+                }
+            )
+        except Exception as exc:
+            logger.warning("Portfolio snapshot compute failed for %s: %s", snap.id, exc)
+    return results
 
 
 def _write_bench_results(
@@ -750,11 +756,10 @@ def compute(db: Session, account_id: int) -> dict:
     scheme_order = {s.get("id"): i for i, s in enumerate(schemes)}
     scheme_results.sort(key=lambda r: scheme_order.get(r["id"], 999))
 
-    snap_result = _compute_portfolio_snap_result(
+    snap_results = _compute_portfolio_snap_results(
         db, account_id, income_plain, price_cache, current_prices, fx
     )
-    if snap_result:
-        scheme_results.append(snap_result)
+    scheme_results.extend(snap_results)
 
     _write_bench_results(
         db, account_id, today, portfolio_xirr, portfolio_value_usd, scheme_results
