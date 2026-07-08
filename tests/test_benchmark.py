@@ -761,18 +761,18 @@ def test_fetch_price_data_mocked():
     assert prices.get("SPY") == 105.0
 
 
-# ── _compute_portfolio_snap_result ────────────────────────────────────────────
+# ── _compute_portfolio_snap_results ───────────────────────────────────────────
 
 
 def test_compute_portfolio_snap_result_no_snap():
-    from fin.services.benchmark_service import _compute_portfolio_snap_result
+    from fin.services.benchmark_service import _compute_portfolio_snap_results
 
     engine, Session = _make_isolated_db()
     db = Session()
-    result = _compute_portfolio_snap_result(
+    result = _compute_portfolio_snap_results(
         db, 999, [], {}, {}, {"USD": 7.2, "CNY": 1.0}
     )
-    assert result is None
+    assert result == []
     db.close()
     engine.dispose()
 
@@ -1548,10 +1548,10 @@ def test_compute_portfolio_xirr_with_income():
 
 
 def test_compute_portfolio_snap_result_with_snapshot():
-    """_compute_portfolio_snap_result should return a result dict when snapshot exists."""
+    """_compute_portfolio_snap_results should return results for all enabled snapshots."""
     import json
     from fin.models.benchmark_custom_scheme import BenchmarkCustomSchemeModel
-    from fin.services.benchmark_service import _compute_portfolio_snap_result
+    from fin.services.benchmark_service import _compute_portfolio_snap_results
 
     engine, Session = _make_isolated_db()
     db = Session()
@@ -1589,12 +1589,12 @@ def test_compute_portfolio_snap_result_with_snapshot():
             "fin.services.benchmark_service._fetch_current_price", return_value=500.0
         ),
     ):
-        result = _compute_portfolio_snap_result(
+        results = _compute_portfolio_snap_results(
             db, 1, income, price_cache, current_prices, fx
         )
 
-    assert result is not None
-    assert "xirr" in result
+    assert len(results) == 1
+    assert "xirr" in results[0]
     db.close()
     engine.dispose()
 

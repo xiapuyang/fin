@@ -34,7 +34,7 @@ const xirr = (cashFlows) => {
 };
 
 // ── Compute positions from holdings + transactions ────────────────────────────
-const computePositions = (holdings, transactions, prices = {}, accounts = []) => {
+const computePositions = (holdings, transactions, prices = {}, accounts = [], snapshotDate = null) => {
   const today = new Date().toISOString().slice(0, 10);
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -48,7 +48,8 @@ const computePositions = (holdings, transactions, prices = {}, accounts = []) =>
     const ref = sorted.find(t => t.code === code);
     return { id: `virtual_${code}`, code, name: code, shares: 0, avg_cost: 0,
              account: ref.account, currency: ref.currency || "USD",
-             market: SYMBOL_INDEX[code]?.market || null };
+             market: SYMBOL_INDEX[code]?.market || null,
+             snapshot_name: snapshotDate || undefined };
   });
   const allHoldings = virtualHoldings.length ? [...holdings, ...virtualHoldings] : holdings;
 
@@ -314,7 +315,7 @@ const Holdings = ({ currency = "CNY", birthDate = "" }) => {
   // Per-account view — uses snapshot-filtered holdings
   const acctCcy = selectedAccount?.currency || "CNY";
   const acctFx = FX[acctCcy] || 1; // CNY rate for converting to account native currency
-  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxnsForCalc, prices, accounts), [snapshotHoldings, acctTxnsForCalc, prices, accounts]);
+  const acctPositions = React.useMemo(() => computePositions(snapshotHoldings, acctTxnsForCalc, prices, accounts, selectedSnapshot), [snapshotHoldings, acctTxnsForCalc, prices, accounts, selectedSnapshot]);
   // acctTotal/cost/unrealized in account's native currency (divide out CNY FX, apply account FX)
   const acctTotal = acctPositions.reduce((s, p) => s + p.value / acctFx, 0);
   const acctCost = acctPositions.reduce((s, p) => s + p.cost / acctFx, 0);
